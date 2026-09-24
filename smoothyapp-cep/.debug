@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  CEP Debug Configuration
+
+  This file enables remote debugging for the panel.
+  Access at: http://localhost:8088 when Premiere is running.
+
+  Only needed during development.
+-->
+<ExtensionList>
+  <Extension Id="com.smoothyedit.autocut.panel">
+    <HostList>
+      <Host Name="PPRO" Port="8088"/>
+    </HostList>
+  </Extension>
+</ExtensionList>

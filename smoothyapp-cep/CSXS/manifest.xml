@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  CEP Extension Manifest for SmoothyEdit
+
+  This file tells Adobe applications about the extension:
+  - What app(s) it supports
+  - Minimum version requirements
+  - Panel size and behavior
+  - ExtendScript entry points
+
+  CEP version 11 supports Premiere Pro 2022+
+-->
+<ExtensionManifest Version="11.0" ExtensionBundleId="com.smoothyedit.autocut" ExtensionBundleName="SmoothyEdit" ExtensionBundleVersion="1.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+  <ExtensionList>
+    <Extension Id="com.smoothyedit.autocut.panel" Version="1.0.0"/>
+  </ExtensionList>
+
+  <ExecutionEnvironment>
+    <HostList>
+      <!-- Premiere Pro -->
+      <Host Name="PPRO" Version="[22.0,99.9]"/>
+    </HostList>
+
+    <LocaleList>
+      <Locale Code="All"/>
+    </LocaleList>
+
+    <RequiredRuntimeList>
+      <RequiredRuntime Name="CSXS" Version="11.0"/>
+    </RequiredRuntimeList>
+  </ExecutionEnvironment>
+
+  <DispatchInfoList>
+    <Extension Id="com.smoothyedit.autocut.panel">
+      <DispatchInfo>
+        <Resources>
+          <MainPath>./index.html</MainPath>
+          <ScriptPath>./jsx/host.jsx</ScriptPath>
+          <CEFCommandLine>
+            <!-- Allow Node.js integration for HTTP requests -->
+            <Parameter>--enable-nodejs</Parameter>
+            <Parameter>--mixed-context</Parameter>
+          </CEFCommandLine>
+        </Resources>
+
+        <Lifecycle>
+          <AutoVisible>true</AutoVisible>
+        </Lifecycle>
+
+        <UI>
+          <Type>Panel</Type>
+          <Menu>SmoothyEdit Bridge</Menu>
+          <Geometry>
+            <Size>
+              <Height>180</Height>
+              <Width>280</Width>
+            </Size>
+            <MinSize>
+              <Height>150</Height>
+              <Width>200</Width>
+            </MinSize>
+            <MaxSize>
+              <Height>250</Height>
+              <Width>350</Width>
+            </MaxSize>
+          </Geometry>
+          <Icons>
+            <Icon Type="Normal">./icons/icon.png</Icon>
+          </Icons>
+        </UI>
+      </DispatchInfo>
+    </Extension>
+  </DispatchInfoList>
+</ExtensionManifest>

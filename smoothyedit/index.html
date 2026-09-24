@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SmoothyEdit Bridge</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="panel">
+    <section class="hero">
+      <p class="eyebrow">Premiere Pro UXP</p>
+      <h1>SmoothyEdit Bridge</h1>
+      <p class="lede">Keep this panel open while SmoothyEdit edits, marks, and analyzes your active sequence.</p>
+    </section>
+
+    <section class="status-card">
+      <div class="status-row">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Starting bridge...</span>
+      </div>
+      <p id="sequenceText" class="sequence-text">No sequence loaded yet.</p>
+    </section>
+
+    <section class="actions">
+      <button id="reconnectButton">Reconnect</button>
+      <button id="refreshButton">Refresh Sequence</button>
+    </section>
+
+    <p id="detailText" class="detail-text">Connecting to ws://localhost:3456</p>
+
+    <section class="log-section">
+      <div class="log-header">
+        <span class="log-title">Live Log</span>
+        <button class="log-clear" id="clearLogBtn">Clear</button>
+      </div>
+      <div class="log-panel" id="logPanel"></div>
+    </section>
+  </main>
+
+  <script src="main.js"></script>
+  <script>
+    document.getElementById('clearLogBtn').addEventListener('click', () => {
+      document.getElementById('logPanel').innerHTML = '';
+    });
+  </script>
+</body>
+</html>
