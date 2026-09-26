@@ -69,7 +69,7 @@ export function formatCaptions(
 
     if ((exceedsLength || exceedsDuration || isEndOfSentence) && currentCaption.words.length > 0) {
       // Finalize current caption
-      const caption = finalizeCaption(currentCaption, captionIndex, opts);
+      const caption = finalizeCaption(currentCaption, captionIndex, opts, captions[captions.length - 1]);
       if (caption) {
         captions.push(caption);
         captionIndex++;
@@ -86,31 +86,47 @@ export function formatCaptions(
 
   // Finalize last caption
   if (currentCaption.words.length > 0) {
-    const caption = finalizeCaption(currentCaption, captionIndex, opts);
+    const caption = finalizeCaption(currentCaption, captionIndex, opts, captions[captions.length - 1]);
     if (caption) {
       captions.push(caption);
     }
   }
 
   // Apply gap between captions
-  return applyGaps(captions, opts.gapBetweenCaptions);
+  const gapped = applyGaps(captions, opts.gapBetweenCaptions);
+  validateCaptions(gapped);
+  return gapped;
 }
 
 /**
- * Finalize a caption from collected words
+ * Finalize a caption from collected words. `previous` is the last already-emitted
+ * caption; start/end times are clamped so they can never go backwards relative to
+ * it. Returns null when the caption can't be placed after the previous one.
  */
 function finalizeCaption(
   caption: { words: TranscriptionChunk[]; text: string },
   index: number,
-  settings: CaptionSettings
+  settings: CaptionSettings,
+  previous?: FormattedCaption
 ): FormattedCaption | null {
   if (caption.words.length === 0) return null;
 
-  const startTime = caption.words[0].timestamp[0];
+  const prevEnd = previous ? previous.endTime : 0;
+
+  let startTime = caption.words[0].timestamp[0];
+  if (!(startTime >= prevEnd)) {
+    startTime = prevEnd;
+  }
+
   let endTime = caption.words[caption.words.length - 1].timestamp[1];
 
-  // Ensure minimum duration
+  // Ensure minimum duration (measured from the clamped start).
   if (endTime - startTime < settings.minDurationSeconds) {
+    endTime = startTime + settings.minDurationSeconds;
+  }
+
+  // Never emit a backwards or zero-length cue.
+  if (!(endTime > startTime)) {
     endTime = startTime + settings.minDurationSeconds;
   }
 
@@ -155,27 +171,60 @@ function formatTextWithLineBreaks(text: string, settings: CaptionSettings): stri
 }
 
 /**
- * Apply gaps between captions
+ * Apply gaps between captions and enforce a strictly increasing timeline.
+ *
+ * If a caption still can't be placed after the previous one without collapsing
+ * its own duration (i.e. the requested start would land at or past its end),
+ * its text is merged into the previous caption instead of emitting a broken cue.
  */
 function applyGaps(captions: FormattedCaption[], gap: number): FormattedCaption[] {
-  if (gap <= 0) return captions;
+  if (captions.length === 0) return captions;
 
-  return captions.map((caption, i) => {
-    if (i === 0) return caption;
+  const out: FormattedCaption[] = [];
 
-    const prevEnd = captions[i - 1].endTime;
-    const currentStart = caption.startTime;
+  for (const caption of captions) {
+    const prev = out[out.length - 1];
 
-    // If captions overlap or are too close, adjust
-    if (currentStart < prevEnd + gap) {
-      return {
-        ...caption,
-        startTime: prevEnd + gap
-      };
+    if (!prev) {
+      out.push({ ...caption, startTime: Math.max(0, caption.startTime) });
+      continue;
     }
 
-    return caption;
-  });
+    const minStart = gap > 0 ? prev.endTime + gap : prev.endTime;
+    const startTime = Math.max(caption.startTime, minStart);
+    let endTime = caption.endTime;
+
+    // If clamping would collapse or invert the cue, merge it into the previous one.
+    if (!(endTime > startTime)) {
+      prev.text = prev.text ? `${prev.text}\n${caption.text}` : caption.text;
+      if (endTime > prev.endTime) prev.endTime = endTime;
+      continue;
+    }
+
+    out.push({ ...caption, startTime, endTime });
+  }
+
+  // Re-number sequentially in case any cues were merged away.
+  out.forEach((caption, i) => { caption.index = i + 1; });
+  return out;
+}
+
+/**
+ * Dev-time sanity check: log any cue whose timing is non-monotonic. Runs after
+ * applyGaps, which should make a violation impossible — this exists so a future
+ * regression can't silently ship again.
+ */
+function validateCaptions(captions: FormattedCaption[]): void {
+  let prevEnd = -1;
+  for (const caption of captions) {
+    if (!(caption.endTime > caption.startTime)) {
+      console.warn(`[Captions] Invalid cue #${caption.index}: end ${caption.endTime} <= start ${caption.startTime}`);
+    }
+    if (caption.startTime < prevEnd) {
+      console.warn(`[Captions] Non-monotonic cue #${caption.index}: start ${caption.startTime} < previous end ${prevEnd}`);
+    }
+    prevEnd = caption.endTime;
+  }
 }
 
 /**
@@ -232,7 +281,9 @@ function splitTextIntoCaptions(
     });
   }
 
-  return applyGaps(captions, settings.gapBetweenCaptions);
+  const gapped = applyGaps(captions, settings.gapBetweenCaptions);
+  validateCaptions(gapped);
+  return gapped;
 }
 
 /**

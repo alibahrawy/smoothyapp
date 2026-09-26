@@ -1997,6 +1997,81 @@ body.platform-macos {
   gap: var(--spacing-sm);
 }
 
+/* In-settings "what's new" notes panel */
+.settings-update-notes {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--background-primary);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.settings-update-notes.hidden {
+  display: none;
+}
+
+.settings-update-notes h4 {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--foreground);
+  margin: var(--spacing-sm) 0 var(--spacing-xs);
+}
+
+.settings-update-notes ul {
+  list-style: disc;
+  padding-left: 18px;
+  margin: 0;
+}
+
+.settings-update-notes li {
+  color: var(--foreground-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  margin-bottom: 3px;
+}
+
+.settings-update-notes p {
+  color: var(--foreground-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+  margin: 0 0 var(--spacing-xs);
+}
+
+/* Captions source switch (sequence vs local file) */
+.source-switch {
+  display: flex;
+  gap: 6px;
+  margin-bottom: var(--spacing-md);
+  background: var(--background-hover, rgba(0,0,0,0.04));
+  padding: 4px;
+  border-radius: var(--radius-md, 8px);
+}
+
+.source-option {
+  flex: 1;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--foreground-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.source-option.active {
+  background: var(--background-secondary);
+  color: var(--foreground);
+  box-shadow: var(--shadow-defined);
+}
+
+#progress-cancel-btn {
+  margin-top: var(--spacing-md);
+}
+
 /* Compressor Tab Styles */
 .drop-zone {
   border: 2px dashed var(--border-color);
@@ -2264,7 +2339,7 @@ body.platform-macos {
   font-size: var(--font-size-xs);
 }
 
-/* Resolve bridge path row (same as CEP path row) */
+/* Bridge path row */
 .bridge-path-row {
   display: flex;
   gap: 8px;

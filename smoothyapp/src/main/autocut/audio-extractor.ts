@@ -10,6 +10,26 @@ import { app } from 'electron';
 
 const SAMPLE_RATE = 16000;
 
+// Handle for the running ffmpeg process so extraction can be cancelled.
+let activeFFmpeg: import('child_process').ChildProcess | null = null;
+let cancelRequested = false;
+
+/**
+ * Kill the in-flight ffmpeg extraction, if any. The pending promise rejects with
+ * AUDIO_EXTRACTION_CANCELLED.
+ */
+export function cancelAudioExtraction(): void {
+  cancelRequested = true;
+  if (activeFFmpeg && !activeFFmpeg.killed) {
+    console.log('[AudioExtractor] Cancelling ffmpeg...');
+    try { activeFFmpeg.kill('SIGTERM'); } catch {}
+  }
+}
+
+export function resetAudioExtractionCancel(): void {
+  cancelRequested = false;
+}
+
 function getFFmpegPath(): string {
   // In development, use system ffmpeg
   if (!app.isPackaged) {
@@ -38,11 +58,20 @@ function runFFmpeg(args: string[]): Promise<{ stdout: string; stderr: string }> 
     const ffmpeg = spawn(getFFmpegPath(), args);
     let stdout = '';
     let stderr = '';
+    let cancelled = false;
+
+    activeFFmpeg = ffmpeg;
+    cancelRequested = false;
 
     ffmpeg.stdout.on('data', (data) => { stdout += data.toString(); });
     ffmpeg.stderr.on('data', (data) => { stderr += data.toString(); });
 
     ffmpeg.on('close', (code) => {
+      if (activeFFmpeg === ffmpeg) activeFFmpeg = null;
+      if (cancelled || cancelRequested) {
+        reject(new Error('AUDIO_EXTRACTION_CANCELLED'));
+        return;
+      }
       if (code === 0) {
         resolve({ stdout, stderr });
       } else {
@@ -51,8 +80,15 @@ function runFFmpeg(args: string[]): Promise<{ stdout: string; stderr: string }> 
     });
 
     ffmpeg.on('error', (err) => {
+      if (activeFFmpeg === ffmpeg) activeFFmpeg = null;
       reject(new Error(`Failed to start ffmpeg: ${err.message}`));
     });
+
+    // If a cancel came in just before the process was registered, kill it now.
+    if (cancelRequested) {
+      cancelled = true;
+      try { ffmpeg.kill('SIGTERM'); } catch {}
+    }
   });
 }
 

@@ -8,6 +8,7 @@ import Store from 'electron-store';
 import { initTelemetry, trackEvent, trackTool, startHeartbeat } from './telemetry';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import {
   startNLEServers,
   stopNLEServers,
@@ -25,9 +26,6 @@ import {
   exportSubtitles,
   sendCaptionsToNLE
 } from './nle-router';
-import {
-  getResolveConnectionStatus
-} from './resolve-bridge';
 import {
   getConnectionStatus as getPremiereConnectionStatus
 } from './websocket-server';
@@ -71,6 +69,9 @@ import {
 import * as whisperService from './captions/whisper-service';
 import {
   stitchTimelineAudio,
+  extractAudioTrack,
+  cancelAudioExtraction,
+  resetAudioExtractionCancel,
   cleanupTempFile,
   TimelineAudioClip
 } from './autocut/audio-extractor';
@@ -98,6 +99,9 @@ let compressorEventsBound = false;
 
 // Cached GitHub release notes for the pending update (null = not fetched yet).
 let updateNotesCache: string | null = null;
+
+// Whether a caption/transcription job is currently running (for cancellation).
+let captionsJobActive = false;
 
 /**
  * Fetch the release body for a specific version from the public releases repo.
@@ -185,9 +189,6 @@ if (isWindows) {
 
 const CEP_PLUGIN_ID = 'com.smoothyedit.panel';
 const CEP_EXTENSION_ID = 'com.smoothyedit.autocut.panel';
-const UXP_PLUGIN_ID = 'com.smoothyedit.uxp.bridge';
-const UXP_PLUGIN_NAME = 'SmoothyEdit Bridge';
-const UXP_PLUGIN_VERSION = '1.0.0';
 
 function getDefaultCepPath(): string {
   if (isMac) {
@@ -203,66 +204,13 @@ function getCepExtensionsPath(): string {
 
 function getCepPluginSource(): string {
   // In packaged app: resources/cep-plugin
-  // In dev: ../smoothyedit (relative to project)
+  // In dev: ../smoothyapp-cep (relative to project)
   const resourcePath = path.join(process.resourcesPath, 'cep-plugin');
   if (fs.existsSync(resourcePath)) {
     return resourcePath;
   }
   // Fallback for dev
   return path.join(__dirname, '..', '..', '..', 'smoothyapp-cep');
-}
-
-function getUxpPluginSource(): string {
-  // In packaged app: resources/uxp-plugin
-  // In dev: ../smoothyedit-uxp (relative to project)
-  const resourcePath = path.join(process.resourcesPath, 'uxp-plugin');
-  if (fs.existsSync(resourcePath)) {
-    return resourcePath;
-  }
-  return path.join(__dirname, '..', '..', '..', 'smoothyapp');
-}
-
-function getAdobeUxpRootPath(): string {
-  if (isMac) {
-    return path.join(app.getPath('home'), 'Library', 'Application Support', 'Adobe', 'UXP');
-  }
-  return path.join(process.env.APPDATA || '', 'Adobe', 'UXP');
-}
-
-function getUxpExternalPluginsPath(): string {
-  return path.join(getAdobeUxpRootPath(), 'Plugins', 'External');
-}
-
-function getUxpInstallPath(): string {
-  return path.join(getUxpExternalPluginsPath(), `${UXP_PLUGIN_ID}_${UXP_PLUGIN_VERSION}`);
-}
-
-function getUxpPremierePluginInfoPath(): string {
-  return path.join(getAdobeUxpRootPath(), 'PluginsInfo', 'v1', 'premierepro.json');
-}
-
-function getUxpPackagePath(): string {
-  return path.join(getAdobeUxpRootPath(), 'Installers', 'SmoothyEdit-Bridge.ccx');
-}
-
-function getUpiaPath(): string | null {
-  if (isMac) {
-    const upiaPath = '/Library/Application Support/Adobe/Adobe Desktop Common/RemoteComponents/UPI/UnifiedPluginInstallerAgent/UnifiedPluginInstallerAgent.app/Contents/MacOS/UnifiedPluginInstallerAgent';
-    return fs.existsSync(upiaPath) ? upiaPath : null;
-  }
-
-  const programFiles = process.env['ProgramFiles'] || 'C:\\Program Files';
-  const upiaPath = path.join(
-    programFiles,
-    'Common Files',
-    'Adobe',
-    'Adobe Desktop Common',
-    'RemoteComponents',
-    'UPI',
-    'UnifiedPluginInstallerAgent',
-    'UnifiedPluginInstallerAgent.exe'
-  );
-  return fs.existsSync(upiaPath) ? upiaPath : null;
 }
 
 function isBridgeInstalled(): { installed: boolean; path: string } {
@@ -301,281 +249,6 @@ function clearSmoothyCepCaches() {
       if (!entry.isDirectory() || !entry.name.includes('com.smoothyedit')) continue;
       fs.rmSync(path.join(cacheRoot, entry.name), { recursive: true, force: true });
     }
-  }
-}
-
-function isUxpBridgeInstalled(): {
-  installed: boolean;
-  sourcePath: string;
-  installPath: string;
-  externalPluginsPath: string;
-  pluginInfoPath: string;
-  packagePath: string;
-  installerAvailable: boolean;
-  installerPath?: string;
-  error?: string;
-} {
-  const sourcePath = getUxpPluginSource();
-  const installPath = getUxpInstallPath();
-  const packagePath = getUxpPackagePath();
-  const installerPath = getUpiaPath();
-  const installed = fs.existsSync(path.join(installPath, 'manifest.json'));
-
-  return {
-    installed,
-    sourcePath,
-    installPath,
-    externalPluginsPath: getUxpExternalPluginsPath(),
-    pluginInfoPath: getUxpPremierePluginInfoPath(),
-    packagePath,
-    installerAvailable: Boolean(installerPath),
-    installerPath: installerPath || undefined
-  };
-}
-
-function writeUxpPremierePluginInfo() {
-  const pluginInfoPath = getUxpPremierePluginInfoPath();
-  const pluginInfoDir = path.dirname(pluginInfoPath);
-  try {
-    fs.mkdirSync(pluginInfoDir, { recursive: true });
-
-    let data: { plugins: any[] } = { plugins: [] };
-    if (fs.existsSync(pluginInfoPath)) {
-      try {
-        data = JSON.parse(fs.readFileSync(pluginInfoPath, 'utf-8'));
-      } catch {
-        data = { plugins: [] };
-      }
-    }
-
-    const plugins = Array.isArray(data.plugins) ? data.plugins : [];
-    const withoutSmoothyEdit = plugins.filter((plugin) => plugin.pluginId !== UXP_PLUGIN_ID);
-    withoutSmoothyEdit.push({
-      hostMinVersion: '25.2.0',
-      name: UXP_PLUGIN_NAME,
-      path: `$localPlugins/External/${UXP_PLUGIN_ID}_${UXP_PLUGIN_VERSION}`,
-      pluginId: UXP_PLUGIN_ID,
-      status: 'enabled',
-      type: 'uxp',
-      versionString: UXP_PLUGIN_VERSION
-    });
-
-    fs.writeFileSync(pluginInfoPath, JSON.stringify({ plugins: withoutSmoothyEdit }, null, 2), 'utf-8');
-  } catch (err) {
-    console.warn('[UXP] Could not write Premiere plugin info:', err);
-  }
-}
-
-function installBridge(targetExtPath?: string): { success: boolean; error?: string; path: string } {
-  const extPath = targetExtPath || getCepExtensionsPath();
-  const pluginDest = path.join(extPath, CEP_PLUGIN_ID);
-  const source = getCepPluginSource();
-
-  try {
-    if (!fs.existsSync(source)) {
-      return { success: false, error: 'CEP plugin source not found in app resources', path: pluginDest };
-    }
-
-    // Ensure extensions directory exists
-    fs.mkdirSync(extPath, { recursive: true });
-
-    // Remove old install if exists
-    if (fs.existsSync(pluginDest)) {
-      fs.rmSync(pluginDest, { recursive: true, force: true });
-    }
-
-    // Copy plugin
-    copyDirSync(source, pluginDest);
-
-    // Create .debug file for unsigned extensions
-    const debugContent = `<?xml version="1.0" encoding="UTF-8"?>
-<ExtensionList>
-  <Extension Id="${CEP_EXTENSION_ID}">
-    <HostList>
-      <Host Name="PPRO" Port="8088"/>
-    </HostList>
-  </Extension>
-</ExtensionList>`;
-    fs.writeFileSync(path.join(pluginDest, '.debug'), debugContent, 'utf-8');
-    clearSmoothyCepCaches();
-
-    // macOS: enable PlayerDebugMode via defaults
-    if (isMac) {
-      const { execSync } = require('child_process');
-      try {
-        execSync('defaults write com.adobe.CSXS.11 PlayerDebugMode 1');
-        execSync('defaults write com.adobe.CSXS.10 PlayerDebugMode 1');
-        execSync('defaults write com.adobe.CSXS.9 PlayerDebugMode 1');
-      } catch {
-        // Non-fatal if defaults command fails
-      }
-    }
-
-    console.log('[CEP] Bridge installed to:', pluginDest);
-    return { success: true, path: pluginDest };
-  } catch (err) {
-    console.error('[CEP] Install failed:', err);
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : 'Unknown error',
-      path: pluginDest
-    };
-  }
-}
-
-function packageUxpBridge(): { success: boolean; error?: string; packagePath: string; sourcePath: string } {
-  const sourcePath = getUxpPluginSource();
-  const packagePath = getUxpPackagePath();
-  const stagingPath = path.join(getAdobeUxpRootPath(), 'Installers', 'package-staging');
-
-  try {
-    if (!fs.existsSync(path.join(sourcePath, 'manifest.json'))) {
-      return { success: false, error: 'UXP plugin source not found in app resources', packagePath, sourcePath };
-    }
-
-    fs.mkdirSync(path.dirname(packagePath), { recursive: true });
-    fs.rmSync(stagingPath, { recursive: true, force: true });
-    fs.rmSync(packagePath, { force: true });
-    copyDirSync(sourcePath, stagingPath);
-
-    const { execFileSync } = require('child_process');
-    if (isWindows) {
-      const zipPath = packagePath.replace(/\.ccx$/i, '.zip');
-      fs.rmSync(zipPath, { force: true });
-      execFileSync('powershell.exe', [
-        '-NoProfile',
-        '-Command',
-        `Compress-Archive -Path ${JSON.stringify(path.join(stagingPath, '*'))} -DestinationPath ${JSON.stringify(zipPath)} -Force`
-      ], { timeout: 60000 });
-      fs.renameSync(zipPath, packagePath);
-    } else {
-      execFileSync('zip', ['-qry', packagePath, '.'], {
-        cwd: stagingPath,
-        timeout: 60000
-      });
-    }
-
-    fs.rmSync(stagingPath, { recursive: true, force: true });
-    return { success: true, packagePath, sourcePath };
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : 'Unknown UXP packaging error',
-      packagePath,
-      sourcePath
-    };
-  }
-}
-
-async function installUxpBridge(): Promise<{
-  success: boolean;
-  error?: string;
-  path: string;
-  installPath?: string;
-  packagePath: string;
-  sourcePath: string;
-  method?: string;
-  requiresUserAction?: boolean;
-  message?: string;
-}> {
-  const sourcePath = getUxpPluginSource();
-  const installPath = getUxpInstallPath();
-  const packagePath = getUxpPackagePath();
-
-  try {
-    if (!fs.existsSync(path.join(sourcePath, 'manifest.json'))) {
-      return {
-        success: false,
-        error: 'UXP plugin source not found in app resources',
-        path: installPath,
-        installPath,
-        packagePath,
-        sourcePath
-      };
-    }
-
-    fs.mkdirSync(getUxpExternalPluginsPath(), { recursive: true });
-    fs.rmSync(installPath, { recursive: true, force: true });
-    copyDirSync(sourcePath, installPath);
-    writeUxpPremierePluginInfo();
-
-    console.log('[UXP] Bridge installed to Adobe UXP folder:', installPath);
-    return {
-      success: true,
-      path: installPath,
-      installPath,
-      packagePath,
-      sourcePath,
-      method: 'adobe-folder',
-      message: 'UXP bridge installed in Adobe UXP folder. Restart Premiere Pro, then open Window > UXP Plugins > SmoothyEdit Bridge.'
-    };
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : 'Adobe UXP folder install failed',
-      path: installPath,
-      installPath,
-      packagePath,
-      sourcePath,
-      method: 'adobe-folder'
-    };
-  }
-}
-
-// ─── DaVinci Resolve Bridge Installation ────────────────────────────────────
-
-function getDefaultResolveScriptsPath(): string {
-  if (isMac) {
-    return path.join(app.getPath('home'), 'Library', 'Application Support', 'Blackmagic Design', 'DaVinci Resolve', 'Fusion', 'Scripts', 'Utility');
-  }
-  return path.join(process.env.APPDATA || '', 'Blackmagic Design', 'DaVinci Resolve', 'Support', 'Fusion', 'Scripts', 'Utility');
-}
-
-function getResolveScriptsPath(): string {
-  const custom = store.get('resolveScriptsPath') as string | null;
-  return custom || getDefaultResolveScriptsPath();
-}
-
-function getResolveBridgeSource(): string {
-  const resourcePath = path.join(process.resourcesPath, 'resolve-plugin');
-  if (fs.existsSync(resourcePath)) {
-    return resourcePath;
-  }
-  return path.join(__dirname, '..', '..', '..', 'smoothyedit-resolve');
-}
-
-function isResolveBridgeInstalled(): { installed: boolean; path: string } {
-  const scriptsPath = getResolveScriptsPath();
-  const bridgePath = path.join(scriptsPath, 'smoothyedit_bridge.lua');
-  return {
-    installed: fs.existsSync(bridgePath),
-    path: scriptsPath
-  };
-}
-
-function installResolveBridge(targetPath?: string): { success: boolean; error?: string; path: string } {
-  const scriptsPath = targetPath || getResolveScriptsPath();
-  const source = getResolveBridgeSource();
-
-  try {
-    if (!fs.existsSync(source)) {
-      return { success: false, error: 'Resolve bridge source not found in app resources', path: scriptsPath };
-    }
-
-    fs.mkdirSync(scriptsPath, { recursive: true });
-
-    // Copy entire resolve plugin directory
-    copyDirSync(source, scriptsPath);
-
-    console.log('[Resolve] Bridge installed to:', scriptsPath);
-    return { success: true, path: scriptsPath };
-  } catch (err) {
-    console.error('[Resolve] Install failed:', err);
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : 'Unknown error',
-      path: scriptsPath
-    };
   }
 }
 
@@ -657,15 +330,14 @@ app.whenReady().then(() => {
     mainWindow?.webContents.send('auth-state-change', state);
   });
 
-  // Start NLE servers (WebSocket for Premiere, HTTP polling for Resolve)
+  // Start the Premiere WebSocket server
   startNLEServers();
 
   // Set up callbacks to send to renderer
   setCallbacks({
     onConnectionChange: (connected) => {
       const nle = getActiveNLE();
-      const nleName = nle === 'resolve' ? 'DaVinci Resolve' : 'Premiere Pro';
-      sendLog('info', `${nleName} bridge ${connected ? 'connected' : 'disconnected'}`);
+      sendLog('info', `Premiere Pro bridge ${connected ? 'connected' : 'disconnected'}`);
       mainWindow?.webContents.send('connection-change', { connected, nle });
     },
     onSequenceInfo: (info) => {
@@ -785,25 +457,17 @@ app.whenReady().then(() => {
     } else {
       console.log('[CEP] Bridge already installed at:', bridgeStatus.path);
     }
-
-    // Auto-install Resolve bridge on macOS
-    const resolveStatus = isResolveBridgeInstalled();
-    if (!resolveStatus.installed) {
-      console.log('[Resolve] Bridge not found, auto-installing...');
-      const result = installResolveBridge();
-      if (result.success) {
-        console.log('[Resolve] Bridge auto-installed successfully');
-      } else {
-        console.warn('[Resolve] Bridge auto-install failed:', result.error);
-      }
-    } else {
-      console.log('[Resolve] Bridge already installed at:', resolveStatus.path);
-    }
   }
 
   // Auto-updater setup
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.logger = {
+    info: (msg?: any) => console.log('[Updater]', msg),
+    warn: (msg?: any) => console.warn('[Updater]', msg),
+    error: (msg?: any) => console.error('[Updater]', msg),
+    debug: (msg?: any) => console.log('[Updater:debug]', msg)
+  } as any;
   updateNotesCache = null;
   autoUpdater.on('checking-for-update', () => {
     console.log('[Updater] Checking for updates...');
@@ -962,8 +626,6 @@ ipcMain.handle('export-subtitles', async () => {
 
     // Save SRT file to desktop if we have subtitles
     if (result.success && result.srt && result.count > 0) {
-      const os = require('os');
-      const fs = require('fs');
       const desktopPath = path.join(os.homedir(), 'Desktop');
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
       const fileName = `${result.sequenceName || 'subtitles'}_${timestamp}.srt`;
@@ -1113,8 +775,28 @@ ipcMain.handle('generate-captions', async (_, config: {
   trackTool('captions');
   let tempAudioFiles: string[] = [];
 
+  resetAudioExtractionCancel();
+  captionsJobActive = true;
+
   try {
     let audioPath = config.audioPath;
+
+    // A local file (audio or video) was chosen directly — normalise it to a
+    // 16 kHz mono WAV so non-WAV/MP3 sources work too.
+    if (audioPath) {
+      mainWindow?.webContents.send('caption-progress', {
+        status: 'exporting',
+        message: 'Preparing audio file...'
+      });
+      try {
+        const normalized = await extractAudioTrack(audioPath, `caption_file_${Date.now()}`);
+        tempAudioFiles.push(normalized);
+        audioPath = normalized;
+      } catch (err) {
+        if (err instanceof Error && err.message === 'AUDIO_EXTRACTION_CANCELLED') throw err;
+        console.warn('[Captions] Could not normalize audio file, using it as-is:', err);
+      }
+    }
 
     // If no audio path provided, extract from sequence using ffmpeg
     if (!audioPath) {
@@ -1230,6 +912,7 @@ ipcMain.handle('generate-captions', async (_, config: {
 
     // Cleanup temp files
     tempAudioFiles.forEach(f => cleanupTempFile(f));
+    captionsJobActive = false;
 
     return {
       success: true,
@@ -1239,13 +922,46 @@ ipcMain.handle('generate-captions', async (_, config: {
       text: transcriptionResult.text
     };
   } catch (error) {
-    console.error('[Main] Caption generation error:', error);
+    captionsJobActive = false;
 
     // Cleanup temp files on error
     tempAudioFiles.forEach(f => cleanupTempFile(f));
 
-    return { success: false, error: error instanceof Error ? error.message : 'Generation failed' };
+    const message = error instanceof Error ? error.message : 'Generation failed';
+
+    if (message === 'TRANSCRIPTION_CANCELLED' || message === 'AUDIO_EXTRACTION_CANCELLED') {
+      console.log('[Main] Caption generation cancelled by user');
+      mainWindow?.webContents.send('caption-progress', { status: 'cancelled', message: 'Cancelled' });
+      return { success: false, cancelled: true, error: 'Cancelled' };
+    }
+
+    console.error('[Main] Caption generation error:', error);
+    return { success: false, error: message };
   }
+});
+
+ipcMain.handle('cancel-generate-captions', async () => {
+  if (!captionsJobActive) return { success: true };
+  await whisperService.cancelTranscription();
+  cancelAudioExtraction();
+  return { success: true };
+});
+
+ipcMain.handle('select-caption-audio', async () => {
+  if (!mainWindow) return { canceled: true };
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose an audio or video file',
+    properties: ['openFile'],
+    filters: [
+      { name: 'Audio', extensions: ['mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'opus', 'wma', 'aiff', 'aif'] },
+      { name: 'Video', extensions: ['mp4', 'mov', 'mkv', 'avi', 'webm', 'm4v', 'mts', 'm2ts', 'mpg', 'mpeg'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  });
+  if (result.canceled || !result.filePaths[0]) {
+    return { canceled: true };
+  }
+  return { canceled: false, path: result.filePaths[0] };
 });
 
 ipcMain.handle('save-captions', async (_, { format, content, fileName }: {
@@ -1322,14 +1038,14 @@ ipcMain.handle('check-for-updates', () => {
   });
 });
 
+ipcMain.handle('get-app-version', () => app.getVersion());
+
 // Premiere Bridge handlers
 ipcMain.handle('get-bridge-status', () => {
   const cepStatus = isBridgeInstalled();
-  const uxpStatus = isUxpBridgeInstalled();
   return {
-    installed: uxpStatus.installed,
-    path: uxpStatus.installPath,
-    uxp: uxpStatus,
+    installed: cepStatus.installed,
+    path: cepStatus.path,
     cep: cepStatus,
     extensionsPath: getCepExtensionsPath(),
     defaultPath: getDefaultCepPath(),
@@ -1338,11 +1054,11 @@ ipcMain.handle('get-bridge-status', () => {
 });
 
 ipcMain.handle('install-bridge', () => {
-  return installUxpBridge();
+  return installBridge();
 });
 
 ipcMain.handle('install-uxp-bridge', () => {
-  return installUxpBridge();
+  return { success: false, error: 'The Premiere UXP extension was removed in v1.3.3. Use the CEP extension.' };
 });
 
 ipcMain.handle('install-legacy-cep-bridge', () => {
@@ -1371,62 +1087,15 @@ ipcMain.handle('browse-cep-path', async () => {
   return { canceled: false, path: result.filePaths[0] };
 });
 
-// DaVinci Resolve Bridge handlers
-ipcMain.handle('get-resolve-bridge-status', () => {
-  const status = isResolveBridgeInstalled();
-  return {
-    installed: status.installed,
-    path: status.path,
-    defaultPath: getDefaultResolveScriptsPath(),
-    isCustomPath: !!store.get('resolveScriptsPath')
-  };
-});
-
-ipcMain.handle('install-resolve-bridge', () => {
-  return installResolveBridge();
-});
-
-ipcMain.handle('set-resolve-scripts-path', async (_, customPath?: string) => {
-  if (customPath) {
-    store.set('resolveScriptsPath', customPath);
-  } else {
-    store.delete('resolveScriptsPath');
-  }
-  return { success: true, path: getResolveScriptsPath() };
-});
-
-ipcMain.handle('browse-resolve-scripts-path', async () => {
-  if (!mainWindow) return { canceled: true };
-  const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Select DaVinci Resolve Scripts Folder',
-    defaultPath: getResolveScriptsPath(),
-    properties: ['openDirectory']
-  });
-  if (result.canceled || !result.filePaths[0]) {
-    return { canceled: true };
-  }
-  return { canceled: false, path: result.filePaths[0] };
-});
-
-ipcMain.handle('reveal-resolve-folder', () => {
-  const folderPath = getResolveScriptsPath();
-  if (fs.existsSync(folderPath)) {
-    shell.showItemInFolder(path.join(folderPath, 'smoothyedit_bridge.lua'));
-    return { success: true };
-  }
-  return { success: false, error: 'Folder not found' };
-});
-
 // NLE switching handlers
 ipcMain.handle('get-active-nle', () => {
   return {
     activeNLE: getActiveNLE(),
-    premiereConnected: getPremiereConnectionStatus(),
-    resolveConnected: getResolveConnectionStatus()
+    premiereConnected: getPremiereConnectionStatus()
   };
 });
 
-ipcMain.handle('set-active-nle', (_, nle: 'premiere' | 'resolve' | null) => {
+ipcMain.handle('set-active-nle', (_, nle: 'premiere' | null) => {
   setActiveNLE(nle);
   return { success: true, activeNLE: getActiveNLE() };
 });

@@ -1,9 +1,11 @@
 /**
- * NLE Router - Unified interface for Premiere Pro and DaVinci Resolve
- * 
- * Routes calls to the appropriate NLE backend based on the active selection.
- * Premiere Pro uses a WebSocket server (websocket-server.ts).
- * DaVinci Resolve uses a Lua bridge script with file/HTTP communication.
+ * NLE Router - Unified interface for Premiere Pro.
+ *
+ * Premiere Pro uses a WebSocket server (websocket-server.ts) with the CEP bridge.
+ *
+ * The DaVinci Resolve bridge and the Premiere UXP extension were removed in
+ * v1.3.3 to focus on the core editing workflow. They will return once they can
+ * reach parity with the CEP extension.
  */
 
 import {
@@ -19,18 +21,13 @@ import {
   addMarkersToSequence as wsAddMarkersToSequence,
   clearMarkersFromSequence as wsClearMarkersFromSequence,
   exportSubtitles as wsExportSubtitles,
-  createShortsAssembly as wsCreateShortsAssembly,
   sendCaptionsToPremiere
 } from './websocket-server';
 
-import { getResolveConnectionStatus } from './resolve-bridge';
-
-let activeNLE: 'premiere' | 'resolve' | null = null;
+let activeNLE: 'premiere' | null = null;
 
 export function startNLEServers() {
   startWebSocketServer();
-  // DaVinci Resolve bridge doesn't need a persistent server -
-  // it's polled via HTTP or file-based communication from the Lua script.
 }
 
 export function stopNLEServers() {
@@ -54,11 +51,6 @@ export function runSilenceRemoval(config: any) {
 }
 
 export function getConnectionStatus() {
-  // If resolve is explicitly selected, return resolve status
-  if (activeNLE === 'resolve') {
-    return getResolveConnectionStatus();
-  }
-  // Otherwise return Premiere status (default)
   return getPremiereConnectionStatus();
 }
 
@@ -70,7 +62,7 @@ export function getActiveNLE() {
   return activeNLE;
 }
 
-export function setActiveNLE(nle: 'premiere' | 'resolve' | null) {
+export function setActiveNLE(nle: 'premiere' | null) {
   activeNLE = nle;
 }
 
@@ -88,10 +80,6 @@ export function clearMarkersFromSequence() {
 
 export function exportSubtitles() {
   return wsExportSubtitles();
-}
-
-export function createShortsAssembly(markers: any[], options?: any) {
-  return wsCreateShortsAssembly(markers, options);
 }
 
 export function sendCaptionsToNLE(srtPath: string) {

@@ -1,6 +1,7 @@
 /**
- * WebSocket Server - Communicates with the Premiere Pro bridge plugin.
- * The bridge can be the modern UXP plugin or the legacy CEP fallback.
+ * WebSocket Server - Communicates with the Premiere Pro CEP bridge plugin.
+ *
+ * The UXP plugin was removed in v1.3.3; the CEP extension is the only bridge.
  */
 
 import { runVad } from './autocut/vad-runner';
@@ -24,10 +25,6 @@ let pluginSocket: any = null;
 let pluginSocketType: string | null = null;
 const pluginSockets: Record<string, any> = {};
 const pluginVersions: Record<string, string> = {};
-const FIXED_UXP_MARKER_VERSIONS = new Set([
-  'uxp-marker-debug-20260419-v3',
-  'uxp-20260916-transcript-shorts-v1'
-]);
 let isConnected = false;
 let currentSequenceInfo: any = null;
 
@@ -69,7 +66,7 @@ function isOpenSocket(socket: any) {
 }
 
 function selectActivePluginSocket() {
-  const preferredTypes = ['cep', 'uxp', 'unknown'];
+  const preferredTypes = ['cep', 'unknown'];
   for (const type of preferredTypes) {
     if (isOpenSocket(pluginSockets[type])) {
       pluginSocket = pluginSockets[type];
@@ -84,46 +81,19 @@ function selectActivePluginSocket() {
   isConnected = false;
 }
 
-function getPreferredTypesForMessage(message: any) {
-  // Premiere 25.2+ should use UXP for marker creation, but stale UXP panels
-  // can stay alive after file updates. Prefer CEP until the fixed UXP bridge
-  // version is actually connected.
-  if (message?.type === 'addMarkers') {
-    if (FIXED_UXP_MARKER_VERSIONS.has(pluginVersions.uxp)) {
-      return ['uxp', 'cep', 'unknown'];
-    }
-    return ['cep', 'uxp', 'unknown'];
-  }
-
-  if (message?.type === 'exportSubtitles' || message?.type === 'createShortsAssembly') {
-    return ['uxp', 'cep', 'unknown'];
-  }
-
-  if (message?.type === 'exportAudio') {
-    return ['cep', 'uxp', 'unknown'];
-  }
-
-  return ['cep', 'uxp', 'unknown'];
+function getPreferredTypesForMessage(_message: any) {
+  // CEP is the only supported bridge since v1.3.3.
+  return ['cep', 'unknown'];
 }
 
 function selectPluginSocketForMessage(message: any): { socket: any; type: string } | null {
   const preferredTypes = getPreferredTypesForMessage(message);
   for (const type of preferredTypes) {
-    if (message?.type === 'addMarkers' && type === 'uxp' && !FIXED_UXP_MARKER_VERSIONS.has(pluginVersions.uxp)) {
-      console.log(`[WebSocket] Skipping UXP for markers (unrecognized version ${pluginVersions.uxp})`);
-      continue;
-    }
-
     const socket = pluginSockets[type];
     if (isOpenSocket(socket)) {
       console.log(`[WebSocket] Selected ${type} plugin for ${message?.type}`);
       return { socket, type };
     }
-  }
-
-  if (message?.type === 'addMarkers' && getMarkerBridgeUnavailableReason()) {
-    console.warn(`[WebSocket] Marker bridge unavailable: ${getMarkerBridgeUnavailableReason()}`);
-    return null;
   }
 
   selectActivePluginSocket();
@@ -133,19 +103,6 @@ function selectPluginSocketForMessage(message: any): { socket: any; type: string
 function getPluginTypeForSocket(socket: any): string | null {
   for (const [type, plugin] of Object.entries(pluginSockets)) {
     if (plugin === socket) return type;
-  }
-
-  return null;
-}
-
-function getMarkerBridgeUnavailableReason(): string | null {
-  if (
-    isOpenSocket(pluginSockets.uxp) &&
-    pluginVersions.uxp &&
-    !FIXED_UXP_MARKER_VERSIONS.has(pluginVersions.uxp) &&
-    !isOpenSocket(pluginSockets.cep)
-  ) {
-    return `Premiere is still running old UXP bridge ${pluginVersions.uxp}. Reopen the UXP panel or reopen the CEP panel so SmoothyEdit can load the updated marker bridge.`;
   }
 
   return null;
@@ -166,7 +123,6 @@ let pendingAddMarkers: {
 let pendingClearMarkers: { resolve: (value: any) => void; reject: (error: any) => void } | null = null;
 let pendingExportSubtitles: { resolve: (value: any) => void; reject: (error: any) => void; attemptedTypes: string[] } | null = null;
 let pendingImportCaptions: { resolve: (value: any) => void; reject: (error: any) => void } | null = null;
-let pendingShortsAssembly: { resolve: (value: any) => void; reject: (error: any) => void } | null = null;
 
 export function exportAudio(): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -193,9 +149,8 @@ export function addMarkersToSequence(markers: any[]): Promise<any> {
     pendingAddMarkers = { resolve, reject, markers, attemptedTypes: [] };
     const sent = sendToPlugin({ type: 'addMarkers', markers });
     if (!sent) {
-      const reason = getMarkerBridgeUnavailableReason();
       pendingAddMarkers = null;
-      reject(new Error(reason || 'Not connected to Premiere'));
+      reject(new Error('Not connected to Premiere'));
       return;
     }
 
@@ -250,23 +205,10 @@ export function exportSubtitles(): Promise<any> {
   });
 }
 
-export function createShortsAssembly(markers: any[], options: any = {}): Promise<any> {
-  return new Promise((resolve, reject) => {
-    pendingShortsAssembly = { resolve, reject };
-    const uxpSocket = pluginSockets.uxp;
-    if (!isOpenSocket(uxpSocket)) {
-      pendingShortsAssembly = null;
-      reject(new Error('Open the SmoothyEdit UXP panel in Premiere Pro 25.6+ to build a vertical sequence.'));
-      return;
-    }
-    uxpSocket.send(JSON.stringify({ type: 'createShortsAssembly', markers, ...options }));
-    setTimeout(() => {
-      if (pendingShortsAssembly) {
-        pendingShortsAssembly = null;
-        reject(new Error('Create shorts assembly timeout'));
-      }
-    }, 120000);
-  });
+export function createShortsAssembly(_markers: any[], _options: any = {}): Promise<any> {
+  // Vertical-sequence assembly required the Premiere UXP plugin, which was
+  // removed in v1.3.3. Kept as a clear error so callers degrade gracefully.
+  return Promise.reject(new Error('Building a vertical sequence is coming back soon with the Premiere plugin.'));
 }
 
 export function sendCaptionsToPremiere(srtPath: string): Promise<any> {
@@ -402,12 +344,6 @@ async function handleMessage(msg: any, ws?: any) {
 
     case 'audioExported':
       if (pendingExportAudio) {
-        const responseType = getPluginTypeForSocket(ws) || pluginSocketType || 'unknown';
-        if (!msg.success && responseType === 'uxp' && !pendingExportAudio.attemptedTypes.includes('cep') && isOpenSocket(pluginSockets.cep)) {
-          pendingExportAudio.attemptedTypes.push('cep');
-          pluginSockets.cep.send(JSON.stringify({ type: 'exportAudio' }));
-          break;
-        }
         if (msg.success) {
           pendingExportAudio.resolve({ success: true, audioBase64: msg.audioBase64, fileName: msg.fileName, fileSize: msg.fileSize, duration: msg.duration });
         } else {
@@ -428,20 +364,6 @@ async function handleMessage(msg: any, ws?: any) {
       }
       if (!msg.success) {
         console.warn('[WebSocket] Markers failed:', msg.error || 'Unknown marker error');
-      }
-      if (
-        pendingAddMarkers &&
-        !msg.success &&
-        responseType === 'uxp' &&
-        !pendingAddMarkers.attemptedTypes.includes('cep') &&
-        isOpenSocket(pluginSockets.cep)
-      ) {
-        console.warn('[WebSocket] UXP marker request failed; retrying with CEP bridge');
-        pendingAddMarkers.attemptedTypes.push('cep');
-        pluginSocket = pluginSockets.cep;
-        pluginSocketType = 'cep';
-        pluginSockets.cep.send(JSON.stringify({ type: 'addMarkers', markers: pendingAddMarkers.markers }));
-        break;
       }
       if (pendingAddMarkers) {
         pendingAddMarkers.resolve({
@@ -468,12 +390,6 @@ async function handleMessage(msg: any, ws?: any) {
     case 'subtitlesExported':
       console.log('[WebSocket] Subtitles debug:', msg.debug);
       if (pendingExportSubtitles) {
-        const responseType = getPluginTypeForSocket(ws) || pluginSocketType || 'unknown';
-        if (!msg.success && responseType === 'uxp' && !pendingExportSubtitles.attemptedTypes.includes('cep') && isOpenSocket(pluginSockets.cep)) {
-          pendingExportSubtitles.attemptedTypes.push('cep');
-          pluginSockets.cep.send(JSON.stringify({ type: 'exportSubtitles' }));
-          break;
-        }
         pendingExportSubtitles.resolve({
           success: msg.success,
           subtitles: msg.subtitles,
@@ -485,13 +401,6 @@ async function handleMessage(msg: any, ws?: any) {
           debug: msg.debug
         });
         pendingExportSubtitles = null;
-      }
-      break;
-
-    case 'shortsAssemblyCreated':
-      if (pendingShortsAssembly) {
-        pendingShortsAssembly.resolve(msg);
-        pendingShortsAssembly = null;
       }
       break;
 

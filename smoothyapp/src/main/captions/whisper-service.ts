@@ -68,6 +68,9 @@ export type ProgressCallback = (progress: {
   total?: number;
 }) => void;
 
+// Handle for the in-flight transcription job, so it can be cancelled.
+let activeTranscribe: { stop: () => Promise<void> } | null = null;
+
 /**
  * Load or get the Whisper model using whisper.cpp native binding
  */
@@ -170,7 +173,7 @@ export async function transcribe(
   const cpuThreads = Math.max(4, Math.min(os.cpus().length, 16));
   const maxThreads = activeBackend === 'cpu' ? cpuThreads : 4;
 
-  const { promise } = whisperContext.transcribeFile(audioPath, {
+  const { promise, stop } = whisperContext.transcribeFile(audioPath, {
     language: 'en',
     tokenTimestamps: true,
     maxLen: 50,
@@ -186,7 +189,21 @@ export async function transcribe(
     }
   });
 
-  const result = await promise;
+  activeTranscribe = { stop };
+
+  let result: any;
+  try {
+    result = await promise;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.toLowerCase().includes('cancel')) {
+      console.log('[Whisper] Transcription cancelled by user');
+      throw new Error('TRANSCRIPTION_CANCELLED');
+    }
+    throw err;
+  } finally {
+    activeTranscribe = null;
+  }
 
   if (!result || !result.segments) {
     console.log(`[Whisper] No segments returned`);
@@ -197,7 +214,13 @@ export async function transcribe(
   // With maxLen:50, segments are short phrases (~8-10 words, ~3-4 seconds).
   // Segment boundaries are accurate (whisper.cpp token-level analysis),
   // so interpolation error within each segment stays small and can't accumulate.
+  //
+  // whisper.cpp occasionally returns a segment whose t1 <= t0 (or t0 before the
+  // previous segment's end). Left unchecked, that produces a word whose end time
+  // is before its start, which corrupts the SRT downstream. We drop degenerate
+  // segments and force every emitted word to be strictly non-decreasing.
   const chunks: TranscriptionChunk[] = [];
+  let minStart = 0;
 
   for (const seg of result.segments) {
     if (!seg.text || !seg.text.trim()) continue;
@@ -206,15 +229,26 @@ export async function transcribe(
     const words = segText.split(/\s+/).filter((w: string) => w.length > 0);
     if (words.length === 0) continue;
 
-    const segStart = seg.t0 / 1000;
-    const segEnd = seg.t1 / 1000;
+    let segStart = seg.t0 / 1000;
+    let segEnd = seg.t1 / 1000;
+
+    // Drop zero/negative-length segments outright.
+    if (!(segEnd > segStart)) {
+      console.warn(`[Whisper] Skipping degenerate segment (t0=${seg.t0}, t1=${seg.t1}): "${segText.slice(0, 40)}"`);
+      continue;
+    }
+
+    // Never let a segment start before the previous segment finished.
+    if (segStart < minStart) segStart = minStart;
+    if (segEnd <= segStart) segEnd = segStart + 0.01;
     const segDuration = segEnd - segStart;
 
     if (words.length === 1) {
       chunks.push({
         text: words[0],
-        timestamp: [segStart, segEnd]
+        timestamp: [round2(segStart), round2(segEnd)]
       });
+      minStart = round2(segEnd);
       continue;
     }
 
@@ -223,17 +257,23 @@ export async function transcribe(
     let charOffset = 0;
 
     for (const word of words) {
-      const wordStart = segStart + (charOffset / totalChars) * segDuration;
+      let wordStart = segStart + (charOffset / totalChars) * segDuration;
       charOffset += word.length;
-      const wordEnd = segStart + (charOffset / totalChars) * segDuration;
+      let wordEnd = segStart + (charOffset / totalChars) * segDuration;
+
+      // Enforce monotonic, non-zero-length word spans.
+      if (wordStart < minStart) wordStart = minStart;
+      if (wordEnd <= wordStart) wordEnd = wordStart + 0.01;
+
+      wordStart = round2(wordStart);
+      wordEnd = round2(wordEnd);
+      if (wordEnd <= wordStart) wordEnd = round2(wordStart + 0.01);
 
       chunks.push({
         text: word,
-        timestamp: [
-          Math.round(wordStart * 100) / 100,
-          Math.round(wordEnd * 100) / 100
-        ]
+        timestamp: [wordStart, wordEnd]
       });
+      minStart = wordEnd;
     }
   }
 
@@ -253,13 +293,36 @@ export async function transcribe(
 }
 
 /**
+ * Cancel the in-flight transcription, if any. The underlying job rejects with
+ * "Transcription cancelled", which transcribe() maps to TRANSCRIPTION_CANCELLED.
+ */
+export async function cancelTranscription(): Promise<void> {
+  if (activeTranscribe) {
+    console.log('[Whisper] Cancelling transcription...');
+    try {
+      await activeTranscribe.stop();
+    } catch (err) {
+      console.warn('[Whisper] Error while cancelling:', err);
+    }
+    activeTranscribe = null;
+  }
+}
+
+export function isTranscribing(): boolean {
+  return activeTranscribe !== null;
+}
+
+/**
  * Unload the current model to free memory
  */
-export async function unloadModel(): Promise<void> {
-  if (whisperContext) {
+export async function unloadModel(): Promise<void> {  if (whisperContext) {
     await whisperContext.release();
     whisperContext = null;
     currentModelId = null;
     console.log('[Whisper] Model unloaded');
   }
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
 }

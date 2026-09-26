@@ -16,7 +16,12 @@ const state = {
   captionResult: null,
   activeNLE: null,
   pendingUpdateNotes: null,
-  updateModalOpen: false
+  updateModalOpen: false,
+  appVersion: null,
+  updateState: { status: 'idle', version: null, percent: 0 },
+  captionSource: 'sequence',
+  captionFilePath: null,
+  isTranscribing: false
 };
 
 // DOM Elements
@@ -58,6 +63,14 @@ const captionModelProgressText = document.getElementById('caption-model-progress
 const captionsPreviewSection = document.getElementById('captions-preview-section');
 const captionsPreview = document.getElementById('captions-preview');
 const captionsCount = document.getElementById('captions-count');
+const captionsSourceSequence = document.getElementById('captions-source-sequence');
+const captionsSourceFile = document.getElementById('captions-source-file');
+const captionsFileRow = document.getElementById('captions-file-row');
+const captionsFilePath = document.getElementById('captions-file-path');
+const captionsFileBrowse = document.getElementById('captions-file-browse');
+const captionsSequenceSection = document.getElementById('captions-sequence-section');
+const captionsTracksSection = document.getElementById('captions-tracks-section');
+const progressCancelBtn = document.getElementById('progress-cancel-btn');
 
 // Best Shorts DOM Elements
 const bestshortsStatusBar = document.getElementById('bestshorts-status-bar');
@@ -86,31 +99,26 @@ const getTokenLink = document.getElementById('get-token-link');
 // Bridge Settings DOM Elements
 const bridgeStatusDot = document.getElementById('bridge-status-dot');
 const bridgeStatusText = document.getElementById('bridge-status-text');
-const uxpPackageInput = document.getElementById('uxp-package-input');
-const uxpInstallBtn = document.getElementById('uxp-install-btn');
 const cepPathInput = document.getElementById('cep-path-input');
 const cepBrowseBtn = document.getElementById('cep-browse-btn');
 const cepResetBtn = document.getElementById('cep-reset-btn');
 const cepInstallBtn = document.getElementById('cep-install-btn');
 
-// Resolve Bridge Settings DOM Elements
-const resolveBridgeStatusDot = document.getElementById('resolve-bridge-status-dot');
-const resolveBridgeStatusText = document.getElementById('resolve-bridge-status-text');
-const resolveScriptsInput = document.getElementById('resolve-scripts-input');
-const resolveBrowseBtn = document.getElementById('resolve-browse-btn');
-const resolveInstallBtn = document.getElementById('resolve-install-btn');
-const resolveRevealBtn = document.getElementById('resolve-reveal-btn');
-
 // NLE Selector DOM Elements
 const nleAutoBtn = document.getElementById('nle-auto-btn');
 const nlePremiereBtn = document.getElementById('nle-premiere-btn');
-const nleResolveBtn = document.getElementById('nle-resolve-btn');
 const nleStatusText = document.getElementById('nle-status-text');
 const connectionNleLabel = document.getElementById('connection-nle-label');
 
 // Update Settings DOM Elements
 const checkUpdateBtn = document.getElementById('check-update-btn');
 const settingsUpdateStatus = document.getElementById('settings-update-status');
+const settingsInstallUpdateBtn = document.getElementById('settings-install-update-btn');
+const settingsUpdateNotes = document.getElementById('settings-update-notes');
+const settingsCurrentVersion = document.getElementById('settings-current-version');
+const appVersionLabel = document.getElementById('app-version-label');
+const discordBtn = document.getElementById('discord-btn');
+const settingsDiscordBtn = document.getElementById('settings-discord-btn');
 
 // Logs DOM Elements
 const logsContainer = document.getElementById('logs-container');
@@ -158,6 +166,17 @@ async function init() {
   // Get initial website connection status
   const websiteStatus = await window.electronAPI.getWebsiteConnectionStatus();
   updateWebsiteConnection(websiteStatus.connected);
+
+  // Show the real app version (never hardcode it again)
+  try {
+    const version = await window.electronAPI.getAppVersion();
+    if (version) {
+      const label = `v${version}`;
+      if (appVersionLabel) appVersionLabel.textContent = label;
+      if (settingsCurrentVersion) settingsCurrentVersion.textContent = label;
+      state.appVersion = version;
+    }
+  } catch {}
 }
 
 // ========================================
@@ -368,6 +387,11 @@ function setupEventListeners() {
   saveCaptionsBtn.addEventListener('click', saveCaptionsFile);
   importCaptionsBtn.addEventListener('click', importCaptionsToPremiere);
 
+  if (captionsSourceSequence) captionsSourceSequence.addEventListener('click', () => setCaptionSource('sequence'));
+  if (captionsSourceFile) captionsSourceFile.addEventListener('click', () => setCaptionSource('file'));
+  if (captionsFileBrowse) captionsFileBrowse.addEventListener('click', chooseCaptionFile);
+  if (progressCancelBtn) progressCancelBtn.addEventListener('click', cancelCaptionGeneration);
+
   document.getElementById('caption-max-chars').addEventListener('input', (e) => {
     document.getElementById('caption-max-chars-value').textContent = e.target.value;
   });
@@ -407,21 +431,9 @@ function setupEventListeners() {
   });
 
   // Bridge settings
-  uxpInstallBtn.addEventListener('click', installUxpBridge);
   cepBrowseBtn.addEventListener('click', browseCepPath);
   cepResetBtn.addEventListener('click', resetCepPath);
   cepInstallBtn.addEventListener('click', reinstallLegacyBridge);
-
-  // Resolve bridge settings
-  if (resolveInstallBtn) {
-    resolveInstallBtn.addEventListener('click', installResolveBridge);
-  }
-  if (resolveBrowseBtn) {
-    resolveBrowseBtn.addEventListener('click', browseResolveScriptsPath);
-  }
-  if (resolveRevealBtn) {
-    resolveRevealBtn.addEventListener('click', revealResolveFolder);
-  }
 
   // NLE selector
   if (nleAutoBtn) {
@@ -430,12 +442,18 @@ function setupEventListeners() {
   if (nlePremiereBtn) {
     nlePremiereBtn.addEventListener('click', () => setActiveNLE('premiere'));
   }
-  if (nleResolveBtn) {
-    nleResolveBtn.addEventListener('click', () => setActiveNLE('resolve'));
-  }
 
   // Check for updates button
   checkUpdateBtn.addEventListener('click', manualCheckForUpdates);
+  if (settingsInstallUpdateBtn) {
+    settingsInstallUpdateBtn.addEventListener('click', () => window.electronAPI.installUpdate());
+  }
+  if (discordBtn) {
+    discordBtn.addEventListener('click', () => window.electronAPI.openExternal('https://discord.gg/KmJRqUZzDe'));
+  }
+  if (settingsDiscordBtn) {
+    settingsDiscordBtn.addEventListener('click', () => window.electronAPI.openExternal('https://discord.gg/KmJRqUZzDe'));
+  }
 
   // Logs tab
   if (logsClearBtn) {
@@ -549,6 +567,9 @@ function setupElectronListeners() {
     if (data.status === 'complete') {
       hideProgress();
       setCaptionsStatus('Captions generated!', 'success');
+    } else if (data.status === 'cancelled') {
+      hideProgress();
+      setCaptionsStatus('Transcription cancelled', 'idle');
     } else {
       const pct = data.progress || 0;
       setProgress(pct, data.message || 'Processing...');
@@ -581,44 +602,23 @@ function setupElectronListeners() {
 
   // Auto-updater listener
   window.electronAPI.onUpdateStatus((data) => {
-    const updateBar = document.getElementById('update-bar');
-    const updateText = document.getElementById('update-bar-text');
-    const updateBtn = document.getElementById('update-bar-btn');
+    state.updateState = {
+      status: data.status,
+      version: data.version || state.updateState.version,
+      percent: data.percent || 0
+    };
+    renderUpdateState();
 
+    // Show the "what's new" modal once a new version is fully downloaded.
     if (data.status === 'downloaded') {
-      updateText.textContent = `Update v${data.version} ready`;
-      updateBtn.textContent = 'Restart to Update';
-      updateBtn.onclick = () => window.electronAPI.installUpdate();
-      updateBar.classList.remove('hidden');
-      settingsUpdateStatus.textContent = `Update v${data.version} ready - restart to install`;
-      checkUpdateBtn.textContent = 'Restart to Update';
-      checkUpdateBtn.onclick = () => window.electronAPI.installUpdate();
       showUpdateModal(data.version);
-    } else if (data.status === 'downloading') {
-      updateText.textContent = `Downloading update... ${data.percent}%`;
-      updateBtn.style.display = 'none';
-      updateBar.classList.remove('hidden');
-      settingsUpdateStatus.textContent = `Downloading update... ${data.percent}%`;
-      checkUpdateBtn.disabled = true;
-    } else if (data.status === 'checking') {
-      settingsUpdateStatus.textContent = 'Checking for updates...';
-      checkUpdateBtn.disabled = true;
-    } else if (data.status === 'up-to-date') {
-      settingsUpdateStatus.textContent = 'You are on the latest version';
-      checkUpdateBtn.disabled = false;
-      checkUpdateBtn.textContent = 'Check for Updates';
-    } else if (data.status === 'available') {
-      settingsUpdateStatus.textContent = `Update v${data.version} available, downloading...`;
-    } else if (data.status === 'error') {
-      settingsUpdateStatus.textContent = 'Update check failed';
-      checkUpdateBtn.disabled = false;
-      checkUpdateBtn.textContent = 'Check for Updates';
     }
   });
 
-  // Release notes for the pending update -> shown in the "what's new" modal
+  // Release notes for the pending update -> shown in the settings panel + modal
   window.electronAPI.onUpdateNotes((data) => {
     state.pendingUpdateNotes = data.notes || null;
+    renderSettingsUpdateNotes(data.version, data.notes);
     if (state.updateModalOpen) {
       renderUpdateModalNotes(data.version, data.notes);
     }
@@ -652,12 +652,10 @@ function escapeHtml(text) {
 }
 
 function getNLEDisplayName() {
-  if (state.activeNLE === 'resolve') return 'DaVinci Resolve';
   return 'Premiere Pro';
 }
 
 function getNLEPanelName() {
-  if (state.activeNLE === 'resolve') return 'Resolve';
   return 'Premiere';
 }
 
@@ -1024,10 +1022,19 @@ function setStatus(text, type) {
   statusText.textContent = text;
 }
 
-function showProgress(msg) {
+function showProgress(msg, options = {}) {
   document.getElementById('progress-overlay').classList.remove('hidden');
   document.getElementById('progress-text').textContent = msg;
   document.getElementById('progress-fill').style.width = '0%';
+  if (progressCancelBtn) {
+    if (options.cancelable) {
+      progressCancelBtn.classList.remove('hidden');
+      progressCancelBtn.disabled = false;
+      progressCancelBtn.textContent = 'Cancel';
+    } else {
+      progressCancelBtn.classList.add('hidden');
+    }
+  }
 }
 
 function setProgress(pct, msg) {
@@ -1037,6 +1044,7 @@ function setProgress(pct, msg) {
 
 function hideProgress() {
   document.getElementById('progress-overlay').classList.add('hidden');
+  if (progressCancelBtn) progressCancelBtn.classList.add('hidden');
 }
 
 function showError(msg) {
@@ -1047,6 +1055,95 @@ function showError(msg) {
 // ========================================
 // Update "what's new" modal
 // ========================================
+
+/**
+ * Single source of truth for the update UI. Called on every updater event so the
+ * update bar and the settings section can never drift out of sync (previously a
+ * downloaded update left the bar's button hidden and the check button disabled).
+ */
+function renderUpdateState() {
+  const { status, version, percent } = state.updateState;
+
+  const updateBar = document.getElementById('update-bar');
+  const updateText = document.getElementById('update-bar-text');
+  const updateBtn = document.getElementById('update-bar-btn');
+  const upgradeable = status === 'available' || status === 'downloading' || status === 'downloaded';
+
+  // Reset shared controls to a known-good baseline on every event.
+  checkUpdateBtn.disabled = false;
+  checkUpdateBtn.textContent = 'Check for Updates';
+  if (settingsInstallUpdateBtn) settingsInstallUpdateBtn.classList.add('hidden');
+  if (updateBtn) updateBtn.style.display = '';
+
+  switch (status) {
+    case 'checking':
+      settingsUpdateStatus.textContent = `Checking for updates… (v${state.appVersion || '?'})`;
+      checkUpdateBtn.disabled = true;
+      checkUpdateBtn.textContent = 'Checking…';
+      break;
+
+    case 'available':
+      settingsUpdateStatus.textContent = `Update v${version} is available — downloading…`;
+      checkUpdateBtn.disabled = true;
+      checkUpdateBtn.textContent = 'Downloading…';
+      updateText.textContent = `Downloading update v${version}…`;
+      updateBar.classList.remove('hidden');
+      break;
+
+    case 'downloading':
+      settingsUpdateStatus.textContent = `Downloading update v${version}… ${percent}%`;
+      checkUpdateBtn.disabled = true;
+      checkUpdateBtn.textContent = 'Downloading…';
+      updateText.textContent = `Downloading update v${version}… ${percent}%`;
+      updateBar.classList.remove('hidden');
+      break;
+
+    case 'downloaded':
+      settingsUpdateStatus.textContent = `Update v${version} is ready to install`;
+      checkUpdateBtn.textContent = 'Check for Updates';
+      if (settingsInstallUpdateBtn) settingsInstallUpdateBtn.classList.remove('hidden');
+      updateText.textContent = `Update v${version} ready`;
+      updateBtn.textContent = 'Restart & Update';
+      updateBar.classList.remove('hidden');
+      break;
+
+    case 'up-to-date':
+      settingsUpdateStatus.textContent = `You're on the latest version (v${state.appVersion || '?'})`;
+      break;
+
+    case 'error':
+      settingsUpdateStatus.textContent = 'Update check failed — try again later';
+      break;
+
+    default:
+      settingsUpdateStatus.textContent = `v${state.appVersion || '?'}`;
+  }
+
+  if (!upgradeable) {
+    updateBar.classList.add('hidden');
+  }
+}
+
+/**
+ * Render the pending update's release notes inline in Settings, so the user can
+ * read what a version fixes/adds before choosing to install.
+ */
+function renderSettingsUpdateNotes(version, notes) {
+  if (!settingsUpdateNotes) return;
+
+  if (!version || !notes) {
+    settingsUpdateNotes.classList.add('hidden');
+    settingsUpdateNotes.innerHTML = '';
+    return;
+  }
+
+  settingsUpdateNotes.innerHTML = '';
+  const title = document.createElement('p');
+  title.innerHTML = `<strong>What's new in v${escapeHtml(version)}</strong>`;
+  settingsUpdateNotes.appendChild(title);
+  renderMarkdownInto(settingsUpdateNotes, notes);
+  settingsUpdateNotes.classList.remove('hidden');
+}
 
 function showUpdateModal(version) {
   const modal = document.getElementById('update-modal');
@@ -1078,7 +1175,14 @@ function renderUpdateModalNotes(version, notes) {
     return;
   }
 
-  // GitHub release bodies are markdown. Render the common shapes:
+  renderMarkdownInto(body, notes);
+}
+
+/**
+ * Render a GitHub release body (markdown: headings, bullet lists, paragraphs)
+ * into a container. Shared by the update modal and the settings panel.
+ */
+function renderMarkdownInto(body, notes) {
   // headings (##), bullet lists (-/*), and plain paragraphs.
   let list = null;
   const lines = notes.split(/\r?\n/);
@@ -1266,8 +1370,10 @@ function displayCaptionsSequenceInfo(info) {
     captionsSequenceName.textContent = 'No sequence open';
     captionsSequenceDetails.textContent = 'Open a sequence in Premiere';
     captionsAudioTracksList.innerHTML = '<p class="empty-message">Open a sequence first</p>';
-    generateCaptionsBtn.disabled = true;
-    captionsFooterStatus.textContent = 'Open a sequence to begin';
+    updateGenerateCaptionsButton();
+    if (state.captionSource === 'sequence') {
+      captionsFooterStatus.textContent = 'Open a sequence, or pick an audio/video file';
+    }
     return;
   }
 
@@ -1294,26 +1400,99 @@ function displayCaptionsSequenceInfo(info) {
     captionsAudioTracksList.innerHTML = '<p class="empty-message">No audio tracks found</p>';
   }
 
-  const hasAudio = info.audioTracks && info.audioTracks.length > 0;
+  updateGenerateCaptionsButton();
+}
+
+/**
+ * Enable/disable Generate based on the active source: a chosen file, or a
+ * sequence with at least one audio track.
+ */
+function updateGenerateCaptionsButton() {
+  if (state.isTranscribing) {
+    generateCaptionsBtn.disabled = true;
+    return;
+  }
+
+  if (state.captionSource === 'file') {
+    const hasFile = !!state.captionFilePath;
+    generateCaptionsBtn.disabled = !hasFile;
+    captionsFooterStatus.textContent = hasFile ? 'Ready to generate captions' : 'Choose an audio or video file';
+    return;
+  }
+
+  const hasAudio = state.sequenceInfo?.audioTracks && state.sequenceInfo.audioTracks.length > 0;
   generateCaptionsBtn.disabled = !hasAudio;
-  captionsFooterStatus.textContent = hasAudio ? 'Ready to generate captions' : 'Need audio tracks';
+  if (hasAudio) {
+    captionsFooterStatus.textContent = 'Ready to generate captions';
+  }
+}
+
+function setCaptionSource(source) {
+  state.captionSource = source;
+  const isFile = source === 'file';
+
+  if (captionsSourceSequence) captionsSourceSequence.classList.toggle('active', !isFile);
+  if (captionsSourceFile) captionsSourceFile.classList.toggle('active', isFile);
+  if (captionsFileRow) captionsFileRow.classList.toggle('hidden', !isFile);
+  if (captionsSequenceSection) captionsSequenceSection.classList.toggle('hidden', isFile);
+  if (captionsTracksSection) captionsTracksSection.classList.toggle('hidden', isFile);
+
+  updateGenerateCaptionsButton();
+}
+
+async function chooseCaptionFile() {
+  try {
+    const result = await window.electronAPI.selectCaptionAudio();
+    if (!result.canceled && result.path) {
+      state.captionFilePath = result.path;
+      if (captionsFilePath) captionsFilePath.value = result.path;
+      updateGenerateCaptionsButton();
+    }
+  } catch (error) {
+    showError(error.message || 'Could not open file picker');
+  }
+}
+
+async function cancelCaptionGeneration() {
+  if (!state.isTranscribing) return;
+  progressCancelBtn.disabled = true;
+  progressCancelBtn.textContent = 'Cancelling...';
+  try {
+    await window.electronAPI.cancelCaptions();
+  } catch (error) {
+    // The generation promise will settle; nothing else to do here.
+  }
 }
 
 async function runGenerateCaptions() {
-  if (state.isProcessing || !state.sequenceInfo) return;
+  if (state.isProcessing) return;
 
-  const trackIndices = Array.from(document.querySelectorAll('.captions-audio-track-cb:checked'))
-    .map(cb => parseInt(cb.dataset.trackIndex, 10))
-    .filter(index => !Number.isNaN(index));
+  const useFile = state.captionSource === 'file';
 
-  if (trackIndices.length === 0) {
-    showError('Select at least one audio track');
+  if (!useFile && !state.sequenceInfo) {
+    showError('Open a sequence in Premiere, or switch to Audio / Video File');
+    return;
+  }
+
+  let trackIndices = [];
+  if (!useFile) {
+    trackIndices = Array.from(document.querySelectorAll('.captions-audio-track-cb:checked'))
+      .map(cb => parseInt(cb.dataset.trackIndex, 10))
+      .filter(index => !Number.isNaN(index));
+
+    if (trackIndices.length === 0) {
+      showError('Select at least one audio track');
+      return;
+    }
+  } else if (!state.captionFilePath) {
+    showError('Choose an audio or video file first');
     return;
   }
 
   state.isProcessing = true;
+  state.isTranscribing = true;
   generateCaptionsBtn.disabled = true;
-  showProgress('Starting caption generation...');
+  showProgress('Starting caption generation...', { cancelable: true });
   setCaptionsStatus('Generating captions...', 'processing');
 
   const settings = {
@@ -1323,10 +1502,22 @@ async function runGenerateCaptions() {
   };
 
   try {
-    const result = await window.electronAPI.generateCaptions({ settings, trackIndices });
+    const config = useFile
+      ? { settings, audioPath: state.captionFilePath }
+      : { settings, trackIndices };
+
+    const result = await window.electronAPI.generateCaptions(config);
 
     hideProgress();
     state.isProcessing = false;
+    state.isTranscribing = false;
+
+    if (result.cancelled) {
+      setCaptionsStatus('Transcription cancelled', 'idle');
+      captionsFooterStatus.textContent = 'Cancelled';
+      updateGenerateCaptionsButton();
+      return;
+    }
 
     if (result.success) {
       state.captionResult = result;
@@ -1343,21 +1534,21 @@ async function runGenerateCaptions() {
         saveCaptionsBtn.disabled = false;
         importCaptionsBtn.disabled = !state.isConnected;
       }
-      generateCaptionsBtn.disabled = false;
 
       // Show preview
       displayCaptionsPreview(result.captions);
     } else {
       setCaptionsStatus('Generation failed', 'error');
       showError(result.error || 'Caption generation failed');
-      generateCaptionsBtn.disabled = false;
     }
   } catch (error) {
     hideProgress();
     state.isProcessing = false;
+    state.isTranscribing = false;
     setCaptionsStatus('Generation failed', 'error');
     showError(error.message || 'Caption generation failed');
-    generateCaptionsBtn.disabled = false;
+  } finally {
+    updateGenerateCaptionsButton();
   }
 }
 
@@ -1449,6 +1640,10 @@ async function openSettings() {
 
   // Load bridge status
   loadBridgeStatus();
+
+  // Refresh the update section so it reflects the real current state
+  renderUpdateState();
+  renderSettingsUpdateNotes(state.updateState.version, state.pendingUpdateNotes);
 }
 
 function closeSettings() {
@@ -1502,20 +1697,12 @@ async function toggleWebsiteConnection() {
 async function loadBridgeStatus() {
   try {
     const status = await window.electronAPI.getBridgeStatus();
-    const uxp = status.uxp || {};
     const cep = status.cep || {};
-    uxpPackageInput.value = uxp.installPath || status.path || '';
     cepPathInput.value = status.extensionsPath;
 
     if (cep.installed) {
       bridgeStatusDot.className = 'connection-dot connected';
       bridgeStatusText.textContent = 'CEP bridge installed';
-    } else if (uxp.installed) {
-      bridgeStatusDot.className = 'connection-dot connected';
-      bridgeStatusText.textContent = 'UXP bridge installed (CEP not found)';
-    } else if (cep.error || uxp.error) {
-      bridgeStatusDot.className = 'connection-dot disconnected';
-      bridgeStatusText.textContent = 'Bridge status check failed';
     } else {
       bridgeStatusDot.className = 'connection-dot disconnected';
       bridgeStatusText.textContent = 'Bridge not installed';
@@ -1523,28 +1710,6 @@ async function loadBridgeStatus() {
   } catch (err) {
     bridgeStatusDot.className = 'connection-dot disconnected';
     bridgeStatusText.textContent = 'Error checking bridge';
-  }
-
-  // Load Resolve bridge status
-  try {
-    const resolveStatus = await window.electronAPI.getResolveBridgeStatus();
-    if (resolveScriptsInput) {
-      resolveScriptsInput.value = resolveStatus.path || '';
-    }
-    if (resolveBridgeStatusDot) {
-      if (resolveStatus.installed) {
-        resolveBridgeStatusDot.className = 'connection-dot connected';
-        resolveBridgeStatusText.textContent = 'Resolve bridge installed';
-      } else {
-        resolveBridgeStatusDot.className = 'connection-dot disconnected';
-        resolveBridgeStatusText.textContent = 'Resolve bridge not installed';
-      }
-    }
-  } catch (err) {
-    if (resolveBridgeStatusDot) {
-      resolveBridgeStatusDot.className = 'connection-dot disconnected';
-      resolveBridgeStatusText.textContent = 'Error checking Resolve bridge';
-    }
   }
 
   // Load NLE status
@@ -1574,33 +1739,6 @@ async function resetCepPath() {
   setTimeout(() => { cepResetBtn.textContent = 'Reset Path'; }, 1500);
 }
 
-async function installUxpBridge() {
-  uxpInstallBtn.textContent = 'Installing...';
-  uxpInstallBtn.disabled = true;
-
-  try {
-    const result = await window.electronAPI.installUxpBridge();
-    if (result.success) {
-      uxpInstallBtn.textContent = result.requiresUserAction ? 'Opened Installer' : 'Installed!';
-      if (result.message) {
-        bridgeStatusText.textContent = result.message;
-      }
-      await loadBridgeStatus();
-    } else {
-      uxpInstallBtn.textContent = 'Failed';
-      showError('UXP bridge install failed: ' + (result.error || 'Unknown error'));
-    }
-  } catch (err) {
-    uxpInstallBtn.textContent = 'Failed';
-    showError('UXP bridge install error');
-  }
-
-  setTimeout(() => {
-    uxpInstallBtn.textContent = 'Install UXP Bridge';
-    uxpInstallBtn.disabled = false;
-  }, 2500);
-}
-
 async function reinstallLegacyBridge() {
   cepInstallBtn.textContent = 'Installing...';
   cepInstallBtn.disabled = true;
@@ -1625,52 +1763,6 @@ async function reinstallLegacyBridge() {
   }, 2000);
 }
 
-async function installResolveBridge() {
-  resolveInstallBtn.textContent = 'Installing...';
-  resolveInstallBtn.disabled = true;
-
-  try {
-    const result = await window.electronAPI.installResolveBridge();
-    if (result.success) {
-      resolveInstallBtn.textContent = 'Installed!';
-      resolveBridgeStatusText.textContent = 'Installed — restart Resolve to use';
-      resolveBridgeStatusDot.className = 'connection-dot connecting';
-      await loadBridgeStatus();
-    } else {
-      resolveInstallBtn.textContent = 'Failed';
-      showError('Resolve bridge install failed: ' + (result.error || 'Unknown error'));
-    }
-  } catch (err) {
-    resolveInstallBtn.textContent = 'Failed';
-    showError('Resolve bridge install error');
-  }
-
-  setTimeout(() => {
-    resolveInstallBtn.textContent = 'Install Resolve Bridge';
-    resolveInstallBtn.disabled = false;
-  }, 2000);
-}
-
-async function browseResolveScriptsPath() {
-  const result = await window.electronAPI.browseResolveScriptsPath();
-  if (!result.canceled && result.path) {
-    await window.electronAPI.setResolveScriptsPath(result.path);
-    resolveScriptsInput.value = result.path;
-    await loadBridgeStatus();
-  }
-}
-
-async function revealResolveFolder() {
-  try {
-    const result = await window.electronAPI.revealResolveFolder();
-    if (!result.success) {
-      showError('Could not open folder: ' + (result.error || 'Not found'));
-    }
-  } catch (err) {
-    showError('Could not reveal folder in Finder');
-  }
-}
-
 async function setActiveNLE(nle) {
   await window.electronAPI.setActiveNLE(nle);
   state.activeNLE = nle;
@@ -1688,7 +1780,7 @@ function updateNLESelectorUI() {
   const nle = state.activeNLE;
 
   // Update button states
-  [nleAutoBtn, nlePremiereBtn, nleResolveBtn].forEach(btn => {
+  [nleAutoBtn, nlePremiereBtn].forEach(btn => {
     if (btn) btn.classList.remove('active');
   });
 
@@ -1698,9 +1790,6 @@ function updateNLESelectorUI() {
   } else if (nle === 'premiere' && nlePremiereBtn) {
     nlePremiereBtn.classList.add('active');
     nleStatusText.textContent = 'Locked to Premiere Pro';
-  } else if (nle === 'resolve' && nleResolveBtn) {
-    nleResolveBtn.classList.add('active');
-    nleStatusText.textContent = 'Locked to DaVinci Resolve. Launch the bridge from Workspace > Scripts > Utility > SmoothyEdit Bridge';
   }
 }
 
@@ -1710,18 +1799,18 @@ function updateNLESelectorUI() {
 
 function manualCheckForUpdates() {
   checkUpdateBtn.disabled = true;
-  checkUpdateBtn.textContent = 'Checking...';
-  settingsUpdateStatus.textContent = 'Checking for updates...';
+  checkUpdateBtn.textContent = 'Checking…';
+  settingsUpdateStatus.textContent = 'Checking for updates…';
   window.electronAPI.checkForUpdates();
 
-  // Re-enable after 10s in case no response comes back
+  // Re-enable after 15s in case no response comes back
   setTimeout(() => {
-    if (checkUpdateBtn.textContent === 'Checking...') {
-      checkUpdateBtn.disabled = false;
-      checkUpdateBtn.textContent = 'Check for Updates';
+    if (state.updateState.status === 'checking' || checkUpdateBtn.textContent === 'Checking…') {
+      state.updateState = { status: 'idle', version: null, percent: 0 };
+      renderUpdateState();
       settingsUpdateStatus.textContent = 'No updates found';
     }
-  }, 10000);
+  }, 15000);
 }
 
 // ========================================
@@ -1785,15 +1874,9 @@ function applyPlatformStyles(platformInfo) {
   if (platformInfo.isWindows) {
     document.body.classList.add('platform-windows');
     console.log('[Platform] Windows detected - applying Windows styles');
-    // Update platform-specific button text
-    const revealBtn = document.getElementById('resolve-reveal-btn');
-    if (revealBtn) revealBtn.textContent = 'Reveal in File Explorer';
   } else if (platformInfo.isMac) {
     document.body.classList.add('platform-macos');
     console.log('[Platform] macOS detected - applying macOS styles');
-    // Update platform-specific button text
-    const revealBtn = document.getElementById('resolve-reveal-btn');
-    if (revealBtn) revealBtn.textContent = 'Reveal in Finder';
   }
 }
 

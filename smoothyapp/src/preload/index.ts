@@ -35,6 +35,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   downloadCaptionModel: (modelId: string) => ipcRenderer.invoke('download-caption-model', modelId),
   generateCaptions: (config: { audioPath?: string; settings: any; trackIndices?: number[] }) =>
     ipcRenderer.invoke('generate-captions', config),
+  cancelCaptions: () => ipcRenderer.invoke('cancel-generate-captions'),
+  selectCaptionAudio: () => ipcRenderer.invoke('select-caption-audio'),
   saveCaptions: (options: { format: string; content: string; fileName?: string }) =>
     ipcRenderer.invoke('save-captions', options),
   importCaptionsToPremiere: (captions: any[]) =>
@@ -63,25 +65,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Auto-updater
   installUpdate: () => ipcRenderer.invoke('install-update'),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
   // NLE Bridge
   getActiveNLE: () => ipcRenderer.invoke('get-active-nle'),
-  setActiveNLE: (nle: 'premiere' | 'resolve' | null) => ipcRenderer.invoke('set-active-nle', nle),
+  setActiveNLE: (nle: 'premiere' | null) => ipcRenderer.invoke('set-active-nle', nle),
 
   // Premiere Bridge
   getBridgeStatus: () => ipcRenderer.invoke('get-bridge-status'),
   installBridge: () => ipcRenderer.invoke('install-bridge'),
-  installUxpBridge: () => ipcRenderer.invoke('install-uxp-bridge'),
   installLegacyCepBridge: () => ipcRenderer.invoke('install-legacy-cep-bridge'),
   setCepPath: (customPath?: string) => ipcRenderer.invoke('set-cep-path', customPath),
   browseCepPath: () => ipcRenderer.invoke('browse-cep-path'),
-
-  // DaVinci Resolve Bridge
-  getResolveBridgeStatus: () => ipcRenderer.invoke('get-resolve-bridge-status'),
-  installResolveBridge: () => ipcRenderer.invoke('install-resolve-bridge'),
-  setResolveScriptsPath: (customPath?: string) => ipcRenderer.invoke('set-resolve-scripts-path', customPath),
-  browseResolveScriptsPath: () => ipcRenderer.invoke('browse-resolve-scripts-path'),
-  revealResolveFolder: () => ipcRenderer.invoke('reveal-resolve-folder'),
 
   // Video Compressor
   compressorCheckFFmpeg: () => ipcRenderer.invoke('compressor-check-ffmpeg'),
