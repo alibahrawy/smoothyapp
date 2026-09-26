@@ -48,7 +48,7 @@ if (typeof JSON === 'undefined') {
   };
 }
 
-var SMOOTHY_CEP_HOST_VERSION = "20260419-marker-host-v5";
+var SMOOTHY_CEP_HOST_VERSION = "20260420-caption-host-v6";
 
 function getSmoothyCepHostVersion() {
   return SMOOTHY_CEP_HOST_VERSION;
@@ -1091,68 +1091,44 @@ function formatSrtTime(seconds) {
 }
 
 /**
- * Import captions from SmoothyEdit to Premiere as a caption track.
- * captionsJSON: array of {index, startTime, endTime, text}
- * Saves an SRT file, imports it into the project, then inserts it onto the sequence.
+ * Import an SRT file (already written by the desktop app) into Premiere as a
+ * caption track. srtPath is an absolute path to the file on disk — the desktop
+ * app owns file generation so the bytes match the "Save SRT" output exactly.
  */
-function importCaptions(captionsJSON) {
+function importCaptions(srtPath) {
   try {
     var seq = app.project.activeSequence;
     if (!seq) {
       return JSON.stringify({ success: false, error: "No active sequence" });
     }
 
-    var captions = JSON.parse(captionsJSON);
-    if (!captions || captions.length === 0) {
-      return JSON.stringify({ success: false, error: "No captions provided" });
+    if (!srtPath) {
+      return JSON.stringify({ success: false, error: "No caption file path provided" });
     }
 
-    // Build SRT content
-    var srtContent = "";
-    for (var j = 0; j < captions.length; j++) {
-      var c = captions[j];
-      srtContent += (j + 1) + "\n";
-      srtContent += formatSrtTime(c.startTime) + " --> " + formatSrtTime(c.endTime) + "\n";
-      srtContent += c.text + "\n\n";
-    }
-
-    // Determine save path — next to the project file
-    var projectPath = app.project.path;
-    var srtPath = "";
-
-    if (projectPath) {
-      var projectFolder = projectPath.substring(0, projectPath.lastIndexOf("/"));
-      srtPath = projectFolder + "/" + seq.name + "_captions.srt";
-    } else {
-      // No project saved yet — use temp folder
-      srtPath = Folder.temp.fsName + "/" + seq.name + "_captions.srt";
-    }
-
-    // Write SRT file
     var srtFile = new File(srtPath);
-    srtFile.encoding = "UTF-8";
-    srtFile.open("w");
-    srtFile.write(srtContent);
-    srtFile.close();
+    if (!srtFile.exists) {
+      return JSON.stringify({ success: false, error: "Caption file not found: " + srtPath });
+    }
 
     // Import the SRT file into Premiere's project panel
     var importSuccess = app.project.importFiles(
-      [srtPath],    // array of file paths
-      true,          // suppress import UI
-      app.project.rootItem, // target bin
-      false          // not numbered stills
+      [srtPath],              // array of file paths
+      true,                   // suppress import UI
+      app.project.rootItem,   // target bin
+      false                   // not numbered stills
     );
 
     if (!importSuccess) {
       return JSON.stringify({
         success: false,
-        error: "Failed to import SRT file into project. File saved at: " + srtPath
+        error: "Premiere could not import the caption file. File saved at: " + srtPath
       });
     }
 
     // Find the imported SRT item in the project
     var srtItem = null;
-    var srtFileName = srtPath.substring(srtPath.lastIndexOf("/") + 1);
+    var srtFileName = srtFile.name;
 
     for (var i = app.project.rootItem.children.numItems - 1; i >= 0; i--) {
       var item = app.project.rootItem.children[i];
@@ -1165,26 +1141,23 @@ function importCaptions(captionsJSON) {
     if (!srtItem) {
       return JSON.stringify({
         success: true,
-        count: captions.length,
-        message: "SRT imported into project panel (" + captions.length + " captions). Drag it onto your sequence to create a caption track."
+        message: "Caption file imported into the project panel. Drag '" + srtFileName + "' onto your sequence to create a caption track."
       });
     }
 
-    // Try to insert the SRT onto the sequence as a caption track
-    // Premiere recognizes SRT files and creates a caption track automatically
+    // Try to insert the SRT onto the sequence as a caption track.
+    // Premiere recognizes SRT files and creates a caption track automatically.
     try {
       seq.insertClip(srtItem, 0, seq.videoTracks.numTracks - 1, seq.audioTracks.numTracks - 1);
       return JSON.stringify({
         success: true,
-        count: captions.length,
-        message: "Imported " + captions.length + " captions onto sequence."
+        message: "Captions imported onto the sequence."
       });
     } catch (insertErr) {
-      // insertClip may not work for SRT — tell user to drag from project panel
+      // insertClip may not work for SRT — tell the user to drag from project panel
       return JSON.stringify({
         success: true,
-        count: captions.length,
-        message: "SRT imported into project (" + captions.length + " captions). Drag '" + srtFileName + "' from the project panel onto your sequence to create a caption track."
+        message: "Caption file imported into the project. Drag '" + srtFileName + "' from the project panel onto your sequence to create a caption track."
       });
     }
 

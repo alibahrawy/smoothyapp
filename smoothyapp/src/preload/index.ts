@@ -33,7 +33,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCaptionModels: () => ipcRenderer.invoke('get-caption-models'),
   getCaptionModelStatus: () => ipcRenderer.invoke('get-caption-model-status'),
   downloadCaptionModel: (modelId: string) => ipcRenderer.invoke('download-caption-model', modelId),
-  generateCaptions: (config: { audioPath?: string; settings: any }) =>
+  generateCaptions: (config: { audioPath?: string; settings: any; trackIndices?: number[] }) =>
     ipcRenderer.invoke('generate-captions', config),
   saveCaptions: (options: { format: string; content: string; fileName?: string }) =>
     ipcRenderer.invoke('save-captions', options),
@@ -147,6 +147,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onUpdateStatus: (callback: (data: any) => void) => {
     ipcRenderer.on('update-status', (_, data) => callback(data));
+  },
+  onUpdateNotes: (callback: (data: { version: string; notes: string | null }) => void) => {
+    ipcRenderer.on('update-notes', (_, data) => callback(data));
   },
 
   // Log streaming from main process

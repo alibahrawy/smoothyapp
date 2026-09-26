@@ -14,7 +14,9 @@ const state = {
   currentTheme: 'cream',
   platform: 'unknown',
   captionResult: null,
-  activeNLE: null
+  activeNLE: null,
+  pendingUpdateNotes: null,
+  updateModalOpen: false
 };
 
 // DOM Elements
@@ -591,6 +593,7 @@ function setupElectronListeners() {
       settingsUpdateStatus.textContent = `Update v${data.version} ready - restart to install`;
       checkUpdateBtn.textContent = 'Restart to Update';
       checkUpdateBtn.onclick = () => window.electronAPI.installUpdate();
+      showUpdateModal(data.version);
     } else if (data.status === 'downloading') {
       updateText.textContent = `Downloading update... ${data.percent}%`;
       updateBtn.style.display = 'none';
@@ -610,6 +613,14 @@ function setupElectronListeners() {
       settingsUpdateStatus.textContent = 'Update check failed';
       checkUpdateBtn.disabled = false;
       checkUpdateBtn.textContent = 'Check for Updates';
+    }
+  });
+
+  // Release notes for the pending update -> shown in the "what's new" modal
+  window.electronAPI.onUpdateNotes((data) => {
+    state.pendingUpdateNotes = data.notes || null;
+    if (state.updateModalOpen) {
+      renderUpdateModalNotes(data.version, data.notes);
     }
   });
 
@@ -1034,6 +1045,90 @@ function showError(msg) {
 }
 
 // ========================================
+// Update "what's new" modal
+// ========================================
+
+function showUpdateModal(version) {
+  const modal = document.getElementById('update-modal');
+  document.getElementById('update-modal-version').textContent = version;
+  renderUpdateModalNotes(version, state.pendingUpdateNotes);
+  modal.classList.remove('hidden');
+  state.updateModalOpen = true;
+
+  document.getElementById('update-modal-install').onclick = () => {
+    modal.classList.add('hidden');
+    state.updateModalOpen = false;
+    window.electronAPI.installUpdate();
+  };
+  document.getElementById('update-modal-later').onclick = () => {
+    modal.classList.add('hidden');
+    state.updateModalOpen = false;
+  };
+}
+
+function renderUpdateModalNotes(version, notes) {
+  const body = document.getElementById('update-modal-body');
+  body.innerHTML = '';
+
+  if (!notes) {
+    const p = document.createElement('p');
+    p.className = 'update-empty';
+    p.textContent = `SmoothyEdit v${version} is ready to install. Restart to get the latest fixes and features.`;
+    body.appendChild(p);
+    return;
+  }
+
+  // GitHub release bodies are markdown. Render the common shapes:
+  // headings (##), bullet lists (-/*), and plain paragraphs.
+  let list = null;
+  const lines = notes.split(/\r?\n/);
+  const flushList = () => {
+    if (list) { body.appendChild(list); list = null; }
+  };
+
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) { flushList(); continue; }
+
+    const heading = line.match(/^#{1,6}\s+(.*)$/);
+    if (heading) {
+      flushList();
+      const h = document.createElement('h4');
+      h.textContent = stripInlineMarkdown(heading[1]);
+      body.appendChild(h);
+      continue;
+    }
+
+    const bullet = line.match(/^[-*]\s+(.*)$/);
+    if (bullet) {
+      if (!list) { list = document.createElement('ul'); }
+      const li = document.createElement('li');
+      applyInlineMarkdown(li, bullet[1]);
+      list.appendChild(li);
+      continue;
+    }
+
+    flushList();
+    const p = document.createElement('p');
+    p.className = 'update-empty';
+    applyInlineMarkdown(p, line);
+    body.appendChild(p);
+  }
+  flushList();
+}
+
+function stripInlineMarkdown(text) {
+  return text.replace(/\*\*(.*?)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1');
+}
+
+function applyInlineMarkdown(el, text) {
+  const html = escapeHtml(text)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+  el.innerHTML = html;
+}
+
+// ========================================
 // Best Shorts Functions
 // ========================================
 
@@ -1207,6 +1302,15 @@ function displayCaptionsSequenceInfo(info) {
 async function runGenerateCaptions() {
   if (state.isProcessing || !state.sequenceInfo) return;
 
+  const trackIndices = Array.from(document.querySelectorAll('.captions-audio-track-cb:checked'))
+    .map(cb => parseInt(cb.dataset.trackIndex, 10))
+    .filter(index => !Number.isNaN(index));
+
+  if (trackIndices.length === 0) {
+    showError('Select at least one audio track');
+    return;
+  }
+
   state.isProcessing = true;
   generateCaptionsBtn.disabled = true;
   showProgress('Starting caption generation...');
@@ -1219,7 +1323,7 @@ async function runGenerateCaptions() {
   };
 
   try {
-    const result = await window.electronAPI.generateCaptions({ settings });
+    const result = await window.electronAPI.generateCaptions({ settings, trackIndices });
 
     hideProgress();
     state.isProcessing = false;

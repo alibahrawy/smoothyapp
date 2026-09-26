@@ -6,13 +6,48 @@
  * interpolated proportionally within each segment for the caption formatter.
  */
 
-import { initWhisper } from '@fugood/whisper.node';
+import { initWhisper, LibVariant } from '@fugood/whisper.node';
+import { execFileSync } from 'child_process';
+import os from 'os';
 import {
   ensureModelDownloaded
 } from './model-manager';
 
 let whisperContext: any = null;
 let currentModelId: string | null = null;
+let activeBackend: 'metal' | 'cuda' | 'vulkan' | 'cpu' = 'cpu';
+
+const isMac = process.platform === 'darwin';
+const isWindows = process.platform === 'win32';
+
+function hasNvidiaGpu(): boolean {
+  if (!isWindows && process.platform !== 'linux') return false;
+  try {
+    execFileSync('nvidia-smi', ['-L'], { stdio: 'ignore', timeout: 4000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Pick the best available whisper.cpp backend once per process. The native
+ * module is cached globally, so changing backends requires an app restart.
+ */
+function resolveBackends(): { variants: (LibVariant | undefined)[]; labels: string[] } {
+  if (isMac) {
+    // macOS arm64 default package ships Metal.
+    return { variants: [undefined], labels: ['metal'] };
+  }
+  if (hasNvidiaGpu()) {
+    return { variants: ['cuda', undefined], labels: ['cuda', 'vulkan'] };
+  }
+  return { variants: ['vulkan'], labels: ['vulkan'] };
+}
+
+export function getActiveBackend(): string {
+  return activeBackend;
+}
 
 export interface TranscriptionChunk {
   text: string;
@@ -62,14 +97,39 @@ export async function loadModel(
     onProgress({ status: 'initializing', progress: 95 });
   }
 
-  // Initialize whisper.cpp context with Metal GPU
-  whisperContext = await initWhisper({
-    filePath: modelPath,
-    useGpu: true
-  });
+  // Initialize whisper.cpp context, preferring the best GPU backend for this
+  // machine (Metal on macOS, CUDA on NVIDIA, Vulkan otherwise). Falls back to
+  // CPU when no GPU backend can be initialized.
+  const { variants, labels } = resolveBackends();
+  const errors: string[] = [];
+
+  for (let i = 0; i < variants.length; i++) {
+    const variant = variants[i];
+    const label = labels[i];
+    try {
+      whisperContext = await initWhisper(
+        { filePath: modelPath, useGpu: true },
+        variant
+      );
+      activeBackend = label as typeof activeBackend;
+      console.log(`[Whisper] Model loaded successfully using ${activeBackend} backend`);
+      break;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${label}: ${message}`);
+      console.warn(`[Whisper] Failed to initialize ${label} backend:`, message);
+      whisperContext = null;
+    }
+  }
+
+  if (!whisperContext) {
+    console.warn(`[Whisper] No GPU backend available (${errors.join(' | ')}). Falling back to CPU.`);
+    whisperContext = await initWhisper({ filePath: modelPath, useGpu: false });
+    activeBackend = 'cpu';
+    console.log('[Whisper] Model loaded successfully using CPU backend');
+  }
 
   currentModelId = modelId;
-  console.log(`[Whisper] Model loaded successfully (GPU enabled)`);
 
   if (onProgress) {
     onProgress({ status: 'ready', progress: 100 });
@@ -107,12 +167,15 @@ export async function transcribe(
 
   console.log(`[Whisper] Transcribing: ${audioPath}`);
 
+  const cpuThreads = Math.max(4, Math.min(os.cpus().length, 16));
+  const maxThreads = activeBackend === 'cpu' ? cpuThreads : 4;
+
   const { promise } = whisperContext.transcribeFile(audioPath, {
     language: 'en',
     tokenTimestamps: true,
     maxLen: 50,
     temperature: 0.0,
-    maxThreads: 4,
+    maxThreads,
     onProgress: (progress: number) => {
       if (onProgress) {
         onProgress({

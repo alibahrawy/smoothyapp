@@ -1947,6 +1947,56 @@ body.platform-macos {
   opacity: 1;
 }
 
+/* Update available modal */
+.update-modal {
+  max-width: 460px;
+  text-align: left;
+}
+
+.update-modal .update-modal-title {
+  color: var(--foreground);
+  margin-bottom: var(--spacing-md);
+}
+
+.update-modal-body {
+  max-height: 50vh;
+  overflow-y: auto;
+  margin-bottom: var(--spacing-lg);
+  padding-right: var(--spacing-sm);
+}
+
+.update-modal-body h4 {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--foreground);
+  margin: var(--spacing-md) 0 var(--spacing-xs);
+}
+
+.update-modal-body ul {
+  list-style: disc;
+  padding-left: 18px;
+  margin: 0;
+}
+
+.update-modal-body li {
+  color: var(--foreground-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+
+.update-modal-body .update-empty {
+  color: var(--foreground-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+.update-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
 /* Compressor Tab Styles */
 .drop-zone {
   border: 2px dashed var(--border-color);

@@ -269,10 +269,10 @@ export function createShortsAssembly(markers: any[], options: any = {}): Promise
   });
 }
 
-export function sendCaptionsToPremiere(captions: any[]): Promise<any> {
+export function sendCaptionsToPremiere(srtPath: string): Promise<any> {
   return new Promise((resolve, reject) => {
     pendingImportCaptions = { resolve, reject };
-    const sent = sendToPlugin({ type: 'importCaptions', captions });
+    const sent = sendToPlugin({ type: 'importCaptions', srtPath });
     if (!sent) {
       pendingImportCaptions = null;
       reject(new Error('Not connected to Premiere'));

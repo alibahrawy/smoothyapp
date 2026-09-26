@@ -9,7 +9,7 @@
   'use strict';
 
   const csInterface = new CSInterface();
-  const HOST_SCRIPT_VERSION = '20260419-marker-host-v5';
+  const HOST_SCRIPT_VERSION = '20260420-caption-host-v6';
   const MARKER_PAYLOAD_CHUNK_SIZE = 8000;
   let ws = null;
   let isConnected = false;
@@ -156,14 +156,18 @@
         break;
 
       case 'importCaptions':
-        importCaptions(data.captions);
+        importCaptions(data.srtPath);
         break;
     }
   }
 
-  function importCaptions(captions) {
-    const captionsJson = JSON.stringify(captions).replace(/'/g, "\\'");
-    csInterface.evalScript(`importCaptions('${captionsJson}')`, function(result) {
+  function importCaptions(srtPath) {
+    if (!srtPath) {
+      send({ type: 'captionsImported', success: false, error: 'No caption file path provided' });
+      return;
+    }
+    const escaped = String(srtPath).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    csInterface.evalScript(`importCaptions('${escaped}')`, function(result) {
       try {
         const res = JSON.parse(result);
         send({
@@ -174,7 +178,8 @@
           error: res.error
         });
       } catch (e) {
-        send({ type: 'captionsImported', success: false, error: 'Failed to import captions: ' + e.message });
+        const raw = typeof result === 'string' ? result.slice(0, 300) : String(result);
+        send({ type: 'captionsImported', success: false, error: 'Failed to import captions: ' + e.message + ' | Premiere response: ' + raw });
       }
     });
   }

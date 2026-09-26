@@ -264,7 +264,9 @@ async function readTrackItems(track) {
       name: await readValue(clip, 'name', 'Clip'),
       path: await getMediaPath(projectItem),
       start: await secondsFromTime(await readValue(clip, 'start', await safeCall(clip, 'getStartTime', null))),
-      end: await secondsFromTime(await readValue(clip, 'end', await safeCall(clip, 'getEndTime', null)))
+      end: await secondsFromTime(await readValue(clip, 'end', await safeCall(clip, 'getEndTime', null))),
+      inPoint: await secondsFromTime(await safeCall(clip, 'getInPoint', null) || await readValue(clip, 'inPoint', null)),
+      outPoint: await secondsFromTime(await safeCall(clip, 'getOutPoint', null) || await readValue(clip, 'outPoint', null))
     });
   }
 

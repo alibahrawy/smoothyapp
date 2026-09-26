@@ -94,6 +94,6 @@ export function createShortsAssembly(markers: any[], options?: any) {
   return wsCreateShortsAssembly(markers, options);
 }
 
-export function sendCaptionsToNLE(captions: any[]) {
-  return sendCaptionsToPremiere(captions);
+export function sendCaptionsToNLE(srtPath: string) {
+  return sendCaptionsToPremiere(srtPath);
 }

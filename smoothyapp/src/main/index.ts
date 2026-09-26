@@ -70,12 +70,10 @@ import {
 } from './captions/caption-formatter';
 import * as whisperService from './captions/whisper-service';
 import {
-  extractAudioTrack,
-  cleanupTempFile
+  stitchTimelineAudio,
+  cleanupTempFile,
+  TimelineAudioClip
 } from './autocut/audio-extractor';
-import {
-  combineAudioTracks
-} from './autocut/silence-detector';
 import videoCompressor, { CompressionSettings, VideoFile } from './compressor/video-compressor';
 
 function swallowStdIOMaybeEpipe() {
@@ -97,6 +95,36 @@ const isMac = process.platform === 'darwin';
 const isWindows = process.platform === 'win32';
 const store = new Store();
 let compressorEventsBound = false;
+
+// Cached GitHub release notes for the pending update (null = not fetched yet).
+let updateNotesCache: string | null = null;
+
+/**
+ * Fetch the release body for a specific version from the public releases repo.
+ * Used to show "what's new" in the update modal.
+ */
+async function fetchUpdateNotes(version: string): Promise<string | null> {
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'SmoothyEdit'
+  };
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  try {
+    const res = await fetch('https://api.github.com/repos/alibahrawy/smoothyapp/releases?per_page=20', { headers });
+    if (!res.ok) return null;
+    const releases = await res.json() as Array<{ tag_name?: string; name?: string; body?: string }>;
+    const normalized = version.replace(/^v/, '');
+    const match = releases.find((r) =>
+      (r.tag_name || '').replace(/^v/, '') === normalized || (r.name || '').replace(/^v/, '') === normalized
+    );
+    return match?.body?.trim() || null;
+  } catch (err) {
+    console.warn('[Updater] Failed to fetch release notes:', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
 
 function sendLog(level: string, message: string) {
   const timestamp = new Date().toLocaleTimeString();
@@ -191,7 +219,7 @@ function getUxpPluginSource(): string {
   if (fs.existsSync(resourcePath)) {
     return resourcePath;
   }
-  return path.join(__dirname, '..', '..', '..', 'smoothyedit');
+  return path.join(__dirname, '..', '..', '..', 'smoothyapp');
 }
 
 function getAdobeUxpRootPath(): string {
@@ -776,7 +804,7 @@ app.whenReady().then(() => {
   // Auto-updater setup
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
-
+  updateNotesCache = null;
   autoUpdater.on('checking-for-update', () => {
     console.log('[Updater] Checking for updates...');
     mainWindow?.webContents.send('update-status', { status: 'checking' });
@@ -785,6 +813,11 @@ app.whenReady().then(() => {
   autoUpdater.on('update-available', (info) => {
     console.log('[Updater] Update available:', info.version);
     mainWindow?.webContents.send('update-status', { status: 'available', version: info.version });
+    updateNotesCache = null;
+    fetchUpdateNotes(info.version).then((notes) => {
+      updateNotesCache = notes;
+      mainWindow?.webContents.send('update-notes', { version: info.version, notes });
+    });
   });
 
   autoUpdater.on('update-not-available', () => {
@@ -802,6 +835,16 @@ app.whenReady().then(() => {
   autoUpdater.on('update-downloaded', (info) => {
     console.log('[Updater] Update downloaded:', info.version);
     mainWindow?.webContents.send('update-status', { status: 'downloaded', version: info.version });
+
+    const emit = (notes: string | null) => mainWindow?.webContents.send('update-notes', { version: info.version, notes });
+    if (updateNotesCache !== null) {
+      emit(updateNotesCache);
+    } else {
+      fetchUpdateNotes(info.version).then((notes) => {
+        updateNotesCache = notes;
+        emit(notes);
+      });
+    }
   });
 
   autoUpdater.on('error', (err) => {
@@ -1065,10 +1108,10 @@ ipcMain.handle('download-caption-model', async (_, modelId: string) => {
 ipcMain.handle('generate-captions', async (_, config: {
   audioPath?: string;
   settings: Partial<CaptionSettings>;
+  trackIndices?: number[];
 }) => {
   trackTool('captions');
   let tempAudioFiles: string[] = [];
-  let combinedAudioPath: string | null = null;
 
   try {
     let audioPath = config.audioPath;
@@ -1090,63 +1133,44 @@ ipcMain.handle('generate-captions', async (_, config: {
         return { success: false, error: 'No audio tracks in sequence' };
       }
 
-      // Extract audio from each track that has clips
-      // Deduplicate by clip path to avoid extracting the same file multiple times
-      const seenPaths = new Set<string>();
+      // Build a timeline-accurate WAV from every clip on the selected audio
+      // tracks. Only using the first clip and ignoring clip in/out + timeline
+      // offsets silently truncated long sequences.
+      const selectedTracks = Array.isArray(config.trackIndices) && config.trackIndices.length > 0
+        ? new Set<number>(config.trackIndices)
+        : null;
 
-      for (let i = 0; i < seqInfo.audioTracks.length; i++) {
-        const track = seqInfo.audioTracks[i];
-        if (track.clips && track.clips.length > 0 && track.clips[0].path) {
-          const clipPath = track.clips[0].path;
-
-          if (seenPaths.has(clipPath)) {
-            console.log(`[Captions] Skipping track ${i} (${track.name}) - duplicate path: ${clipPath}`);
-            continue;
-          }
-          seenPaths.add(clipPath);
-
-          console.log(`[Captions] Extracting track ${i} (${track.name}) from: ${clipPath}`);
-          mainWindow?.webContents.send('caption-progress', {
-            status: 'exporting',
-            message: `Extracting audio track ${i + 1}/${seqInfo.audioTracks.length}...`
+      const timelineClips: TimelineAudioClip[] = [];
+      for (const track of seqInfo.audioTracks) {
+        if (selectedTracks && !selectedTracks.has(track.index)) continue;
+        for (const clip of track.clips || []) {
+          if (!clip || !clip.path) continue;
+          timelineClips.push({
+            path: clip.path,
+            start: Number(clip.start) || 0,
+            end: Number(clip.end) || 0,
+            inPoint: clip.inPoint,
+            outPoint: clip.outPoint
           });
-
-          try {
-            const tempWav = await extractAudioTrack(clipPath, `caption_track_${i}`, 0);
-
-            // Verify the WAV has actual audio content (> 1KB)
-            const fs = require('fs');
-            const stats = fs.statSync(tempWav);
-            if (stats.size < 1024) {
-              console.warn(`[Captions] Track ${i} (${track.name}) produced empty/tiny WAV (${stats.size} bytes), skipping`);
-              cleanupTempFile(tempWav);
-              continue;
-            }
-
-            console.log(`[Captions] Track ${i} extracted successfully (${(stats.size / 1024).toFixed(0)} KB)`);
-            tempAudioFiles.push(tempWav);
-          } catch (err) {
-            console.warn(`[Captions] Failed to extract track ${i} (${track.name}):`, err);
-          }
         }
       }
 
-      if (tempAudioFiles.length === 0) {
-        return { success: false, error: 'Failed to extract audio from any track' };
+      if (timelineClips.length === 0) {
+        return { success: false, error: 'No audio clips found on the selected tracks' };
       }
 
-      // Combine all tracks into a single WAV for transcription
-      if (tempAudioFiles.length > 1) {
-        mainWindow?.webContents.send('caption-progress', {
-          status: 'exporting',
-          message: 'Combining audio tracks...'
-        });
-        combinedAudioPath = await combineAudioTracks(tempAudioFiles);
-        audioPath = combinedAudioPath;
-        console.log(`[Captions] ${tempAudioFiles.length} tracks combined into one`);
-      } else {
-        audioPath = tempAudioFiles[0];
-        console.log(`[Captions] 1 audio track extracted`);
+      mainWindow?.webContents.send('caption-progress', {
+        status: 'exporting',
+        message: `Preparing timeline audio (${timelineClips.length} clip${timelineClips.length === 1 ? '' : 's'})...`
+      });
+
+      const stitched = await stitchTimelineAudio(timelineClips, `caption_timeline_${Date.now()}`);
+      tempAudioFiles.push(stitched.path);
+      audioPath = stitched.path;
+      console.log(`[Captions] Timeline audio ready: ${stitched.durationSeconds.toFixed(1)}s from ${stitched.clipCount} clip(s)`);
+
+      if (stitched.durationSeconds < 1) {
+        return { success: false, error: 'Extracted audio is empty' };
       }
     }
 
@@ -1206,7 +1230,6 @@ ipcMain.handle('generate-captions', async (_, config: {
 
     // Cleanup temp files
     tempAudioFiles.forEach(f => cleanupTempFile(f));
-    if (combinedAudioPath) cleanupTempFile(combinedAudioPath);
 
     return {
       success: true,
@@ -1220,7 +1243,6 @@ ipcMain.handle('generate-captions', async (_, config: {
 
     // Cleanup temp files on error
     tempAudioFiles.forEach(f => cleanupTempFile(f));
-    if (combinedAudioPath) cleanupTempFile(combinedAudioPath);
 
     return { success: false, error: error instanceof Error ? error.message : 'Generation failed' };
   }
@@ -1263,16 +1285,19 @@ ipcMain.handle('save-captions', async (_, { format, content, fileName }: {
 
 ipcMain.handle('import-captions-to-premiere', async (_, captions: FormattedCaption[]) => {
   try {
-    // Convert captions to JSON format for the CEP plugin
-    const captionsData = captions.map(cap => ({
-      index: cap.index,
-      startTime: cap.startTime,
-      endTime: cap.endTime,
-      text: cap.text
-    }));
+    if (!Array.isArray(captions) || captions.length === 0) {
+      return { success: false, error: 'No captions to import' };
+    }
 
-    // Send to active NLE bridge
-    const result = await sendCaptionsToNLE(captionsData);
+    // Write the SRT on the Node side using the exact same bytes as "Save SRT".
+    // The previous flow rebuilt the file inside ExtendScript, which broke on
+    // Windows paths and produced files Premiere rejected as malformed.
+    const seqInfo = getSequenceInfo();
+    const safeName = (seqInfo?.name || 'captions').replace(/[\\/:*?"<>|]/g, '_');
+    const srtPath = path.join(os.tmpdir(), `${safeName}_captions_${Date.now()}.srt`);
+    fs.writeFileSync(srtPath, toSRT(captions), 'utf-8');
+
+    const result = await sendCaptionsToNLE(srtPath);
 
     return result;
   } catch (error) {
