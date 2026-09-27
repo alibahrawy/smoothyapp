@@ -72,6 +72,7 @@ const captionsSequenceSection = document.getElementById('captions-sequence-secti
 const captionsTracksSection = document.getElementById('captions-tracks-section');
 const progressCancelBtn = document.getElementById('progress-cancel-btn');
 const captionModelSelect = document.getElementById('caption-model-select');
+const captionEngineSelect = document.getElementById('caption-engine-select');
 const captionEngineStatus = document.getElementById('caption-engine-status');
 const captionsCapitalizeBtn = document.getElementById('captions-capitalize-btn');
 const captionsRemovePunctBtn = document.getElementById('captions-remove-punct-btn');
@@ -184,6 +185,7 @@ async function init() {
 
   // Caption model list + engine status
   loadCaptionModels();
+  loadCaptionEnginePreference();
 }
 
 // ========================================
@@ -399,6 +401,7 @@ function setupEventListeners() {
   if (captionsFileBrowse) captionsFileBrowse.addEventListener('click', chooseCaptionFile);
   if (progressCancelBtn) progressCancelBtn.addEventListener('click', cancelCaptionGeneration);
   if (captionModelSelect) captionModelSelect.addEventListener('change', onCaptionModelChange);
+  if (captionEngineSelect) captionEngineSelect.addEventListener('change', onCaptionEngineChange);
   if (captionsCapitalizeBtn) captionsCapitalizeBtn.addEventListener('click', () => transformCaptions('capitalize'));
   if (captionsRemovePunctBtn) captionsRemovePunctBtn.addEventListener('click', () => transformCaptions('removePunctuation'));
 
@@ -1467,10 +1470,12 @@ async function refreshCaptionEngineStatus() {
     const label = backend === 'CUDA' ? 'GPU (CUDA)'
       : backend === 'METAL' ? 'GPU (Metal)'
       : backend === 'VULKAN' ? 'GPU (Vulkan)'
-      : 'CPU';
-    captionEngineStatus.textContent = info.ready
-      ? `Running on ${label}`
-      : 'The engine downloads automatically on your first transcription';
+      : 'CPU (all cores)';
+    if (info.ready) {
+      captionEngineStatus.textContent = `Running on ${label}`;
+    } else {
+      captionEngineStatus.textContent = 'The engine downloads automatically on your first transcription';
+    }
   } catch {
     captionEngineStatus.textContent = '';
   }
@@ -1483,6 +1488,33 @@ async function onCaptionModelChange() {
     captionEngineStatus.textContent = 'Model set — applies to your next transcription';
   } catch (error) {
     showError(error.message || 'Could not change the model');
+  }
+}
+
+async function loadCaptionEnginePreference() {
+  if (!captionEngineSelect) return;
+  try {
+    const engine = await window.electronAPI.getCaptionEngine();
+    if (engine && ['auto', 'cuda', 'cpu'].includes(engine)) {
+      captionEngineSelect.value = engine;
+    }
+  } catch (error) {
+    console.warn('Failed to load engine preference', error);
+  }
+}
+
+async function onCaptionEngineChange() {
+  if (!captionEngineSelect) return;
+  try {
+    const result = await window.electronAPI.setCaptionEngine(captionEngineSelect.value);
+    if (result && result.success) {
+      const label = result.engine === 'cpu' ? 'CPU (all cores)'
+        : result.engine === 'cuda' ? 'GPU (CUDA)'
+        : 'Auto';
+      captionEngineStatus.textContent = `Engine set to ${label} — applies to your next transcription`;
+    }
+  } catch (error) {
+    showError(error.message || 'Could not change the engine');
   }
 }
 

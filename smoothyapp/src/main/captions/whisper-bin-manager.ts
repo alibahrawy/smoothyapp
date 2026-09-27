@@ -89,6 +89,20 @@ export function isBinaryInstalled(variant: WhisperVariant): boolean {
   return findExe(getVariantDir(variant), variant) !== null;
 }
 
+/** User-chosen engine: 'auto' (best detected), 'cuda' (force GPU), 'cpu' (force CPU). */
+export type EnginePreference = 'auto' | 'cuda' | 'cpu';
+
+let enginePreference: EnginePreference = 'auto';
+
+export function setEnginePreference(pref: EnginePreference): void {
+  enginePreference = pref === 'cuda' || pref === 'cpu' ? pref : 'auto';
+  console.log(`[WhisperBin] Engine preference: ${enginePreference}`);
+}
+
+export function getEnginePreference(): EnginePreference {
+  return enginePreference;
+}
+
 /**
  * The preferred variant for this machine: CUDA when an NVIDIA GPU is present
  * (Windows/Linux), Metal on Apple Silicon, otherwise CPU.
@@ -102,6 +116,14 @@ export function getPreferredVariant(): WhisperVariant {
 
 /** Ordered list of variants to try, best first. */
 export function getVariantOrder(): WhisperVariant[] {
+  if (enginePreference === 'cpu') {
+    return ['cpu'];
+  }
+  if (enginePreference === 'cuda') {
+    // Forced GPU: try CUDA first, CPU as a safety net so a forced choice
+    // never blocks transcription entirely.
+    return ['cuda', 'cpu'];
+  }
   const preferred = getPreferredVariant();
   const fallbacks: WhisperVariant[] = preferred === 'cuda' ? ['cuda', 'cpu'] : [preferred];
   return Array.from(new Set(fallbacks));

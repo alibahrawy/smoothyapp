@@ -318,7 +318,17 @@
               <select id="caption-model-select" class="select-input">
                 <option value="">Loading…</option>
               </select>
+            </div>
+
+            <div class="form-group">
+              <label for="caption-engine-select">Transcription Engine</label>
+              <select id="caption-engine-select" class="select-input">
+                <option value="auto">Auto — GPU if available</option>
+                <option value="cuda">GPU (CUDA)</option>
+                <option value="cpu">CPU (all cores)</option>
+              </select>
               <p class="help-text" id="caption-engine-status">Checking engine…</p>
+              <p class="help-text">If the GPU engine keeps failing or is slow, switch to CPU. Auto retries on CPU whenever the GPU fails.</p>
             </div>
 
             <div class="form-group">

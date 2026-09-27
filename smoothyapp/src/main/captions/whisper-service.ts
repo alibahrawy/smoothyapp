@@ -24,6 +24,8 @@ import {
   isBinaryInstalled,
   getVariantOrder,
   clearBinary,
+  setEnginePreference as setBinEnginePreference,
+  getEnginePreference as getBinEnginePreference,
   WhisperVariant
 } from './whisper-bin-manager';
 
@@ -49,6 +51,7 @@ export type ProgressCallback = (progress: {
 let currentModelId: string | null = null;
 let activeBackend: WhisperVariant = 'cpu';
 let activeBinary: string | null = null;
+let enginePrefSetting: 'auto' | 'cuda' | 'cpu' = 'auto';
 let activeTranscribe: {
   process: ChildProcessWithoutNullStreams;
   cancel: () => void;
@@ -59,6 +62,25 @@ const isWindows = process.platform === 'win32';
 
 export function getActiveBackend(): string {
   return activeBackend;
+}
+
+/**
+ * Choose which engine the next transcription uses: 'auto' (best detected),
+ * 'cuda' (force GPU), or 'cpu' (force CPU with every thread).
+ */
+export function setEnginePreference(pref: 'auto' | 'cuda' | 'cpu'): void {
+  const normalized = pref === 'cuda' || pref === 'cpu' ? pref : 'auto';
+  const changed = normalized !== enginePrefSetting;
+  enginePrefSetting = normalized;
+  setBinEnginePreference(normalized);
+  if (changed) {
+    activeBinary = null;
+    console.log('[Whisper] Engine preference changed — engine will reload on next use');
+  }
+}
+
+export function getEnginePreference(): 'auto' | 'cuda' | 'cpu' {
+  return enginePrefSetting;
 }
 
 /**
@@ -239,110 +261,115 @@ export async function transcribe(
   }
 
   const outBase = path.join(os.tmpdir(), `smoothyedit-whisper-${Date.now()}`);
-  const threads = Math.max(4, Math.min(os.cpus().length, 16));
-
-  const args = [
-    '-m', modelPath,
-    '-f', audioPath,
-    '-l', 'en',
-    '-oj',            // JSON output
-    '-of', outBase,
-    '-t', String(threads),
-    '-ml', '50',      // max segment length (chars) -> short phrases
-    '-pp'             // print progress
-  ];
-
-  // Force CPU when we deliberately loaded the CPU build.
-  if (activeBackend === 'cpu') args.push('-ng');
-
-  console.log(`[Whisper] Running CLI (${activeBackend}, ${threads} threads): ${path.basename(activeBinary)}`);
-
+  const threads = os.cpus().length;
   const jsonPath = `${outBase}.json`;
 
-  const result = await new Promise<string>((resolve, reject) => {
-    const child = spawn(activeBinary as string, args, { windowsHide: true });
-    let stderr = '';
-    let lastReported = -1;
+  const runOnce = (binary: string, backend: WhisperVariant, onProgressCb?: ProgressCallback): Promise<string> => {
+    const args = [
+      '-m', modelPath,
+      '-f', audioPath,
+      '-l', 'en',
+      '-oj',            // JSON output
+      '-of', outBase,
+      '-t', String(threads),
+      '-ml', '50',      // max segment length (chars) -> short phrases
+      '-pp'             // print progress
+    ];
 
-    const cleanup = () => {
-      activeTranscribe = null;
-      try { if (fs.existsSync(jsonPath)) fs.rmSync(jsonPath, { force: true }); } catch {}
-      for (const ext of ['.txt', '.srt', '.vtt', '.json']) {
-        try { const p = outBase + ext; if (fs.existsSync(p)) fs.rmSync(p, { force: true }); } catch {}
-      }
-    };
+    // Force CPU when we deliberately loaded the CPU build.
+    if (backend === 'cpu') args.push('-ng');
 
-    activeTranscribe = {
-      process: child,
-      cancel: () => {
-        try { child.kill('SIGTERM'); } catch {}
-      }
-    };
+    console.log(`[Whisper] Running CLI (${backend}, ${threads} threads): ${path.basename(binary)}`);
 
-    child.stdout.on('data', (d) => {
-      // Progress lines look like: "whisper_print_progress_callback: progress = 42%"
-      const text = d.toString();
-      const m = [...text.matchAll(/progress\s*=\s*(\d+)%/g)];
-      if (m.length > 0 && onProgress) {
-        const pct = parseInt(m[m.length - 1][1], 10);
-        if (pct !== lastReported) {
-          lastReported = pct;
-          onProgress({
-            status: `Transcribing — ${pct}%`,
-            progress: Math.min(95, Math.round(pct * 0.95))
-          });
+    return new Promise<string>((resolve, reject) => {
+      const child = spawn(binary, args, { windowsHide: true });
+      let stderr = '';
+      let lastReported = -1;
+
+      const cleanup = () => {
+        activeTranscribe = null;
+        for (const ext of ['.txt', '.srt', '.vtt', '.json']) {
+          try { const p = outBase + ext; if (fs.existsSync(p)) fs.rmSync(p, { force: true }); } catch {}
         }
-      }
-    });
+      };
 
-    child.stderr.on('data', (d) => {
-      stderr += d.toString();
-      const text = d.toString();
-      const m = [...text.matchAll(/progress\s*=\s*(\d+)%/g)];
-      if (m.length > 0 && onProgress) {
-        const pct = parseInt(m[m.length - 1][1], 10);
-        if (pct !== lastReported) {
-          lastReported = pct;
-          onProgress({
-            status: `Transcribing — ${pct}%`,
-            progress: Math.min(95, Math.round(pct * 0.95))
-          });
+      activeTranscribe = {
+        process: child,
+        cancel: () => {
+          try { child.kill('SIGTERM'); } catch {}
         }
-      }
-    });
+      };
 
-    child.on('error', (err) => {
-      cleanup();
-      reject(new Error(`Failed to start whisper.cpp: ${err.message}`));
-    });
+      const reportProgress = (text: string) => {
+        const m = [...text.matchAll(/progress\s*=\s*(\d+)%/g)];
+        if (m.length > 0 && onProgressCb) {
+          const pct = parseInt(m[m.length - 1][1], 10);
+          if (pct !== lastReported) {
+            lastReported = pct;
+            onProgressCb({
+              status: `Transcribing — ${pct}%`,
+              progress: Math.min(95, Math.round(pct * 0.95))
+            });
+          }
+        }
+      };
 
-    child.on('close', (code) => {
-      const cancelled = activeTranscribe === null && code !== 0;
-      if (code === 0 && fs.existsSync(jsonPath)) {
-        // Read the output BEFORE cleanup deletes it.
-        let raw = '';
-        try {
-          raw = fs.readFileSync(jsonPath, 'utf-8');
-        } catch (err) {
+      child.stdout.on('data', (d) => reportProgress(d.toString()));
+      child.stderr.on('data', (d) => {
+        stderr += d.toString();
+        reportProgress(d.toString());
+      });
+
+      child.on('error', (err) => {
+        cleanup();
+        reject(new Error(`Failed to start whisper.cpp: ${err.message}`));
+      });
+
+      child.on('close', (code) => {
+        const cancelled = activeTranscribe === null && code !== 0;
+        if (code === 0 && fs.existsSync(jsonPath)) {
+          // Read the output BEFORE cleanup deletes it.
+          let raw = '';
+          try {
+            raw = fs.readFileSync(jsonPath, 'utf-8');
+          } catch (err) {
+            cleanup();
+            reject(new Error(`Could not read whisper.cpp output: ${err instanceof Error ? err.message : String(err)}`));
+            return;
+          }
           cleanup();
-          reject(new Error(`Could not read whisper.cpp output: ${err instanceof Error ? err.message : String(err)}`));
-          return;
+          resolve(raw);
+        } else if (cancelled) {
+          cleanup();
+          reject(new Error('TRANSCRIPTION_CANCELLED'));
+        } else {
+          cleanup();
+          const tail = stderr.split(/\r?\n/).filter(Boolean).slice(-4).join(' | ');
+          reject(new Error(`whisper.cpp exited with code ${code}${tail ? ': ' + tail : ''}`));
         }
-        cleanup();
-        resolve(raw);
-      } else if (cancelled) {
-        cleanup();
-        reject(new Error('TRANSCRIPTION_CANCELLED'));
-      } else {
-        cleanup();
-        const tail = stderr.split(/\r?\n/).filter(Boolean).slice(-4).join(' | ');
-        reject(new Error(`whisper.cpp exited with code ${code}${tail ? ': ' + tail : ''}`));
-      }
+      });
     });
+  };
 
-    // Safety: if something kills the job via cancelTranscription, mark cancelled.
-    child.on('exit', () => {});
-  });
+  // Run the job; if a GPU build fails at runtime (driver/runtime problems,
+  // unsupported card, VRAM exhaustion) retry once on CPU so the user still
+  // gets captions instead of an error.
+  let result: string;
+  try {
+    result = await runOnce(activeBinary as string, activeBackend, onProgress);
+  } catch (err) {
+    if (err instanceof Error && err.message === 'TRANSCRIPTION_CANCELLED') throw err;
+    if (activeBackend === 'cuda') {
+      console.warn('[Whisper] GPU engine failed — retrying on CPU:', err instanceof Error ? err.message : err);
+      if (onProgress) onProgress({ status: 'GPU engine failed — retrying on CPU…' });
+      const cpuExe = await ensureBinary('cpu');
+      activeBinary = cpuExe;
+      activeBackend = 'cpu';
+      result = await runOnce(cpuExe, 'cpu', onProgress);
+    } else {
+      throw err;
+    }
+  }
 
   let parsed: CliJson;
   try {

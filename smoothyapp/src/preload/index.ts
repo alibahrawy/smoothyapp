@@ -43,6 +43,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('import-captions-to-premiere', captions),
   unloadCaptionModel: () => ipcRenderer.invoke('unload-caption-model'),
   getCaptionEngineInfo: () => ipcRenderer.invoke('get-caption-engine-info'),
+  getCaptionEngine: () => ipcRenderer.invoke('get-caption-engine'),
+  setCaptionEngine: (engine: string) => ipcRenderer.invoke('set-caption-engine', engine),
   getSelectedCaptionModel: () => ipcRenderer.invoke('get-selected-caption-model'),
   setSelectedCaptionModel: (modelId: string) => ipcRenderer.invoke('set-selected-caption-model', modelId),
 

@@ -462,6 +462,7 @@ app.whenReady().then(() => {
   // Auto-updater setup
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowDowngrade = false;
   autoUpdater.logger = {
     info: (msg?: any) => console.log('[Updater]', msg),
     warn: (msg?: any) => console.warn('[Updater]', msg),
@@ -859,6 +860,9 @@ ipcMain.handle('generate-captions', async (_, config: {
     // Resolve the model: whatever the user picked in Settings, else the default.
     const selectedModel = (store.get('captionModel') as string | null) || getDefaultModelId();
 
+    // Apply the user's engine choice (auto / cuda / cpu) before preparing the engine.
+    whisperService.setEnginePreference((store.get('captionEngine') as 'auto' | 'cuda' | 'cpu') || 'auto');
+
     // Ensure the engine + model are ready (downloads on first use).
     if (!whisperService.isModelLoaded() || whisperService.getCurrentModelId() !== selectedModel) {
       mainWindow?.webContents.send('caption-progress', {
@@ -1036,8 +1040,21 @@ ipcMain.handle('get-caption-engine-info', () => {
   return {
     backend: whisperService.getActiveBackend(),
     ready: whisperService.isModelLoaded(),
-    currentModelId: whisperService.getCurrentModelId()
+    currentModelId: whisperService.getCurrentModelId(),
+    enginePreference: (store.get('captionEngine') as string) || 'auto'
   };
+});
+
+ipcMain.handle('get-caption-engine', () => {
+  return (store.get('captionEngine') as string) || 'auto';
+});
+
+ipcMain.handle('set-caption-engine', async (_, preference: string) => {
+  const normalized = preference === 'cuda' || preference === 'cpu' ? preference : 'auto';
+  store.set('captionEngine', normalized);
+  // Force a reload on the next transcription so the new engine is used.
+  await whisperService.unloadModel();
+  return { success: true, engine: normalized };
 });
 
 ipcMain.handle('get-selected-caption-model', () => {
@@ -1055,7 +1072,9 @@ ipcMain.handle('set-selected-caption-model', async (_, modelId: string) => {
 
 // Auto-updater handlers
 ipcMain.handle('install-update', () => {
-  autoUpdater.quitAndInstall();
+  // isForceRunAfter=true relaunches the app right after the installer finishes,
+  // so a completed update can never leave the user on the old version.
+  autoUpdater.quitAndInstall(false, true);
 });
 
 ipcMain.handle('check-for-updates', () => {
