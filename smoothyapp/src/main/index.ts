@@ -856,21 +856,26 @@ ipcMain.handle('generate-captions', async (_, config: {
       }
     }
 
-    // Ensure model is loaded (downloads GGML model if needed)
-    if (!whisperService.isModelLoaded()) {
+    // Resolve the model: whatever the user picked in Settings, else the default.
+    const selectedModel = (store.get('captionModel') as string | null) || getDefaultModelId();
+
+    // Ensure the engine + model are ready (downloads on first use).
+    if (!whisperService.isModelLoaded() || whisperService.getCurrentModelId() !== selectedModel) {
       mainWindow?.webContents.send('caption-progress', {
         status: 'loading-model',
-        message: 'Loading Whisper model...'
+        message: 'Preparing transcription engine...'
       });
 
-      const defaultModel = getDefaultModelId();
-      await whisperService.loadModel(defaultModel, (progress) => {
+      await whisperService.loadModel(selectedModel, (progress) => {
+        const isEngineDownload = progress.status === 'downloading-bin';
         mainWindow?.webContents.send('caption-progress', {
           status: 'loading-model',
-          message: progress.status === 'downloading'
-            ? `Downloading model: ${progress.progress || 0}%`
-            : `Loading model: ${progress.status}`,
-          progress: progress.progress
+          message: isEngineDownload
+            ? (progress.file || 'Downloading transcription engine…')
+            : progress.status === 'downloading'
+              ? `Downloading model: ${progress.progress || 0}%`
+              : `Preparing: ${progress.status}`,
+          progress: isEngineDownload ? undefined : progress.progress
         });
       });
     }
@@ -878,7 +883,7 @@ ipcMain.handle('generate-captions', async (_, config: {
     // Transcribe
     mainWindow?.webContents.send('caption-progress', {
       status: 'transcribing',
-      message: 'Transcribing audio...'
+      message: `Transcribing on ${whisperService.getActiveBackend().toUpperCase()}...`
     });
 
     const transcriptionResult = await whisperService.transcribe(audioPath!, (progress) => {
@@ -1025,6 +1030,27 @@ ipcMain.handle('import-captions-to-premiere', async (_, captions: FormattedCapti
 ipcMain.handle('unload-caption-model', async () => {
   await whisperService.unloadModel();
   return { success: true };
+});
+
+ipcMain.handle('get-caption-engine-info', () => {
+  return {
+    backend: whisperService.getActiveBackend(),
+    ready: whisperService.isModelLoaded(),
+    currentModelId: whisperService.getCurrentModelId()
+  };
+});
+
+ipcMain.handle('get-selected-caption-model', () => {
+  return (store.get('captionModel') as string | null) || getDefaultModelId();
+});
+
+ipcMain.handle('set-selected-caption-model', async (_, modelId: string) => {
+  const model = getModelById(modelId);
+  if (!model) return { success: false, error: 'Model not found' };
+  store.set('captionModel', modelId);
+  // Force a reload on the next transcription so the new model is used.
+  await whisperService.unloadModel();
+  return { success: true, modelId };
 });
 
 // Auto-updater handlers

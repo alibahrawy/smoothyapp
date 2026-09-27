@@ -25,21 +25,35 @@ const AVAILABLE_MODELS: Omit<ModelInfo, 'downloaded' | 'filePath'>[] = [
     name: 'Tiny (English)',
     size: '75 MB',
     sizeBytes: 75_000_000,
-    speed: '~10x realtime (GPU)'
+    speed: 'Fastest — lowest accuracy'
   },
   {
     id: 'ggml-base.en.bin',
     name: 'Base (English)',
     size: '142 MB',
     sizeBytes: 142_000_000,
-    speed: '~8x realtime (GPU)'
+    speed: 'Fast — good for most videos'
   },
   {
     id: 'ggml-small.en.bin',
     name: 'Small (English)',
     size: '466 MB',
     sizeBytes: 466_000_000,
-    speed: '~4x realtime (GPU)'
+    speed: 'Balanced — better accuracy'
+  },
+  {
+    id: 'ggml-medium.en.bin',
+    name: 'Medium (English)',
+    size: '1.5 GB',
+    sizeBytes: 1_500_000_000,
+    speed: 'Accurate — slower'
+  },
+  {
+    id: 'ggml-large-v3-turbo.bin',
+    name: 'Large v3 Turbo (multilingual)',
+    size: '1.6 GB',
+    sizeBytes: 1_600_000_000,
+    speed: 'Most accurate — detects any language'
   }
 ];
 

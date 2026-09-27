@@ -131,7 +131,7 @@
           <span class="status-label" id="connection-nle-label">Premiere Pro</span>
         </div>
         <div class="footer-row">
-          <span class="version" id="app-version-label">v1.3.3</span>
+          <span class="version" id="app-version-label">v1.3.4</span>
           <div class="footer-actions">
             <button class="settings-btn" id="discord-btn" title="Join our Discord">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -314,6 +314,14 @@
             <h2>Caption Settings</h2>
 
             <div class="form-group">
+              <label for="caption-model-select">Transcription Model</label>
+              <select id="caption-model-select" class="select-input">
+                <option value="">Loading…</option>
+              </select>
+              <p class="help-text" id="caption-engine-status">Checking engine…</p>
+            </div>
+
+            <div class="form-group">
               <label for="caption-max-chars">
                 Max Characters Per Line
                 <span class="value-display" id="caption-max-chars-value">42</span>
@@ -343,6 +351,10 @@
             <div class="section-header-row">
               <h2>Generated Captions</h2>
               <span id="captions-count" class="help-text"></span>
+            </div>
+            <div class="caption-text-actions">
+              <button id="captions-capitalize-btn" class="btn btn-secondary btn-small" title="Capitalise the first letter of every caption">Capitalize All</button>
+              <button id="captions-remove-punct-btn" class="btn btn-secondary btn-small" title="Strip punctuation from every caption">Remove Punctuation</button>
             </div>
             <div id="captions-preview" class="captions-preview"></div>
           </section>
@@ -899,7 +911,7 @@
 
       <div class="settings-section">
         <h4>App Updates</h4>
-        <p class="help-text">SmoothyEdit checks for updates automatically on startup. This is your current version: <strong id="settings-current-version">v1.3.3</strong></p>
+        <p class="help-text">SmoothyEdit checks for updates automatically on startup. This is your current version: <strong id="settings-current-version">v1.3.4</strong></p>
 
         <div class="update-status-row">
           <span id="settings-update-status">No updates checked yet</span>

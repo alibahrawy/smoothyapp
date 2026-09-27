@@ -1,53 +1,31 @@
 /**
- * Whisper Service - Handles transcription using @fugood/whisper.node (whisper.cpp native binding)
+ * Whisper Service - Runs transcription via the whisper.cpp CLI.
  *
- * Uses Metal GPU on macOS for 10-40x faster transcription than ONNX CPU.
- * Natural segments from whisper.cpp (accurate boundaries), then words are
- * interpolated proportionally within each segment for the caption formatter.
+ * Why the CLI and not @fugood/whisper.node: the native binding's GPU packages
+ * target the wrong CUDA architecture and omit the CUDA runtime DLLs, so they
+ * silently report "no GPU found" and run on CPU with only 4 threads. Driving the
+ * whisper.cpp CLI with a CUDA build (bundled runtime) gives real GPU speed
+ * (~2.5x over a fully-threaded CPU build on the same machine).
+ *
+ * The CLI is downloaded on demand by whisper-bin-manager and selected per
+ * platform (CUDA -> CPU on Windows/Linux, Metal/CPU on macOS).
  */
 
-import { initWhisper, LibVariant } from '@fugood/whisper.node';
-import { execFileSync } from 'child_process';
+import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
+import fs from 'fs';
 import os from 'os';
+import path from 'path';
 import {
-  ensureModelDownloaded
+  ensureModelDownloaded,
+  getModelFilePath
 } from './model-manager';
-
-let whisperContext: any = null;
-let currentModelId: string | null = null;
-let activeBackend: 'metal' | 'cuda' | 'vulkan' | 'cpu' = 'cpu';
-
-const isMac = process.platform === 'darwin';
-const isWindows = process.platform === 'win32';
-
-function hasNvidiaGpu(): boolean {
-  if (!isWindows && process.platform !== 'linux') return false;
-  try {
-    execFileSync('nvidia-smi', ['-L'], { stdio: 'ignore', timeout: 4000 });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Pick the best available whisper.cpp backend once per process. The native
- * module is cached globally, so changing backends requires an app restart.
- */
-function resolveBackends(): { variants: (LibVariant | undefined)[]; labels: string[] } {
-  if (isMac) {
-    // macOS arm64 default package ships Metal.
-    return { variants: [undefined], labels: ['metal'] };
-  }
-  if (hasNvidiaGpu()) {
-    return { variants: ['cuda', undefined], labels: ['cuda', 'vulkan'] };
-  }
-  return { variants: ['vulkan'], labels: ['vulkan'] };
-}
-
-export function getActiveBackend(): string {
-  return activeBackend;
-}
+import {
+  ensureBinary,
+  isBinaryInstalled,
+  getVariantOrder,
+  clearBinary,
+  WhisperVariant
+} from './whisper-bin-manager';
 
 export interface TranscriptionChunk {
   text: string;
@@ -68,243 +46,327 @@ export type ProgressCallback = (progress: {
   total?: number;
 }) => void;
 
-// Handle for the in-flight transcription job, so it can be cancelled.
-let activeTranscribe: { stop: () => Promise<void> } | null = null;
+let currentModelId: string | null = null;
+let activeBackend: WhisperVariant = 'cpu';
+let activeBinary: string | null = null;
+let activeTranscribe: {
+  process: ChildProcessWithoutNullStreams;
+  cancel: () => void;
+} | null = null;
+
+const isMac = process.platform === 'darwin';
+const isWindows = process.platform === 'win32';
+
+export function getActiveBackend(): string {
+  return activeBackend;
+}
 
 /**
- * Load or get the Whisper model using whisper.cpp native binding
+ * Resolve (downloading if needed) a working whisper.cpp binary for this
+ * machine, preferring the best variant and falling back to CPU.
  */
 export async function loadModel(
   modelId: string,
   onProgress?: ProgressCallback
 ): Promise<void> {
-  // If same model already loaded, skip
-  if (whisperContext && currentModelId === modelId) {
-    console.log(`[Whisper] Model ${modelId} already loaded`);
-    return;
-  }
+  const modelPath = await ensureModelDownloaded(modelId);
 
-  // Unload previous model
-  if (whisperContext) {
-    await whisperContext.release();
-    whisperContext = null;
-    currentModelId = null;
-  }
-
-  console.log(`[Whisper] Loading model: ${modelId}`);
-
-  // Ensure model is downloaded
-  const modelPath = await ensureModelDownloaded(modelId, onProgress);
-
-  if (onProgress) {
-    onProgress({ status: 'initializing', progress: 95 });
-  }
-
-  // Initialize whisper.cpp context, preferring the best GPU backend for this
-  // machine (Metal on macOS, CUDA on NVIDIA, Vulkan otherwise). Falls back to
-  // CPU when no GPU backend can be initialized.
-  const { variants, labels } = resolveBackends();
+  const order = getVariantOrder();
   const errors: string[] = [];
 
-  for (let i = 0; i < variants.length; i++) {
-    const variant = variants[i];
-    const label = labels[i];
+  for (const variant of order) {
     try {
-      whisperContext = await initWhisper(
-        { filePath: modelPath, useGpu: true },
-        variant
-      );
-      activeBackend = label as typeof activeBackend;
-      console.log(`[Whisper] Model loaded successfully using ${activeBackend} backend`);
-      break;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      errors.push(`${label}: ${message}`);
-      console.warn(`[Whisper] Failed to initialize ${label} backend:`, message);
-      whisperContext = null;
+      if (!isBinaryInstalled(variant)) {
+        if (onProgress) {
+          onProgress({
+            status: 'downloading-bin',
+            progress: 0,
+            file: variant === 'cuda'
+              ? 'Downloading GPU engine (~630 MB, one time)…'
+              : 'Downloading transcription engine…'
+          });
+        }
+      }
+      const exe = await ensureBinary(variant, (p) => {
+        if (onProgress) {
+          onProgress({
+            status: 'downloading-bin',
+            progress: p.progress,
+            file: variant === 'cuda' ? 'Downloading GPU engine (one time)…' : 'Downloading transcription engine…'
+          });
+        }
+      });
+      activeBinary = exe;
+      activeBackend = variant;
+      currentModelId = modelId;
+      console.log(`[Whisper] Using whisper.cpp binary: ${exe} (${variant})`);
+      if (onProgress) onProgress({ status: 'ready', progress: 100 });
+      return;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      errors.push(`${variant}: ${message}`);
+      console.warn(`[Whisper] Could not prepare ${variant} binary:`, message);
+      // A broken download shouldn't wedge the app — clear and let CPU be tried.
+      try { clearBinary(variant); } catch {}
     }
   }
 
-  if (!whisperContext) {
-    console.warn(`[Whisper] No GPU backend available (${errors.join(' | ')}). Falling back to CPU.`);
-    whisperContext = await initWhisper({ filePath: modelPath, useGpu: false });
-    activeBackend = 'cpu';
-    console.log('[Whisper] Model loaded successfully using CPU backend');
-  }
-
-  currentModelId = modelId;
-
-  if (onProgress) {
-    onProgress({ status: 'ready', progress: 100 });
-  }
+  throw new Error(`Could not prepare a transcription engine (${errors.join(' | ')})`);
 }
 
-/**
- * Check if a model is currently loaded
- */
 export function isModelLoaded(): boolean {
-  return whisperContext !== null;
+  return activeBinary !== null;
 }
 
-/**
- * Get the currently loaded model ID
- */
 export function getCurrentModelId(): string | null {
   return currentModelId;
 }
 
+interface CliToken {
+  text: string;
+  offsets?: { from: number; to: number };
+}
+
+interface CliSegment {
+  text: string;
+  offsets: { from: number; to: number };
+  tokens?: CliToken[];
+}
+
+interface CliJson {
+  result?: { language?: string };
+  transcription: CliSegment[];
+}
+
+/** Special tokens whisper.cpp emits that must never reach the captions. */
+const SPECIAL_TOKEN = /^\[_.*\]$|^<\|.*\|>$/;
+
 /**
- * Transcribe a single combined WAV file and return word-level chunks.
- * Uses tokenTimestamps + maxLen:50 for short phrase-level segments (~8-10 words)
- * with accurate whisper.cpp boundaries. Words within each segment get
- * proportionally interpolated timestamps. Short segments keep interpolation
- * error small and prevent cumulative drift.
+ * Turn whisper.cpp JSON segments into word-level chunks. We prefer per-token
+ * offsets (accurate) and fall back to proportional interpolation within a
+ * segment when token timing is missing. Times are forced monotonic.
  */
-export async function transcribe(
-  audioPath: string,
-  onProgress?: ProgressCallback
-): Promise<TranscriptionResult> {
-  if (!whisperContext) {
-    throw new Error('No model loaded. Call loadModel() first.');
-  }
-
-  console.log(`[Whisper] Transcribing: ${audioPath}`);
-
-  const cpuThreads = Math.max(4, Math.min(os.cpus().length, 16));
-  const maxThreads = activeBackend === 'cpu' ? cpuThreads : 4;
-
-  const { promise, stop } = whisperContext.transcribeFile(audioPath, {
-    language: 'en',
-    tokenTimestamps: true,
-    maxLen: 50,
-    temperature: 0.0,
-    maxThreads,
-    onProgress: (progress: number) => {
-      if (onProgress) {
-        onProgress({
-          status: `Transcribing — ${progress}%`,
-          progress: Math.min(95, Math.round(progress * 0.95))
-        });
-      }
-    }
-  });
-
-  activeTranscribe = { stop };
-
-  let result: any;
-  try {
-    result = await promise;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (message.toLowerCase().includes('cancel')) {
-      console.log('[Whisper] Transcription cancelled by user');
-      throw new Error('TRANSCRIPTION_CANCELLED');
-    }
-    throw err;
-  } finally {
-    activeTranscribe = null;
-  }
-
-  if (!result || !result.segments) {
-    console.log(`[Whisper] No segments returned`);
-    return { text: '', chunks: [], language: 'en' };
-  }
-
-  // Split each segment into individual words with interpolated timestamps.
-  // With maxLen:50, segments are short phrases (~8-10 words, ~3-4 seconds).
-  // Segment boundaries are accurate (whisper.cpp token-level analysis),
-  // so interpolation error within each segment stays small and can't accumulate.
-  //
-  // whisper.cpp occasionally returns a segment whose t1 <= t0 (or t0 before the
-  // previous segment's end). Left unchecked, that produces a word whose end time
-  // is before its start, which corrupts the SRT downstream. We drop degenerate
-  // segments and force every emitted word to be strictly non-decreasing.
+function segmentsToChunks(segments: CliSegment[]): TranscriptionChunk[] {
   const chunks: TranscriptionChunk[] = [];
   let minStart = 0;
 
-  for (const seg of result.segments) {
-    if (!seg.text || !seg.text.trim()) continue;
+  for (const seg of segments) {
+    if (!seg || !seg.text || !seg.text.trim()) continue;
 
-    const segText = seg.text.trim();
-    const words = segText.split(/\s+/).filter((w: string) => w.length > 0);
+    const segStart = Math.max(0, (seg.offsets?.from ?? 0) / 1000);
+    const segEnd = Math.max(segStart, (seg.offsets?.to ?? 0) / 1000);
+
+    // Build words from tokens when available.
+    const tokens = (seg.tokens || [])
+      .filter((t) => t && t.text && !SPECIAL_TOKEN.test(t.text.trim()))
+      .map((t) => ({
+        text: t.text,
+        start: Math.max(0, (t.offsets?.from ?? 0) / 1000),
+        end: Math.max(0, (t.offsets?.to ?? 0) / 1000)
+      }));
+
+    if (tokens.length > 0) {
+      for (const tok of tokens) {
+        // Tokens can be sub-word pieces; text is usually space-prefixed.
+        const isNewWord = /^\s/.test(tok.text) || chunks.length === 0;
+        let text = tok.text.trim();
+        if (!text) continue;
+
+        if (!isNewWord && chunks.length > 0) {
+          // Continuation of the previous word – merge text, extend end time.
+          const prev = chunks[chunks.length - 1];
+          prev.text += text;
+          prev.timestamp[1] = Math.max(prev.timestamp[1], round2(Math.max(tok.end, minStart)));
+          minStart = prev.timestamp[1];
+          continue;
+        }
+
+        let start = Math.max(tok.start, minStart);
+        let end = Math.max(tok.end, start + 0.01);
+        start = round2(start);
+        end = round2(end);
+        if (end <= start) end = round2(start + 0.01);
+
+        chunks.push({ text, timestamp: [start, end] });
+        minStart = end;
+      }
+      continue;
+    }
+
+    // Fallback: interpolate words across the segment.
+    const words = seg.text.trim().split(/\s+/).filter((w) => w.length > 0);
     if (words.length === 0) continue;
-
-    let segStart = seg.t0 / 1000;
-    let segEnd = seg.t1 / 1000;
-
-    // Drop zero/negative-length segments outright.
-    if (!(segEnd > segStart)) {
-      console.warn(`[Whisper] Skipping degenerate segment (t0=${seg.t0}, t1=${seg.t1}): "${segText.slice(0, 40)}"`);
-      continue;
-    }
-
-    // Never let a segment start before the previous segment finished.
-    if (segStart < minStart) segStart = minStart;
-    if (segEnd <= segStart) segEnd = segStart + 0.01;
-    const segDuration = segEnd - segStart;
-
-    if (words.length === 1) {
-      chunks.push({
-        text: words[0],
-        timestamp: [round2(segStart), round2(segEnd)]
-      });
-      minStart = round2(segEnd);
-      continue;
-    }
-
-    // Distribute time proportionally by character length
-    const totalChars = words.reduce((sum: number, w: string) => sum + w.length, 0);
+    const duration = Math.max(0.01, segEnd - segStart);
+    const totalChars = words.reduce((s, w) => s + w.length, 0) || 1;
     let charOffset = 0;
-
     for (const word of words) {
-      let wordStart = segStart + (charOffset / totalChars) * segDuration;
+      let start = segStart + (charOffset / totalChars) * duration;
       charOffset += word.length;
-      let wordEnd = segStart + (charOffset / totalChars) * segDuration;
-
-      // Enforce monotonic, non-zero-length word spans.
-      if (wordStart < minStart) wordStart = minStart;
-      if (wordEnd <= wordStart) wordEnd = wordStart + 0.01;
-
-      wordStart = round2(wordStart);
-      wordEnd = round2(wordEnd);
-      if (wordEnd <= wordStart) wordEnd = round2(wordStart + 0.01);
-
-      chunks.push({
-        text: word,
-        timestamp: [wordStart, wordEnd]
-      });
-      minStart = wordEnd;
+      let end = segStart + (charOffset / totalChars) * duration;
+      if (start < minStart) start = minStart;
+      if (end <= start) end = start + 0.01;
+      start = round2(start);
+      end = round2(end);
+      if (end <= start) end = round2(start + 0.01);
+      chunks.push({ text: word, timestamp: [start, end] });
+      minStart = end;
     }
   }
 
-  const text = result.result || chunks.map((c: TranscriptionChunk) => c.text).join(' ');
-
-  if (onProgress) {
-    onProgress({ status: 'complete', progress: 100 });
-  }
-
-  console.log(`[Whisper] Transcription complete — ${result.segments.length} segments → ${chunks.length} words, ${text.length} chars`);
-
-  return {
-    text,
-    chunks,
-    language: 'en'
-  };
+  return chunks;
 }
 
 /**
- * Cancel the in-flight transcription, if any. The underlying job rejects with
- * "Transcription cancelled", which transcribe() maps to TRANSCRIPTION_CANCELLED.
+ * Transcribe an audio file. `audioPath` should be WAV/MP3/FLAC/OGG — the CLI
+ * decodes these directly.
+ */
+export async function transcribe(
+  audioPath: string,
+  onProgress?: ProgressCallback,
+  modelId?: string
+): Promise<TranscriptionResult> {
+  if (!activeBinary) {
+    throw new Error('No transcription engine loaded. Call loadModel() first.');
+  }
+
+  const model = modelId || currentModelId;
+  if (!model) {
+    throw new Error('No model selected.');
+  }
+  const modelPath = getModelFilePath(model);
+  if (!fs.existsSync(modelPath)) {
+    throw new Error(`Model file missing: ${modelPath}`);
+  }
+
+  const outBase = path.join(os.tmpdir(), `smoothyedit-whisper-${Date.now()}`);
+  const threads = Math.max(4, Math.min(os.cpus().length, 16));
+
+  const args = [
+    '-m', modelPath,
+    '-f', audioPath,
+    '-l', 'en',
+    '-oj',            // JSON output
+    '-of', outBase,
+    '-t', String(threads),
+    '-ml', '50',      // max segment length (chars) -> short phrases
+    '-pp'             // print progress
+  ];
+
+  // Force CPU when we deliberately loaded the CPU build.
+  if (activeBackend === 'cpu') args.push('-ng');
+
+  console.log(`[Whisper] Running CLI (${activeBackend}, ${threads} threads): ${path.basename(activeBinary)}`);
+
+  const jsonPath = `${outBase}.json`;
+
+  const result = await new Promise<string>((resolve, reject) => {
+    const child = spawn(activeBinary as string, args, { windowsHide: true });
+    let stderr = '';
+    let lastReported = -1;
+
+    const cleanup = () => {
+      activeTranscribe = null;
+      try { if (fs.existsSync(jsonPath)) fs.rmSync(jsonPath, { force: true }); } catch {}
+      for (const ext of ['.txt', '.srt', '.vtt', '.json']) {
+        try { const p = outBase + ext; if (fs.existsSync(p)) fs.rmSync(p, { force: true }); } catch {}
+      }
+    };
+
+    activeTranscribe = {
+      process: child,
+      cancel: () => {
+        try { child.kill('SIGTERM'); } catch {}
+      }
+    };
+
+    child.stdout.on('data', (d) => {
+      // Progress lines look like: "whisper_print_progress_callback: progress = 42%"
+      const text = d.toString();
+      const m = [...text.matchAll(/progress\s*=\s*(\d+)%/g)];
+      if (m.length > 0 && onProgress) {
+        const pct = parseInt(m[m.length - 1][1], 10);
+        if (pct !== lastReported) {
+          lastReported = pct;
+          onProgress({
+            status: `Transcribing — ${pct}%`,
+            progress: Math.min(95, Math.round(pct * 0.95))
+          });
+        }
+      }
+    });
+
+    child.stderr.on('data', (d) => {
+      stderr += d.toString();
+      const text = d.toString();
+      const m = [...text.matchAll(/progress\s*=\s*(\d+)%/g)];
+      if (m.length > 0 && onProgress) {
+        const pct = parseInt(m[m.length - 1][1], 10);
+        if (pct !== lastReported) {
+          lastReported = pct;
+          onProgress({
+            status: `Transcribing — ${pct}%`,
+            progress: Math.min(95, Math.round(pct * 0.95))
+          });
+        }
+      }
+    });
+
+    child.on('error', (err) => {
+      cleanup();
+      reject(new Error(`Failed to start whisper.cpp: ${err.message}`));
+    });
+
+    child.on('close', (code) => {
+      const cancelled = activeTranscribe === null && code !== 0;
+      if (code === 0 && fs.existsSync(jsonPath)) {
+        resolve(jsonPath);
+        cleanup();
+      } else if (cancelled) {
+        cleanup();
+        reject(new Error('TRANSCRIPTION_CANCELLED'));
+      } else {
+        cleanup();
+        const tail = stderr.split(/\r?\n/).filter(Boolean).slice(-4).join(' | ');
+        reject(new Error(`whisper.cpp exited with code ${code}${tail ? ': ' + tail : ''}`));
+      }
+    });
+
+    // Safety: if something kills the job via cancelTranscription, mark cancelled.
+    child.on('exit', () => {});
+  });
+
+  const raw = fs.readFileSync(result, 'utf-8');
+  try { fs.rmSync(result, { force: true }); } catch {}
+
+  let parsed: CliJson;
+  try {
+    parsed = JSON.parse(raw) as CliJson;
+  } catch {
+    throw new Error('Could not parse whisper.cpp output');
+  }
+
+  const segments = parsed.transcription || [];
+  const chunks = segmentsToChunks(segments);
+  const text = chunks.map((c) => c.text).join(' ');
+  const language = parsed.result?.language || 'en';
+
+  if (onProgress) onProgress({ status: 'complete', progress: 100 });
+
+  console.log(`[Whisper] Transcription complete — ${segments.length} segments → ${chunks.length} words, ${text.length} chars`);
+
+  return { text, chunks, language };
+}
+
+/**
+ * Cancel the in-flight transcription. The promise rejects with
+ * TRANSCRIPTION_CANCELLED.
  */
 export async function cancelTranscription(): Promise<void> {
   if (activeTranscribe) {
     console.log('[Whisper] Cancelling transcription...');
-    try {
-      await activeTranscribe.stop();
-    } catch (err) {
-      console.warn('[Whisper] Error while cancelling:', err);
-    }
+    const child = activeTranscribe.process;
     activeTranscribe = null;
+    try { child.kill('SIGTERM'); } catch {}
   }
 }
 
@@ -312,15 +374,11 @@ export function isTranscribing(): boolean {
   return activeTranscribe !== null;
 }
 
-/**
- * Unload the current model to free memory
- */
-export async function unloadModel(): Promise<void> {  if (whisperContext) {
-    await whisperContext.release();
-    whisperContext = null;
-    currentModelId = null;
-    console.log('[Whisper] Model unloaded');
-  }
+/** Release the loaded engine reference (nothing to free for the CLI). */
+export async function unloadModel(): Promise<void> {
+  activeBinary = null;
+  currentModelId = null;
+  console.log('[Whisper] Model unloaded');
 }
 
 function round2(value: number): number {

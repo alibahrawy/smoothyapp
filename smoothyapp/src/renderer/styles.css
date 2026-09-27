@@ -2072,6 +2072,25 @@ body.platform-macos {
   margin-top: var(--spacing-md);
 }
 
+/* Caption model picker + text actions */
+.select-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md, 8px);
+  background: var(--background-primary);
+  color: var(--foreground);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.caption-text-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
 /* Compressor Tab Styles */
 .drop-zone {
   border: 2px dashed var(--border-color);

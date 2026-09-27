@@ -71,6 +71,10 @@ const captionsFileBrowse = document.getElementById('captions-file-browse');
 const captionsSequenceSection = document.getElementById('captions-sequence-section');
 const captionsTracksSection = document.getElementById('captions-tracks-section');
 const progressCancelBtn = document.getElementById('progress-cancel-btn');
+const captionModelSelect = document.getElementById('caption-model-select');
+const captionEngineStatus = document.getElementById('caption-engine-status');
+const captionsCapitalizeBtn = document.getElementById('captions-capitalize-btn');
+const captionsRemovePunctBtn = document.getElementById('captions-remove-punct-btn');
 
 // Best Shorts DOM Elements
 const bestshortsStatusBar = document.getElementById('bestshorts-status-bar');
@@ -177,6 +181,9 @@ async function init() {
       state.appVersion = version;
     }
   } catch {}
+
+  // Caption model list + engine status
+  loadCaptionModels();
 }
 
 // ========================================
@@ -391,6 +398,9 @@ function setupEventListeners() {
   if (captionsSourceFile) captionsSourceFile.addEventListener('click', () => setCaptionSource('file'));
   if (captionsFileBrowse) captionsFileBrowse.addEventListener('click', chooseCaptionFile);
   if (progressCancelBtn) progressCancelBtn.addEventListener('click', cancelCaptionGeneration);
+  if (captionModelSelect) captionModelSelect.addEventListener('change', onCaptionModelChange);
+  if (captionsCapitalizeBtn) captionsCapitalizeBtn.addEventListener('click', () => transformCaptions('capitalize'));
+  if (captionsRemovePunctBtn) captionsRemovePunctBtn.addEventListener('click', () => transformCaptions('removePunctuation'));
 
   document.getElementById('caption-max-chars').addEventListener('input', (e) => {
     document.getElementById('caption-max-chars-value').textContent = e.target.value;
@@ -1425,6 +1435,102 @@ function updateGenerateCaptionsButton() {
   if (hasAudio) {
     captionsFooterStatus.textContent = 'Ready to generate captions';
   }
+}
+
+async function loadCaptionModels() {
+  if (!captionModelSelect) return;
+  try {
+    const [models, selected] = await Promise.all([
+      window.electronAPI.getCaptionModels(),
+      window.electronAPI.getSelectedCaptionModel()
+    ]);
+    captionModelSelect.innerHTML = '';
+    (models || []).forEach((m) => {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = `${m.name} — ${m.size}`;
+      if (m.id === selected) opt.selected = true;
+      captionModelSelect.appendChild(opt);
+    });
+    if (!captionModelSelect.value && selected) captionModelSelect.value = selected;
+  } catch (error) {
+    console.warn('Failed to load caption models', error);
+  }
+  refreshCaptionEngineStatus();
+}
+
+async function refreshCaptionEngineStatus() {
+  if (!captionEngineStatus) return;
+  try {
+    const info = await window.electronAPI.getCaptionEngineInfo();
+    const backend = (info.backend || 'cpu').toUpperCase();
+    const label = backend === 'CUDA' ? 'GPU (CUDA)'
+      : backend === 'METAL' ? 'GPU (Metal)'
+      : backend === 'VULKAN' ? 'GPU (Vulkan)'
+      : 'CPU';
+    captionEngineStatus.textContent = info.ready
+      ? `Running on ${label}`
+      : 'The engine downloads automatically on your first transcription';
+  } catch {
+    captionEngineStatus.textContent = '';
+  }
+}
+
+async function onCaptionModelChange() {
+  if (!captionModelSelect) return;
+  try {
+    await window.electronAPI.setSelectedCaptionModel(captionModelSelect.value);
+    captionEngineStatus.textContent = 'Model set — applies to your next transcription';
+  } catch (error) {
+    showError(error.message || 'Could not change the model');
+  }
+}
+
+/**
+ * Apply a text transform to every generated caption and rebuild the SRT/VTT.
+ */
+function transformCaptions(kind) {
+  if (!state.captionResult || !Array.isArray(state.captionResult.captions)) return;
+
+  const transform = (text) => {
+    if (kind === 'capitalize') {
+      return text.replace(/(^|\n)([a-z])/g, (_, prefix, ch) => prefix + ch.toUpperCase());
+    }
+    if (kind === 'removePunctuation') {
+      return text
+        .replace(/[.,!?;:"'`´’‘“”\-–—…()\[\]{}]/g, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    }
+    return text;
+  };
+
+  state.captionResult.captions = state.captionResult.captions.map((cap) => ({
+    ...cap,
+    text: transform(cap.text)
+  }));
+
+  state.captionResult.srt = buildSRT(state.captionResult.captions);
+  state.captionResult.vtt = buildVTT(state.captionResult.captions);
+
+  displayCaptionsPreview(state.captionResult.captions);
+  captionsFooterStatus.textContent = kind === 'capitalize'
+    ? 'Capitalized all captions'
+    : 'Removed punctuation from all captions';
+}
+
+function buildSRT(captions) {
+  return captions
+    .map((cap) => `${cap.index}\n${formatSRTTime(cap.startTime)} --> ${formatSRTTime(cap.endTime)}\n${cap.text}\n`)
+    .join('\n');
+}
+
+function buildVTT(captions) {
+  const time = (seconds) => formatSRTTime(seconds).replace(',', '.');
+  const body = captions
+    .map((cap) => `${time(cap.startTime)} --> ${time(cap.endTime)}\n${cap.text}\n`)
+    .join('\n');
+  return 'WEBVTT\n\n' + body;
 }
 
 function setCaptionSource(source) {
