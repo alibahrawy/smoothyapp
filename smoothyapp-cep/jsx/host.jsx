@@ -258,7 +258,9 @@ function getSequenceInfo() {
             name: aClip.name,
             path: aClip.projectItem.getMediaPath(),
             start: aClip.start.seconds,
-            end: aClip.end.seconds
+            end: aClip.end.seconds,
+            inPoint: aClip.inPoint.seconds,
+            outPoint: aClip.outPoint.seconds
           });
         }
       }
@@ -1111,6 +1113,17 @@ function importCaptions(srtPath) {
       return JSON.stringify({ success: false, error: "Caption file not found: " + srtPath });
     }
 
+    // Count cues so the user can verify the whole file made it into Premiere.
+    var cueCount = 0;
+    try {
+      srtFile.open("r");
+      var srtContent = srtFile.read();
+      srtFile.close();
+      cueCount = parseSRT(srtContent).length;
+    } catch (parseErr) {
+      cueCount = 0;
+    }
+
     // Import the SRT file into Premiere's project panel
     var importSuccess = app.project.importFiles(
       [srtPath],              // array of file paths
@@ -1141,24 +1154,54 @@ function importCaptions(srtPath) {
     if (!srtItem) {
       return JSON.stringify({
         success: true,
+        count: cueCount,
         message: "Caption file imported into the project panel. Drag '" + srtFileName + "' onto your sequence to create a caption track."
       });
     }
 
-    // Try to insert the SRT onto the sequence as a caption track.
-    // Premiere recognizes SRT files and creates a caption track automatically.
+    // Try to create a caption track directly from the imported SRT item.
+    // This is the documented API for caption media (Premiere 15.4+) and places
+    // the full set of cues at the requested time — insertClip on caption media
+    // is unreliable (it can insert only part of the captions or fail outright).
     try {
-      seq.insertClip(srtItem, 0, seq.videoTracks.numTracks - 1, seq.audioTracks.numTracks - 1);
+      var newTrack = seq.createCaptionTrack(srtItem, 0);
+      if (newTrack) {
+        return JSON.stringify({
+          success: true,
+          count: cueCount,
+          message: "Captions imported onto the sequence" + (cueCount > 0 ? " (" + cueCount + " cues)." : ".")
+        });
+      }
+    } catch (captionErr) {
+      // Fall through to the insertClip strategies below.
+    }
+
+    // Try to insert the SRT onto the sequence as a caption track.
+    // The 2-argument form is the most reliable for caption media; the 4-argument
+    // form is kept as a fallback for older Premiere versions.
+    try {
+      seq.insertClip(srtItem, 0);
       return JSON.stringify({
         success: true,
-        message: "Captions imported onto the sequence."
+        count: cueCount,
+        message: "Captions imported onto the sequence" + (cueCount > 0 ? " (" + cueCount + " cues)." : ".")
       });
-    } catch (insertErr) {
-      // insertClip may not work for SRT — tell the user to drag from project panel
-      return JSON.stringify({
-        success: true,
-        message: "Caption file imported into the project. Drag '" + srtFileName + "' from the project panel onto your sequence to create a caption track."
-      });
+    } catch (insertErr2) {
+      try {
+        seq.insertClip(srtItem, 0, seq.videoTracks.numTracks - 1, seq.audioTracks.numTracks - 1);
+        return JSON.stringify({
+          success: true,
+          count: cueCount,
+          message: "Captions imported onto the sequence" + (cueCount > 0 ? " (" + cueCount + " cues)." : ".")
+        });
+      } catch (insertErr) {
+        // insertClip may not work for SRT — tell the user to drag from project panel
+        return JSON.stringify({
+          success: true,
+          count: cueCount,
+          message: "Caption file imported into the project. Drag '" + srtFileName + "' from the project panel onto your sequence to create a caption track."
+        });
+      }
     }
 
   } catch (e) {
