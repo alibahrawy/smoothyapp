@@ -319,8 +319,17 @@ export async function transcribe(
     child.on('close', (code) => {
       const cancelled = activeTranscribe === null && code !== 0;
       if (code === 0 && fs.existsSync(jsonPath)) {
-        resolve(jsonPath);
+        // Read the output BEFORE cleanup deletes it.
+        let raw = '';
+        try {
+          raw = fs.readFileSync(jsonPath, 'utf-8');
+        } catch (err) {
+          cleanup();
+          reject(new Error(`Could not read whisper.cpp output: ${err instanceof Error ? err.message : String(err)}`));
+          return;
+        }
         cleanup();
+        resolve(raw);
       } else if (cancelled) {
         cleanup();
         reject(new Error('TRANSCRIPTION_CANCELLED'));
@@ -335,12 +344,9 @@ export async function transcribe(
     child.on('exit', () => {});
   });
 
-  const raw = fs.readFileSync(result, 'utf-8');
-  try { fs.rmSync(result, { force: true }); } catch {}
-
   let parsed: CliJson;
   try {
-    parsed = JSON.parse(raw) as CliJson;
+    parsed = JSON.parse(result) as CliJson;
   } catch {
     throw new Error('Could not parse whisper.cpp output');
   }
