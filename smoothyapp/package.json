@@ -1,6 +1,6 @@
 {
   "name": "smoothyedit",
-  "version": "1.3.4",
+  "version": "1.3.5",
   "description": "SmoothyEdit - AI-powered multicam editing for Premiere Pro",
   "main": "out/main/index.js",
   "author": "SmoothyEdit",
