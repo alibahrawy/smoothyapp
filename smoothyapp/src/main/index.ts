@@ -496,7 +496,7 @@ app.whenReady().then(() => {
 
       if (data.type === 'addMarkers' && data.markers) {
         sendLog('info', `Adding ${data.markers.length} markers from website...`);
-        // Add markers to Premiere through the active bridge (UXP preferred, CEP fallback).
+        // Add markers to Premiere through the CEP bridge.
         const result = await addMarkersToSequence(data.markers);
         if (!result.success) {
           sendLog('error', `Failed to add markers: ${result.error || 'Unknown marker error'}`);
@@ -1420,10 +1420,6 @@ ipcMain.handle('get-bridge-status', () => {
 
 ipcMain.handle('install-bridge', () => {
   return installBridge();
-});
-
-ipcMain.handle('install-uxp-bridge', () => {
-  return { success: false, error: 'The Premiere UXP extension was removed in v1.3.3. Use the CEP extension.' };
 });
 
 ipcMain.handle('install-legacy-cep-bridge', () => {

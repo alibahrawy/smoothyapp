@@ -21,8 +21,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ---
-Scope: this MIT license covers the SmoothyEdit desktop app and NLE bridges
-(smoothyedit-app/, smoothyedit/ CEP, smoothyedit-uxp/, smoothyedit-resolve/).
+Scope: this MIT license covers the SmoothyEdit desktop app and Premiere bridge
+(smoothyapp/ and smoothyapp-cep/).
 The web Studio + billing backend remain proprietary.
 
 Privacy: local tools (multicam, silence, captions, compressor) never upload
