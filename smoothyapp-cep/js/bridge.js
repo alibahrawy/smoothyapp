@@ -9,7 +9,7 @@
   'use strict';
 
   const csInterface = new CSInterface();
-  const HOST_SCRIPT_VERSION = '20260927-caption-host-v7';
+  const HOST_SCRIPT_VERSION = '20260930-caption-host-v20';
   const MARKER_PAYLOAD_CHUNK_SIZE = 8000;
   let ws = null;
   let isConnected = false;
@@ -81,11 +81,8 @@
   }
 
   function ensureHostScriptLoaded(callback) {
-    if (hostScriptLoaded) {
-      callback({ success: true, version: HOST_SCRIPT_VERSION });
-      return;
-    }
-
+    // Re-read host.jsx before each call that needs it, so an edit is picked up
+    // after the panel reloads once, without requiring a Premiere restart.
     const hostScriptPath = JSON.stringify(getHostScriptPath());
     const script = [
       'var __smoothyHostLoadResult = "";',
@@ -106,6 +103,17 @@
       if (result === HOST_SCRIPT_VERSION) {
         hostScriptLoaded = true;
         callback({ success: true, version: result });
+        return;
+      }
+
+      // A version that still loads but does not match means Premiere is running
+      // an older copy of the panel.
+      if (typeof result === 'string' && result.indexOf('HOST_LOAD_ERROR') !== 0 && result !== 'missing-host-version') {
+        callback({
+          success: false,
+          stale: true,
+          error: 'The SmoothyEdit panel in Premiere is out of date (' + result + '). Reinstall the latest app, then reopen the panel in Premiere.'
+        });
         return;
       }
 

@@ -6,7 +6,7 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { app } from 'electron';
+import { getFFmpegPath } from '../ffmpeg-path';
 
 const SAMPLE_RATE = 16000;
 
@@ -28,21 +28,6 @@ export function cancelAudioExtraction(): void {
 
 export function resetAudioExtractionCancel(): void {
   cancelRequested = false;
-}
-
-function getFFmpegPath(): string {
-  // In development, use system ffmpeg
-  if (!app.isPackaged) {
-    const systemPaths = [
-      '/opt/homebrew/bin/ffmpeg',
-      '/usr/local/bin/ffmpeg',
-      '/usr/bin/ffmpeg'
-    ];
-    for (const p of systemPaths) {
-      if (fs.existsSync(p)) return p;
-    }
-  }
-  return 'ffmpeg';
 }
 
 function getTempDir(): string {

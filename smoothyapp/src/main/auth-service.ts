@@ -120,9 +120,13 @@ export async function login(
       return { success: false, error: 'Invalid response from server' };
     }
 
-    // Store user data (we use the user ID as a simple auth token for API calls)
+    // Store user data. The signed `sessionToken` is the verified credential for
+    // API calls (sent as a Bearer header); `jwt` is kept for older code paths.
     store.set('user', user);
-    store.set('jwt', user.id); // Use user ID as token for x-member-id header
+    if (data.sessionToken) {
+      store.set('sessionToken', data.sessionToken);
+    }
+    store.set('jwt', user.id);
 
     console.log('[Auth] Login successful:', user.email);
     notifyAuthChange();
@@ -140,6 +144,7 @@ export async function login(
 export function logout(): void {
   store.delete('user');
   store.delete('jwt');
+  store.delete('sessionToken');
   console.log('[Auth] Logged out');
   notifyAuthChange();
 }
@@ -157,10 +162,7 @@ export async function refreshUserData(): Promise<boolean> {
 
   try {
     const response = await fetch(`${API_BASE}/api/auth/me`, {
-      headers: {
-        'x-member-id': user.id,
-        'Authorization': `Bearer ${jwt}`
-      }
+      headers: getAuthHeaders()
     });
 
     if (!response.ok) {
@@ -238,12 +240,14 @@ export function canUseFeature(feature: string): FeatureAccess {
     return { allowed: true };
   }
 
-  // Cloud AI features require login + pro tier
+  // Cloud AI features require a Studio account. Free accounts can use them with
+  // their monthly credits (100) — only anonymous users are blocked. Pro lifts
+  // the credit cap. Credits are only ever spent on cloud calls.
   if (CLOUD_AI_FEATURES.includes(feature)) {
     if (!user) {
       return { allowed: false, reason: 'login-required' };
     }
-    return { allowed: false, reason: 'pro-required' };
+    return { allowed: true };
   }
 
   // Unknown feature - allow by default (local-first)
@@ -255,6 +259,29 @@ export function canUseFeature(feature: string): FeatureAccess {
  */
 export function getStoredJWT(): string | null {
   return store.get('jwt') as string | null;
+}
+
+/**
+ * The signed session token returned by `/api/auth/login`. Preferred over the
+ * legacy `jwt` (which is just the user id) for authenticating API calls.
+ */
+export function getSessionToken(): string | null {
+  return store.get('sessionToken') as string | null;
+}
+
+/**
+ * Headers for authenticated requests to the Smoothy web API. Sends the verified
+ * Bearer token when available, and always includes `x-member-id` so legacy
+ * server paths (rate limiting) keep identifying the user.
+ */
+export function getAuthHeaders(): Record<string, string> {
+  const userId = getStoredUserId();
+  const sessionToken = getSessionToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (userId) headers['x-member-id'] = userId;
+  if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
+  else if (userId) headers['Authorization'] = `Bearer ${userId}`;
+  return headers;
 }
 
 /**
@@ -281,11 +308,7 @@ export async function generateConnectionToken(): Promise<string | null> {
   try {
     const response = await fetch(`${API_BASE}/api/connection/token`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-member-id': userId,
-        'Authorization': `Bearer ${jwt}`
-      }
+      headers: getAuthHeaders()
     });
 
     if (!response.ok) {

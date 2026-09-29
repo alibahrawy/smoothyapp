@@ -18,7 +18,8 @@ export interface ModelInfo {
   filePath?: string;
 }
 
-// Available GGML Whisper models
+// Available GGML Whisper models. The `.en` files are English-only; the plain
+// files are multilingual and required for every other language.
 const AVAILABLE_MODELS: Omit<ModelInfo, 'downloaded' | 'filePath'>[] = [
   {
     id: 'ggml-tiny.en.bin',
@@ -28,11 +29,25 @@ const AVAILABLE_MODELS: Omit<ModelInfo, 'downloaded' | 'filePath'>[] = [
     speed: 'Fastest — lowest accuracy'
   },
   {
+    id: 'ggml-tiny.bin',
+    name: 'Tiny (multilingual)',
+    size: '75 MB',
+    sizeBytes: 75_000_000,
+    speed: 'Fastest — any language'
+  },
+  {
     id: 'ggml-base.en.bin',
     name: 'Base (English)',
     size: '142 MB',
     sizeBytes: 142_000_000,
     speed: 'Fast — good for most videos'
+  },
+  {
+    id: 'ggml-base.bin',
+    name: 'Base (multilingual)',
+    size: '142 MB',
+    sizeBytes: 142_000_000,
+    speed: 'Fast — any language'
   },
   {
     id: 'ggml-small.en.bin',
@@ -42,11 +57,25 @@ const AVAILABLE_MODELS: Omit<ModelInfo, 'downloaded' | 'filePath'>[] = [
     speed: 'Balanced — better accuracy'
   },
   {
+    id: 'ggml-small.bin',
+    name: 'Small (multilingual)',
+    size: '466 MB',
+    sizeBytes: 466_000_000,
+    speed: 'Balanced — any language'
+  },
+  {
     id: 'ggml-medium.en.bin',
     name: 'Medium (English)',
     size: '1.5 GB',
     sizeBytes: 1_500_000_000,
     speed: 'Accurate — slower'
+  },
+  {
+    id: 'ggml-medium.bin',
+    name: 'Medium (multilingual)',
+    size: '1.5 GB',
+    sizeBytes: 1_500_000_000,
+    speed: 'Accurate — any language'
   },
   {
     id: 'ggml-large-v3-turbo.bin',
@@ -125,6 +154,14 @@ export function getModelById(modelId: string): ModelInfo | undefined {
  */
 export function getDefaultModelId(): string {
   return 'ggml-base.en.bin';
+}
+
+/**
+ * English-only GGML models end in `.en.bin` and cannot transcribe any other
+ * language, regardless of the `-l` value passed to whisper.cpp.
+ */
+export function isEnglishOnlyModel(modelId: string): boolean {
+  return /\.en\.bin$/i.test(modelId);
 }
 
 export type DownloadProgressCallback = (progress: {

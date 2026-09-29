@@ -1,6 +1,6 @@
 /**
- * SmoothyEdit Desktop App - Zucchini Theme
- * Full desktop app layout with sidebar navigation
+ * SmoothyEdit Desktop App — Smoothy brand theme
+ * Cream background · black ink · lime action
  */
 
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Caveat:wght@500&display=swap');
@@ -36,136 +36,49 @@
   --sidebar-width: 220px;
   --titlebar-height: 38px;
 
-  /* Zucchini Smoothie - Deep Minty Green Theme (Default) */
-  --background: oklch(0.12 0.06 165);
-  --background-secondary: oklch(0.15 0.065 165);
-  --background-tertiary: oklch(0.18 0.07 165);
-  --background-hover: oklch(0.22 0.08 165);
+  /* Smoothy brand — cream background, black ink, lime action (default) */
+  --background: oklch(0.994 0.003 92);
+  --background-secondary: oklch(0.975 0.005 95);
+  --background-tertiary: oklch(0.955 0.008 100);
+  --background-hover: oklch(0.94 0.012 110);
 
-  --sidebar-bg: oklch(0.10 0.05 165);
-  --sidebar-hover: oklch(0.14 0.06 165);
-  --sidebar-active: oklch(0.18 0.08 165);
+  --sidebar-bg: oklch(0.975 0.006 100);
+  --sidebar-hover: oklch(0.95 0.012 115);
+  --sidebar-active: oklch(0.92 0.06 145);
 
-  --foreground: oklch(0.98 0.02 165);
-  --foreground-secondary: oklch(0.82 0.04 165);
-  --foreground-muted: oklch(0.58 0.05 165);
+  --foreground: oklch(0.18 0 0);
+  --foreground-secondary: oklch(0.35 0 0);
+  --foreground-muted: oklch(0.50 0 0);
 
-  /* Vibrant Green Primary */
-  --primary: oklch(0.65 0.22 155);
-  --primary-hover: oklch(0.70 0.24 155);
-  --primary-foreground: oklch(0.12 0.05 165);
+  /* Lime primary */
+  --primary: oklch(0.87 0.13 145);
+  --primary-hover: oklch(0.83 0.14 145);
+  --primary-foreground: oklch(0.18 0 0);
 
   /* Accent colors */
-  --accent: oklch(0.58 0.18 160);
-  --success: oklch(0.65 0.18 145);
-  --warning: oklch(0.75 0.16 85);
-  --error: oklch(0.60 0.20 25);
+  --accent: oklch(0.50 0.10 155);
+  --success: oklch(0.55 0.15 150);
+  --warning: oklch(0.75 0.14 85);
+  --error: oklch(0.58 0.20 25);
 
   /* Borders and inputs */
-  --border: oklch(0.28 0.08 165);
-  --border-light: oklch(0.35 0.09 165);
-  --input-bg: oklch(0.14 0.06 165);
+  --border: oklch(0.90 0.006 100);
+  --border-light: oklch(0.86 0.008 100);
+  --input-bg: oklch(1 0 0);
 
   /* Ring/focus */
-  --ring: oklch(0.65 0.22 155);
+  --ring: oklch(0.60 0.12 150);
 
-  /* Shadows with green tint */
-  --shadow-color: oklch(0.05 0.04 165 / 0.6);
+  /* Shadows */
+  --shadow-color: oklch(0 0 0 / 0.12);
   --shadow-sm: 0 1px 2px var(--shadow-color);
   --shadow: 0 2px 8px var(--shadow-color);
   --shadow-lg: 0 8px 24px var(--shadow-color);
   --shadow-xl: 0 16px 48px var(--shadow-color);
 
   /* Overlay backgrounds */
-  --overlay-bg: oklch(0.06 0.04 165 / 0.92);
-  --feature-lock-bg: oklch(0.08 0.04 165 / 0.95);
-}
-
-/* ========================================
-   SMOOTHIE THEMES
-   ======================================== */
-
-/* Zucchini Smoothie - Minty Green Theme */
-.theme-zucchini {
-  --background: oklch(0.12 0.06 165);
-  --background-secondary: oklch(0.15 0.065 165);
-  --background-tertiary: oklch(0.18 0.07 165);
-  --background-hover: oklch(0.22 0.08 165);
-  --sidebar-bg: oklch(0.10 0.05 165);
-  --sidebar-hover: oklch(0.14 0.06 165);
-  --sidebar-active: oklch(0.18 0.08 165);
-  --foreground: oklch(0.98 0.02 165);
-  --foreground-secondary: oklch(0.82 0.04 165);
-  --foreground-muted: oklch(0.58 0.05 165);
-  --primary: oklch(0.65 0.22 155);
-  --primary-hover: oklch(0.70 0.24 155);
-  --primary-foreground: oklch(0.12 0.05 165);
-  --accent: oklch(0.58 0.18 160);
-  --border: oklch(0.28 0.08 165);
-  --border-light: oklch(0.35 0.09 165);
-  --input-bg: oklch(0.14 0.06 165);
-  --ring: oklch(0.65 0.22 155);
-  --shadow-color: oklch(0.05 0.04 165 / 0.6);
-  --overlay-bg: oklch(0.06 0.04 165 / 0.92);
-  --feature-lock-bg: oklch(0.08 0.04 165 / 0.95);
-}
-
-/* White - Clean Light Theme */
-.theme-white {
-  --background: oklch(0.98 0.005 0);
-  --background-secondary: oklch(0.96 0.008 0);
-  --background-tertiary: oklch(0.94 0.01 0);
-  --background-hover: oklch(0.92 0.012 0);
-  --sidebar-bg: oklch(0.97 0.006 0);
-  --sidebar-hover: oklch(0.94 0.01 0);
-  --sidebar-active: oklch(0.92 0.015 0);
-  --foreground: oklch(0.20 0.02 240);
-  --foreground-secondary: oklch(0.35 0.02 240);
-  --foreground-muted: oklch(0.50 0.02 240);
-  --primary: oklch(0.60 0.15 200);
-  --primary-hover: oklch(0.55 0.16 200);
-  --primary-foreground: oklch(0.99 0.002 200);
-  --accent: oklch(0.65 0.12 200);
-  --success: oklch(0.55 0.18 145);
-  --warning: oklch(0.70 0.16 85);
-  --error: oklch(0.55 0.20 25);
-  --border: oklch(0.88 0.015 240);
-  --border-light: oklch(0.85 0.02 240);
-  --input-bg: oklch(0.99 0.003 0);
-  --ring: oklch(0.60 0.15 200);
-  --shadow-color: oklch(0.20 0.02 240 / 0.12);
-  --shadow-sm: 0 1px 2px var(--shadow-color);
-  --shadow: 0 2px 8px var(--shadow-color);
-  --shadow-lg: 0 8px 24px var(--shadow-color);
-  --shadow-xl: 0 16px 48px var(--shadow-color);
-  --overlay-bg: oklch(0.30 0.01 240 / 0.5);
-  --feature-lock-bg: oklch(0.30 0.01 240 / 0.85);
-}
-
-/* Culled smoothie themes removed (strawberry/blueberry/ocean/grape/peach) — kept zucchini/white/nofun for Figma-neutral set. Legacy class names migrate in app.js. */
-/* Pure Black Theme with High Contrast */
-.theme-nofun {
-  --background: oklch(0.06 0 0);
-  --background-secondary: oklch(0.08 0 0);
-  --background-tertiary: oklch(0.10 0 0);
-  --background-hover: oklch(0.14 0 0);
-  --sidebar-bg: oklch(0.04 0 0);
-  --sidebar-hover: oklch(0.08 0 0);
-  --sidebar-active: oklch(0.12 0 0);
-  --foreground: oklch(1.0 0 0);
-  --foreground-secondary: oklch(0.85 0 0);
-  --foreground-muted: oklch(0.60 0 0);
-  --primary: oklch(0.85 0 0);
-  --primary-hover: oklch(0.90 0 0);
-  --primary-foreground: oklch(0.06 0 0);
-  --accent: oklch(0.75 0 0);
-  --border: oklch(0.25 0 0);
-  --border-light: oklch(0.30 0 0);
-  --input-bg: oklch(0.08 0 0);
-  --ring: oklch(0.85 0 0);
-  --shadow-color: oklch(0 0 0 / 0.8);
-  --overlay-bg: oklch(0 0 0 / 0.92);
-  --feature-lock-bg: oklch(0.02 0 0 / 0.95);
+  --overlay-bg: oklch(0.20 0 0 / 0.45);
+  --feature-lock-bg: oklch(0.20 0 0 / 0.80);
 }
 
 html, body {
@@ -342,6 +255,30 @@ body {
   flex: 1;
 }
 
+.nav-group-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: var(--spacing-sm) var(--spacing-md) 2px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--foreground-muted);
+}
+
+.nav-credits {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .nav-badge {
   font-size: 9px;
   font-weight: 600;
@@ -468,7 +405,7 @@ body {
 }
 
 .status-processing {
-  background: linear-gradient(90deg, var(--primary), var(--accent));
+  background: var(--primary);
   color: var(--primary-foreground);
   animation: pulse 2s ease-in-out infinite;
 }
@@ -479,12 +416,31 @@ body {
 }
 
 .status-success {
-  background: linear-gradient(90deg, var(--success), oklch(from var(--success) l c h / 0.7));
+  background: var(--success);
   color: white;
 }
 
+/* Passive "target found" state. Loud enough to notice, quiet enough to read
+   for as long as the tab stays open. */
+.status-ready {
+  background: var(--background-secondary);
+  color: var(--foreground);
+  border-bottom: 1px solid var(--border);
+}
+
+.status-ready::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: var(--spacing-sm);
+  border-radius: 50%;
+  background: var(--success);
+  vertical-align: middle;
+}
+
 .status-error {
-  background: linear-gradient(90deg, var(--error), oklch(from var(--error) l c h / 0.7));
+  background: var(--error);
   color: white;
 }
 
@@ -891,13 +847,46 @@ input[type="checkbox"] {
 
 .footer-buttons {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--spacing-md);
   justify-content: center;
 }
 
 .footer-buttons .btn {
-  flex: 1;
-  max-width: 200px;
+  flex: 1 1 auto;
+  max-width: 220px;
+}
+
+/* Best Shorts: status text left, history menu right (same row, no white strip) */
+.bestshorts-statusbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  text-align: left;
+}
+
+.select-input--compact {
+  width: auto;
+  max-width: 240px;
+  padding: 4px 8px;
+  font-size: var(--font-size-xs);
+}
+
+.footer-buttons + .footer-buttons {
+  margin-top: var(--spacing-sm);
+}
+
+.footer-buttons--primary .btn {
+  max-width: none;
+}
+
+.footer-buttons--secondary .btn {
+  flex: 1 1 0;
+  max-width: none;
+  padding-left: var(--spacing-sm);
+  padding-right: var(--spacing-sm);
+  font-size: var(--font-size-sm);
 }
 
 .footer-status {
@@ -1533,6 +1522,20 @@ input[type="checkbox"] {
   text-overflow: ellipsis;
 }
 
+.user-plan {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--tab-accent, #D4C2FF);
+  color: rgba(0, 0, 0, 0.82);
+}
+
 .tier-badge {
   display: inline-block;
   font-size: 9px;
@@ -1737,84 +1740,10 @@ input[type="checkbox"] {
   width: 100%;
 }
 
-/* ========================================
-   Theme Picker Modal
-   ======================================== */
-
+/* Sidebar footer actions (Discord / X / Settings) */
 .footer-actions {
   display: flex;
   gap: var(--spacing-xs);
-}
-
-.theme-modal {
-  max-width: 360px;
-}
-
-.theme-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.theme-option {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  width: 100%;
-  padding: var(--spacing-md);
-  background: var(--background-tertiary);
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  text-align: left;
-}
-
-.theme-option:hover {
-  background: var(--background-hover);
-  border-color: var(--border);
-}
-
-.theme-option.active {
-  background: var(--background-hover);
-  border-color: var(--primary);
-}
-
-.theme-color {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  box-shadow: var(--shadow-sm);
-  border: 2px solid var(--border);
-}
-
-.theme-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.theme-name {
-  font-weight: 600;
-  font-size: var(--font-size-sm);
-  color: var(--foreground);
-}
-
-.theme-desc {
-  font-size: var(--font-size-xs);
-  color: var(--foreground-muted);
-}
-
-.theme-check {
-  opacity: 0;
-  color: var(--primary);
-  transition: opacity 0.2s ease;
-}
-
-.theme-option.active .theme-check {
-  opacity: 1;
 }
 
 /* ========================================
@@ -2078,10 +2007,17 @@ body.platform-macos {
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md, 8px);
-  background: var(--background-primary);
+  background: var(--input-bg);
   color: var(--foreground);
   font-size: var(--font-size-sm);
+  font-family: inherit;
   cursor: pointer;
+}
+
+.select-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px oklch(from var(--primary) l c h / 0.2);
 }
 
 .caption-text-actions {
@@ -2089,6 +2025,12 @@ body.platform-macos {
   gap: var(--spacing-sm);
   margin-bottom: var(--spacing-md);
   flex-wrap: wrap;
+}
+
+.caption-text-actions .btn.active {
+  background: var(--tab-accent, #D4C2FF);
+  color: rgba(0, 0, 0, 0.82);
+  border-color: var(--tab-accent, #D4C2FF);
 }
 
 /* Compressor Tab Styles */
@@ -2436,10 +2378,8 @@ body {
 .theme-cream .legacy-bridge-settings[open] summary,
 .theme-cream .link,
 .theme-cream .trial-days,
-.theme-cream .login-form input:focus,
-.theme-cream .theme-option.active,
-.theme-cream .theme-check,
-.theme-cream .nle-option:hover,
+  .theme-cream .login-form input:focus,
+  .theme-cream .nle-option:hover,
 .theme-cream .nle-option.active {
   color: var(--foreground);
 }
@@ -2622,4 +2562,115 @@ body {
   padding: 3px 10px;
   font-weight: 700;
   letter-spacing: 0.01em;
+}
+
+/* ── Studio (Best Shorts credits + history) ────────────────────────────── */
+.studio-credits {
+  margin-top: 12px;
+}
+
+.studio-credits-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#studio-credits-text {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.credit-bar {
+  height: 6px;
+  margin: 8px 0;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.credit-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  transition: width 0.3s ease;
+}
+
+.shorts-results,
+.shorts-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.short-card,
+.short-history-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px;
+  background: var(--background-tertiary);
+}
+
+.short-history-item {
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.short-history-item:hover {
+  border-color: var(--border-light);
+}
+
+.short-card-header,
+.short-history-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.short-card-title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.short-card-time,
+.short-history-meta {
+  font-size: 12px;
+  color: var(--foreground-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.short-card-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--foreground-secondary);
+}
+
+.short-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.studio-credits-inline {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  white-space: nowrap;
+}
+
+.free-pill {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  background: var(--background-tertiary);
+  color: var(--foreground);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }

@@ -22,6 +22,11 @@ export type WhisperVariant = 'cuda' | 'cpu' | 'metal';
 const BIN_RELEASE_BASE =
   'https://github.com/alibahrawy/smoothyapp/releases/download/whisper-cpp-bins-v1.0.0';
 
+// Fallback mirror (the source these binaries were mirrored from). Used when an
+// asset is missing from our own release — e.g. the macOS builds.
+const UPSTREAM_BIN_RELEASE_BASE =
+  'https://github.com/sjoerdteunisse/whisper.cpp/releases/download/v1.0.0';
+
 const isMac = process.platform === 'darwin';
 const isWindows = process.platform === 'win32';
 
@@ -34,7 +39,9 @@ function getAssetName(variant: WhisperVariant): string | null {
     if (variant === 'cuda') return 'whisper-cpp-win32-x64-cuda.zip';
     if (variant === 'cpu') return 'whisper-cpp-win32-x64-cpu.zip';
   }
-  if (platform === 'darwin' && arch === 'arm64' && variant === 'metal') {
+  if (platform === 'darwin' && arch === 'arm64' && (variant === 'metal' || variant === 'cpu')) {
+    // Apple Silicon ships one Metal-capable binary; CPU mode reuses it with
+    // `-ng` (no-GPU), so there is no separate CPU download.
     return 'whisper-cpp-darwin-arm64.zip';
   }
   if (platform === 'darwin' && arch === 'x64' && variant === 'cpu') {
@@ -257,7 +264,10 @@ export async function ensureBinary(
     throw new Error(`No whisper.cpp binary available for ${process.platform}/${process.arch} (${variant})`);
   }
 
-  const urls = [`${BIN_RELEASE_BASE}/${asset}`];
+  const urls = [
+    `${BIN_RELEASE_BASE}/${asset}`,
+    `${UPSTREAM_BIN_RELEASE_BASE}/${asset}`
+  ];
   const variantDir = getVariantDir(variant);
   const zipPath = path.join(getBinDir(), asset);
 

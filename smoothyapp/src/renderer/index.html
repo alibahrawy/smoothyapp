@@ -39,6 +39,7 @@
 
       <!-- Navigation -->
       <nav class="sidebar-nav">
+        <div class="nav-group-label">Free forever</div>
         <a href="#" class="nav-item active" data-tab="multicam">
           <span class="nav-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -59,16 +60,6 @@
           </span>
           <span class="nav-label">Silence Removal</span>
         </a>
-        <a href="#" class="nav-item" data-tab="bestshorts">
-          <span class="nav-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="23 7 16 12 23 17 23 7"></polygon>
-              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
-            </svg>
-          </span>
-          <span class="nav-label">Best Shorts</span>
-          <span class="paid-badge">Paid</span>
-        </a>
         <a href="#" class="nav-item" data-tab="captions">
           <span class="nav-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -87,7 +78,21 @@
           </span>
           <span class="nav-label">Compressor</span>
         </a>
-        <a href="#" class="nav-item" data-tab="logs">
+
+        <!-- Studio: paid cloud tools live here, never on the free tabs -->
+        <div class="nav-group-label">Studio <span id="studio-credits-inline" class="nav-credits">—</span></div>
+        <a href="#" class="nav-item" data-tab="bestshorts">
+          <span class="nav-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="23 7 16 12 23 17 23 7"></polygon>
+              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+            </svg>
+          </span>
+          <span class="nav-label">Best Shorts</span>
+          <span class="paid-badge">Paid</span>
+        </a>
+
+        <a href="#" class="nav-item hidden" data-tab="logs">
           <span class="nav-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="4 17 10 11 4 5"></polyline>
@@ -102,12 +107,9 @@
       <div class="sidebar-footer">
         <!-- User info (when logged in) -->
         <div id="user-info" class="user-info hidden">
-          <div class="user-avatar">
-            <span id="user-initial">?</span>
-          </div>
           <div class="user-details">
             <span id="user-name" class="user-name">Not logged in</span>
-            <span id="user-tier" class="tier-badge">Free</span>
+            <span id="user-plan" class="user-plan">Studio</span>
           </div>
           <button id="logout-btn" class="logout-btn" title="Logout">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -136,6 +138,11 @@
             <button class="settings-btn" id="discord-btn" title="Join our Discord">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M20.317 4.369a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.865-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.009c.12.099.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.891.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.331c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.211 0 2.176 1.094 2.157 2.418 0 1.334-.955 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.211 0 2.176 1.094 2.157 2.418 0 1.334-.946 2.419-2.157 2.419z"/>
+              </svg>
+            </button>
+            <button class="settings-btn" id="twitter-btn" title="Follow on X">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
               </svg>
             </button>
             <button class="settings-btn" id="settings-btn" title="Settings">
@@ -321,10 +328,18 @@
             </div>
 
             <div class="form-group">
+              <label for="caption-language-select">Language</label>
+              <select id="caption-language-select" class="select-input">
+                <option value="auto">Auto-detect</option>
+              </select>
+              <p class="help-text" id="caption-language-status">Auto-detect works for any spoken language. Non-English languages need a multilingual model.</p>
+            </div>
+
+            <div class="form-group">
               <label for="caption-engine-select">Transcription Engine</label>
               <select id="caption-engine-select" class="select-input">
                 <option value="auto">Auto — GPU if available</option>
-                <option value="cuda">GPU (CUDA)</option>
+                <option value="cuda">GPU</option>
                 <option value="cpu">CPU (all cores)</option>
               </select>
               <p class="help-text" id="caption-engine-status">Checking engine…</p>
@@ -354,6 +369,15 @@
               </label>
               <input type="range" id="caption-max-duration" min="3" max="15" step="0.5" value="7">
             </div>
+
+            <div class="form-group">
+              <label>Text Style</label>
+              <div class="caption-text-actions">
+                <button id="captions-capitalize-btn" class="btn btn-secondary btn-small" title="Capitalise the first letter of every caption">Capitalize All</button>
+                <button id="captions-remove-punct-btn" class="btn btn-secondary btn-small" title="Strip punctuation from every caption">Remove Punctuation</button>
+              </div>
+              <p class="help-text">Applied when you generate captions. Click again to turn off.</p>
+            </div>
           </section>
 
           <!-- Generated Captions Preview -->
@@ -361,10 +385,6 @@
             <div class="section-header-row">
               <h2>Generated Captions</h2>
               <span id="captions-count" class="help-text"></span>
-            </div>
-            <div class="caption-text-actions">
-              <button id="captions-capitalize-btn" class="btn btn-secondary btn-small" title="Capitalise the first letter of every caption">Capitalize All</button>
-              <button id="captions-remove-punct-btn" class="btn btn-secondary btn-small" title="Strip punctuation from every caption">Remove Punctuation</button>
             </div>
             <div id="captions-preview" class="captions-preview"></div>
           </section>
@@ -515,23 +535,21 @@
 
       <!-- Best Shorts Tab Content -->
       <div class="tab-content" id="tab-bestshorts">
-        <!-- Status bar -->
-        <div id="bestshorts-status-bar" class="status-bar status-idle">
+        <!-- Status bar with the history menu at the top-right -->
+        <div id="bestshorts-status-bar" class="status-bar status-idle bestshorts-statusbar-row">
           <span id="bestshorts-status-text">Connect to SmoothyEdit website to start</span>
+          <select id="shorts-history-select" class="select-input select-input--compact" disabled>
+            <option value="">History</option>
+          </select>
         </div>
 
         <!-- Scrollable content -->
         <div class="content-scroll">
-          <!-- Website Connection Status -->
+          <!-- Results -->
           <section class="section">
-            <h2>Website Connection</h2>
-            <div class="website-connection-status">
-              <div class="connection-indicator" id="website-connection-indicator">
-                <span class="connection-dot disconnected" id="website-status-dot"></span>
-                <span class="connection-text" id="website-status-text">Disconnected</span>
-              </div>
-              <p class="help-text" id="website-help-text">Add your connection token in Settings to connect</p>
-            </div>
+            <h2>Shorts</h2>
+            <p id="shorts-status" class="help-text"></p>
+            <div id="shorts-results" class="shorts-results"></div>
           </section>
 
           <!-- Sequence Info -->
@@ -544,57 +562,55 @@
             <p id="bestshorts-sequence-details" class="help-text"></p>
           </section>
 
-          <!-- How it Works -->
-          <section class="section">
-            <h2>How It Works</h2>
-            <div class="steps-list">
-              <div class="step-item">
-                <span class="step-number">1</span>
-                <span class="step-text">Click "Export Audio" to send your sequence audio to SmoothyEdit</span>
-              </div>
-              <div class="step-item">
-                <span class="step-number">2</span>
-                <span class="step-text">AI analyzes your audio to find the best short-form moments</span>
-              </div>
-              <div class="step-item">
-                <span class="step-number">3</span>
-                <span class="step-text">Review and edit clips on the website</span>
-              </div>
-              <div class="step-item">
-                <span class="step-number">4</span>
-                <span class="step-text">Send markers back to Premiere with one click</span>
-              </div>
-            </div>
-          </section>
         </div>
 
         <!-- Action footer -->
         <footer class="content-footer">
-          <div class="footer-buttons">
-            <button id="export-audio-btn" class="btn btn-primary btn-large" disabled>
+          <div class="footer-buttons footer-buttons--primary">
+            <button id="analyze-shorts-btn" class="btn btn-primary btn-large" disabled>
               <span class="btn-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="17 8 12 3 7 8"></polyline>
-                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                  <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
                 </svg>
               </span>
-              Export Audio to Website
+              Find Best Shorts
             </button>
-            <button id="clear-markers-btn" class="btn btn-secondary" disabled>
+            <button id="send-shorts-btn" class="btn btn-primary" disabled>
               <span class="btn-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+              </span>
+              Send to Premiere
+            </button>
+          </div>
+          <div class="footer-buttons footer-buttons--secondary">
+            <button id="clear-markers-btn" class="btn btn-secondary" disabled>
+              <span class="btn-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="3 6 5 6 21 6"></polyline>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                 </svg>
               </span>
-              Clear All Markers
+              Clear Markers
+            </button>
+            <button id="open-studio-dashboard-btn" class="btn btn-secondary">
+              <span class="btn-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+              </span>
+              Open Dashboard
             </button>
           </div>
           <p id="bestshorts-footer-status" class="footer-status">Connect to website in Settings</p>
         </footer>
 
-        <!-- Best Shorts upsell (cloud AI — requires Studio Pro) -->
+        <!-- Best Shorts upsell (cloud AI — part of Studio) -->
         <div id="bestshorts-lock" class="feature-lock-overlay hidden">
           <div class="lock-content">
             <div class="lock-icon">
@@ -603,8 +619,8 @@
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
               </svg>
             </div>
-            <h3>Studio AI Feature</h3>
-            <p>Best Shorts uses cloud AI to find viral moments.<br>Local tools are free forever — connect Studio for AI.</p>
+            <h3>Sign in to Studio</h3>
+            <p>Best Shorts uses cloud AI and your Studio credits.<br>Free accounts get 100 credits a month. The other tools in this app stay free.</p>
             <div class="lock-actions">
               <button id="bestshorts-upgrade-btn" class="btn btn-primary">Connect Studio</button>
               <button id="bestshorts-login-btn" class="btn btn-secondary">Learn more</button>
@@ -614,7 +630,7 @@
       </div>
 
       <!-- Logs Tab Content -->
-      <div class="tab-content" id="tab-logs">
+      <div class="tab-content hidden" id="tab-logs">
         <div class="status-bar status-idle">
           <span>Live Debug Logs</span>
         </div>
@@ -859,8 +875,8 @@
       </div>
 
       <div class="settings-section">
-        <h4>SmoothyEdit Website Connection</h4>
-        <p class="help-text">Connect to smoothyedit.com to use AI features like Best Shorts detection.</p>
+        <h4>Studio</h4>
+        <p class="help-text">Connect to smoothyedit.com to use Studio, the optional paid cloud tools like Best Shorts. The rest of the app works without it.</p>
 
         <div class="form-group">
           <label for="connection-token">Connection Token</label>
@@ -876,6 +892,7 @@
         <div class="settings-actions">
           <button id="save-token-btn" class="btn btn-secondary">Save Token</button>
           <button id="connect-website-btn" class="btn btn-primary">Connect</button>
+          <button id="settings-open-studio-btn" class="btn btn-secondary">Open Dashboard</button>
         </div>
       </div>
 
@@ -940,7 +957,17 @@
         <p class="help-text">Report bugs, request features, and get help from other editors.</p>
         <div class="settings-actions">
           <button id="settings-discord-btn" class="btn btn-secondary">Join our Discord</button>
+          <button id="settings-twitter-btn" class="btn btn-secondary">Follow on X</button>
         </div>
+      </div>
+
+      <div class="settings-section">
+        <h4>Advanced</h4>
+        <label class="checkbox-label" style="margin-top: 8px;">
+          <input type="checkbox" id="show-logs-toggle">
+          <span>Show the Logs tab</span>
+        </label>
+        <p class="help-text">Hidden by default. Turn this on to see live debug logs.</p>
       </div>
     </div>
   </div>

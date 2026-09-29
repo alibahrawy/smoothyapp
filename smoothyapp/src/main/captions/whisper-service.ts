@@ -91,7 +91,11 @@ export async function loadModel(
   modelId: string,
   onProgress?: ProgressCallback
 ): Promise<void> {
-  const modelPath = await ensureModelDownloaded(modelId);
+  const modelPath = await ensureModelDownloaded(modelId, (p) => {
+    if (onProgress) {
+      onProgress({ status: 'downloading', progress: p.progress, file: p.file });
+    }
+  });
 
   const order = getVariantOrder();
   const errors: string[] = [];
@@ -104,8 +108,8 @@ export async function loadModel(
             status: 'downloading-bin',
             progress: 0,
             file: variant === 'cuda'
-              ? 'Downloading GPU engine (~630 MB, one time)…'
-              : 'Downloading transcription engine…'
+              ? 'Downloading GPU engine (one-time setup)'
+              : 'Downloading transcription engine (one-time setup)'
           });
         }
       }
@@ -114,7 +118,9 @@ export async function loadModel(
           onProgress({
             status: 'downloading-bin',
             progress: p.progress,
-            file: variant === 'cuda' ? 'Downloading GPU engine (one time)…' : 'Downloading transcription engine…'
+            file: variant === 'cuda'
+              ? 'Downloading GPU engine (one-time setup)'
+              : 'Downloading transcription engine (one-time setup)'
           });
         }
       });
@@ -240,12 +246,14 @@ function segmentsToChunks(segments: CliSegment[]): TranscriptionChunk[] {
 
 /**
  * Transcribe an audio file. `audioPath` should be WAV/MP3/FLAC/OGG — the CLI
- * decodes these directly.
+ * decodes these directly. `language` is a whisper language code, or `auto` to
+ * let whisper detect the spoken language.
  */
 export async function transcribe(
   audioPath: string,
   onProgress?: ProgressCallback,
-  modelId?: string
+  modelId?: string,
+  language?: string
 ): Promise<TranscriptionResult> {
   if (!activeBinary) {
     throw new Error('No transcription engine loaded. Call loadModel() first.');
@@ -260,6 +268,8 @@ export async function transcribe(
     throw new Error(`Model file missing: ${modelPath}`);
   }
 
+  const lang = language && language.trim() ? language.trim() : 'en';
+
   const outBase = path.join(os.tmpdir(), `smoothyedit-whisper-${Date.now()}`);
   const threads = os.cpus().length;
   const jsonPath = `${outBase}.json`;
@@ -268,7 +278,7 @@ export async function transcribe(
     const args = [
       '-m', modelPath,
       '-f', audioPath,
-      '-l', 'en',
+      '-l', lang,
       '-oj',            // JSON output
       '-of', outBase,
       '-t', String(threads),
@@ -381,13 +391,13 @@ export async function transcribe(
   const segments = parsed.transcription || [];
   const chunks = segmentsToChunks(segments);
   const text = chunks.map((c) => c.text).join(' ');
-  const language = parsed.result?.language || 'en';
+  const detectedLanguage = parsed.result?.language || lang;
 
   if (onProgress) onProgress({ status: 'complete', progress: 100 });
 
   console.log(`[Whisper] Transcription complete — ${segments.length} segments → ${chunks.length} words, ${text.length} chars`);
 
-  return { text, chunks, language };
+  return { text, chunks, language: detectedLanguage };
 }
 
 /**

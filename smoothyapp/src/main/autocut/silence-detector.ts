@@ -7,7 +7,7 @@ import fs from 'fs';
 import { spawn } from 'child_process';
 import path from 'path';
 import os from 'os';
-import { app } from 'electron';
+import { getFFmpegPath } from '../ffmpeg-path';
 
 export interface SilenceSegment {
   start: number;
@@ -32,20 +32,6 @@ export interface SilenceAnalysisResult {
 
 const FRAME_SIZE = 480; // 30ms at 16kHz
 const SAMPLE_RATE = 16000;
-
-function getFFmpegPath(): string {
-  if (!app.isPackaged) {
-    const systemPaths = [
-      '/opt/homebrew/bin/ffmpeg',
-      '/usr/local/bin/ffmpeg',
-      '/usr/bin/ffmpeg'
-    ];
-    for (const p of systemPaths) {
-      if (fs.existsSync(p)) return p;
-    }
-  }
-  return 'ffmpeg';
-}
 
 function getTempDir(): string {
   const tempDir = path.join(os.tmpdir(), 'smoothyedit-temp');

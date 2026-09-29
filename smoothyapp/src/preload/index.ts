@@ -29,6 +29,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   clearMarkers: () => ipcRenderer.invoke('clear-markers'),
   exportSubtitles: () => ipcRenderer.invoke('export-subtitles'),
 
+  // Studio (cloud)
+  getStudioCredits: () => ipcRenderer.invoke('get-studio-credits'),
+  getShortsHistory: (page = 1) => ipcRenderer.invoke('get-shorts-history', page),
+  analyzeShorts: (config?: { trackIndices?: number[] }) => ipcRenderer.invoke('analyze-shorts', config),
+  addShortsMarkers: (shorts: any[]) => ipcRenderer.invoke('add-shorts-markers', shorts),
+
   // Captions
   getCaptionModels: () => ipcRenderer.invoke('get-caption-models'),
   getCaptionModelStatus: () => ipcRenderer.invoke('get-caption-model-status'),
@@ -47,6 +53,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setCaptionEngine: (engine: string) => ipcRenderer.invoke('set-caption-engine', engine),
   getSelectedCaptionModel: () => ipcRenderer.invoke('get-selected-caption-model'),
   setSelectedCaptionModel: (modelId: string) => ipcRenderer.invoke('set-selected-caption-model', modelId),
+  getCaptionLanguages: () => ipcRenderer.invoke('get-caption-languages'),
+  getCaptionLanguage: () => ipcRenderer.invoke('get-caption-language'),
+  setCaptionLanguage: (code: string) => ipcRenderer.invoke('set-caption-language', code),
 
   // Auth
   login: (email: string, password: string, totpCode?: string) =>
@@ -66,6 +75,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Window always on top
   toggleAlwaysOnTop: () => ipcRenderer.invoke('toggle-always-on-top'),
   getAlwaysOnTop: () => ipcRenderer.invoke('get-always-on-top'),
+
+  // Preferences
+  getShowLogs: () => ipcRenderer.invoke('get-show-logs'),
+  setShowLogs: (value: boolean) => ipcRenderer.invoke('set-show-logs', value),
 
   // Auto-updater
   installUpdate: () => ipcRenderer.invoke('install-update'),
@@ -129,6 +142,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onExportProgress: (callback: (data: any) => void) => {
     ipcRenderer.on('export-progress', (_, data) => callback(data));
+  },
+  onShortsProgress: (callback: (data: { message: string }) => void) => {
+    ipcRenderer.on('shorts-progress', (_, data) => callback(data));
   },
   onAuthStateChange: (callback: (state: any) => void) => {
     ipcRenderer.on('auth-state-change', (_, state) => callback(state));

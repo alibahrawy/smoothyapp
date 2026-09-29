@@ -9,6 +9,7 @@ import { initTelemetry, trackEvent, trackTool, startHeartbeat } from './telemetr
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { execFileSync } from 'child_process';
 import {
   startNLEServers,
   stopNLEServers,
@@ -57,8 +58,15 @@ import {
   getAvailableModels,
   getModelById,
   getDefaultModelId,
+  isEnglishOnlyModel,
   ensureModelDownloaded
 } from './captions/model-manager';
+import {
+  WHISPER_LANGUAGES,
+  DEFAULT_CAPTION_LANGUAGE,
+  isSupportedLanguage,
+  getLanguageName
+} from './captions/languages';
 import {
   formatCaptions,
   toSRT,
@@ -76,6 +84,8 @@ import {
   TimelineAudioClip
 } from './autocut/audio-extractor';
 import videoCompressor, { CompressionSettings, VideoFile } from './compressor/video-compressor';
+import * as webApi from './web-api';
+import type { StudioShort } from './web-api';
 
 function swallowStdIOMaybeEpipe() {
   const handle = (err: any) => {
@@ -213,13 +223,40 @@ function getCepPluginSource(): string {
   return path.join(__dirname, '..', '..', '..', 'smoothyapp-cep');
 }
 
+function getInstalledPanelPath(): string {
+  return path.join(getCepExtensionsPath(), CEP_PLUGIN_ID);
+}
+
+/**
+ * The panel version is stored in the CEP manifest. Reading it lets us reinstall
+ * the panel whenever the app ships a newer one — previously we only installed
+ * when the panel was completely missing, so caption-import fixes from a later
+ * app build never reached anyone who had an older panel on disk.
+ */
+function readPanelVersion(pluginDir: string): string | null {
+  try {
+    const manifestPath = path.join(pluginDir, 'CSXS', 'manifest.xml');
+    if (!fs.existsSync(manifestPath)) return null;
+    const xml = fs.readFileSync(manifestPath, 'utf-8');
+    const match = xml.match(/ExtensionBundleVersion="([^"]+)"/);
+    return match ? match[1] : '0.0.0';
+  } catch {
+    return null;
+  }
+}
+
+function getBundledPanelVersion(): string | null {
+  return readPanelVersion(getCepPluginSource());
+}
+
+function getInstalledPanelVersion(): string | null {
+  return readPanelVersion(getInstalledPanelPath());
+}
+
 function isBridgeInstalled(): { installed: boolean; path: string } {
-  const extPath = getCepExtensionsPath();
-  const pluginPath = path.join(extPath, CEP_PLUGIN_ID);
-  const manifestPath = path.join(pluginPath, 'CSXS', 'manifest.xml');
   return {
-    installed: fs.existsSync(manifestPath),
-    path: path.join(extPath, CEP_PLUGIN_ID)
+    installed: fs.existsSync(path.join(getInstalledPanelPath(), 'CSXS', 'manifest.xml')),
+    path: getInstalledPanelPath()
   };
 }
 
@@ -234,6 +271,94 @@ function copyDirSync(src: string, dest: string) {
     } else {
       fs.copyFileSync(srcPath, destPath);
     }
+  }
+}
+
+/**
+ * Write the `.debug` file Premiere looks for when loading an unsigned CEP
+ * extension. Without it the (unsigned) panel never appears in
+ * Window → Extensions.
+ */
+function writeCepDebugFile(pluginDir: string) {
+  const debugXml = `<?xml version="1.0" encoding="UTF-8"?>
+<ExtensionList>
+  <Extension Id="${CEP_EXTENSION_ID}">
+    <HostList>
+      <Host Name="PPRO" Port="8088"/>
+    </HostList>
+  </Extension>
+</ExtensionList>
+`;
+  fs.writeFileSync(path.join(pluginDir, '.debug'), debugXml, 'utf-8');
+}
+
+// CSXS versions Premiere Pro reads. 9–11 cover older releases; 12 and 13 are
+// what current Premiere builds look at.
+const CSXS_DEBUG_VERSIONS = ['9', '10', '11', '12', '13'];
+
+/**
+ * Enable PlayerDebugMode so Premiere loads the unsigned CEP panel. On Windows
+ * that is a set of registry values; on macOS it is a `defaults` domain per CSXS
+ * version. Both are best-effort — a failure here should not abort the install.
+ */
+function enableCepDebugMode() {
+  if (isWindows) {
+    for (const version of CSXS_DEBUG_VERSIONS) {
+      try {
+        execFileSync('reg', ['add', `HKCU\\Software\\Adobe\\CSXS.${version}`, '/v', 'PlayerDebugMode', '/t', 'REG_SZ', '/d', '1', '/f'], {
+          stdio: 'ignore',
+          windowsHide: true
+        });
+      } catch {
+        // Registry entry not creatable (rare); the .debug file may still cover it.
+      }
+    }
+    return;
+  }
+
+  if (isMac) {
+    for (const version of CSXS_DEBUG_VERSIONS) {
+      try {
+        execFileSync('defaults', ['write', `com.adobe.CSXS.${version}`, 'PlayerDebugMode', '1'], { stdio: 'ignore' });
+      } catch {
+        // Missing domain is fine; `defaults write` normally creates it.
+      }
+    }
+  }
+}
+
+/**
+ * Install (or refresh) the bundled Premiere Pro CEP panel into the user's CEP
+ * extensions folder. Safe to call on every launch: if the panel is missing or
+ * a different version than the bundled one, it is replaced.
+ */
+function installBridge(): { success: boolean; path?: string; version?: string; error?: string } {
+  try {
+    const source = getCepPluginSource();
+    if (!fs.existsSync(path.join(source, 'CSXS', 'manifest.xml'))) {
+      return { success: false, error: `Bundled Premiere panel not found at ${source}` };
+    }
+
+    const extensionsPath = getCepExtensionsPath();
+    const dest = getInstalledPanelPath();
+
+    fs.mkdirSync(extensionsPath, { recursive: true });
+    // Remove the old copy so renamed/removed files can't linger.
+    fs.rmSync(dest, { recursive: true, force: true });
+    copyDirSync(source, dest);
+    writeCepDebugFile(dest);
+
+    const version = getBundledPanelVersion() || undefined;
+
+    clearSmoothyCepCaches();
+    // Enable debug mode after clearing caches so Premiere reloads the new panel.
+    enableCepDebugMode();
+
+    console.log(`[CEP] Installed panel ${version || '?'} to ${dest}`);
+    return { success: true, path: dest, version };
+  } catch (error) {
+    console.error('[CEP] installBridge failed:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to install the Premiere panel' };
   }
 }
 
@@ -443,20 +568,25 @@ app.whenReady().then(() => {
 
   createWindow();
 
-  // Auto-install CEP bridge on macOS (Windows uses NSIS installer)
-  if (isMac) {
-    const bridgeStatus = isBridgeInstalled();
-    if (!bridgeStatus.installed) {
-      console.log('[CEP] Bridge not found, auto-installing...');
-      const result = installBridge();
-      if (result.success) {
-        console.log('[CEP] Bridge auto-installed successfully');
-      } else {
-        console.warn('[CEP] Bridge auto-install failed:', result.error);
-      }
+  // Keep the Premiere Pro CEP panel in sync with the app. On macOS the panel
+  // only reaches users via this install path; on Windows the NSIS installer
+  // also copies it, but this guarantees updates when the app updates.
+  const bundledPanelVersion = getBundledPanelVersion();
+  const installedPanelVersion = getInstalledPanelVersion();
+  const panelNeedsInstall = !isBridgeInstalled().installed || installedPanelVersion !== bundledPanelVersion;
+
+  if (panelNeedsInstall) {
+    console.log(
+      `[CEP] Panel ${bundledPanelVersion || '?'} needed (installed: ${installedPanelVersion || 'none'}), installing...`
+    );
+    const result = installBridge();
+    if (result.success) {
+      console.log(`[CEP] Panel ${result.version || ''} installed at ${result.path}`);
     } else {
-      console.log('[CEP] Bridge already installed at:', bridgeStatus.path);
+      console.warn('[CEP] Panel install failed:', result.error);
     }
+  } else {
+    console.log(`[CEP] Panel ${installedPanelVersion} is up to date at ${getInstalledPanelPath()}`);
   }
 
   // Auto-updater setup
@@ -705,6 +835,13 @@ ipcMain.handle('save-theme-local', (_, theme: string) => {
   return { success: true };
 });
 
+// Preferences
+ipcMain.handle('get-show-logs', () => !!store.get('showLogs'));
+ipcMain.handle('set-show-logs', (_, value: boolean) => {
+  store.set('showLogs', !!value);
+  return { success: true };
+});
+
 // Window always on top
 ipcMain.handle('toggle-always-on-top', () => {
   if (mainWindow) {
@@ -860,6 +997,22 @@ ipcMain.handle('generate-captions', async (_, config: {
     // Resolve the model: whatever the user picked in Settings, else the default.
     const selectedModel = (store.get('captionModel') as string | null) || getDefaultModelId();
 
+    // Resolve the language: stored preference, else auto-detect.
+    const selectedLanguage = (store.get('captionLanguage') as string | null) || DEFAULT_CAPTION_LANGUAGE;
+
+    // English-only (.en) models can't transcribe another language — fail with a
+    // clear, actionable message instead of returning English gibberish.
+    if (isEnglishOnlyModel(selectedModel) && selectedLanguage !== 'auto' && selectedLanguage !== 'en') {
+      return {
+        success: false,
+        error: `The selected model can only transcribe English. Choose a multilingual model (e.g. Large v3 Turbo) to transcribe ${getLanguageName(selectedLanguage)}.`
+      };
+    }
+
+    // An English-only model always transcribes English, so pin it rather than
+    // asking whisper to auto-detect on a model that can't detect.
+    const effectiveLanguage = isEnglishOnlyModel(selectedModel) ? 'en' : selectedLanguage;
+
     // Apply the user's engine choice (auto / cuda / cpu) before preparing the engine.
     whisperService.setEnginePreference((store.get('captionEngine') as 'auto' | 'cuda' | 'cpu') || 'auto');
 
@@ -867,19 +1020,26 @@ ipcMain.handle('generate-captions', async (_, config: {
     if (!whisperService.isModelLoaded() || whisperService.getCurrentModelId() !== selectedModel) {
       mainWindow?.webContents.send('caption-progress', {
         status: 'loading-model',
-        message: 'Preparing transcription engine...'
+        message: 'Preparing transcription engine (first run downloads it once)…'
       });
 
       await whisperService.loadModel(selectedModel, (progress) => {
         const isEngineDownload = progress.status === 'downloading-bin';
+        const isModelDownload = progress.status === 'downloading';
+        const pct = typeof progress.progress === 'number' ? Math.round(progress.progress) : undefined;
+        let message: string;
+        if (isEngineDownload) {
+          message = `${progress.file || 'Downloading transcription engine (one-time setup)'}${pct != null ? ` — ${pct}%` : '…'}`;
+        } else if (isModelDownload) {
+          message = `Downloading transcription model (one-time setup)${pct != null ? ` — ${pct}%` : '…'}`;
+        } else {
+          message = `Preparing: ${progress.status}`;
+        }
+
         mainWindow?.webContents.send('caption-progress', {
           status: 'loading-model',
-          message: isEngineDownload
-            ? (progress.file || 'Downloading transcription engine…')
-            : progress.status === 'downloading'
-              ? `Downloading model: ${progress.progress || 0}%`
-              : `Preparing: ${progress.status}`,
-          progress: isEngineDownload ? undefined : progress.progress
+          message,
+          progress: (isEngineDownload || isModelDownload) ? (pct ?? 0) : undefined
         });
       });
     }
@@ -887,7 +1047,9 @@ ipcMain.handle('generate-captions', async (_, config: {
     // Transcribe
     mainWindow?.webContents.send('caption-progress', {
       status: 'transcribing',
-      message: `Transcribing on ${whisperService.getActiveBackend().toUpperCase()}...`
+      message: effectiveLanguage === 'auto'
+        ? `Detecting language and transcribing on ${whisperService.getActiveBackend().toUpperCase()}...`
+        : `Transcribing ${getLanguageName(effectiveLanguage)} on ${whisperService.getActiveBackend().toUpperCase()}...`
     });
 
     const transcriptionResult = await whisperService.transcribe(audioPath!, (progress) => {
@@ -896,7 +1058,7 @@ ipcMain.handle('generate-captions', async (_, config: {
         message: progress.status,
         progress: progress.progress
       });
-    });
+    }, selectedModel, effectiveLanguage);
 
     // Format captions
     mainWindow?.webContents.send('caption-progress', {
@@ -1070,6 +1232,162 @@ ipcMain.handle('set-selected-caption-model', async (_, modelId: string) => {
   return { success: true, modelId };
 });
 
+ipcMain.handle('get-caption-languages', () => WHISPER_LANGUAGES);
+
+ipcMain.handle('get-caption-language', () => {
+  return (store.get('captionLanguage') as string | null) || DEFAULT_CAPTION_LANGUAGE;
+});
+
+ipcMain.handle('set-caption-language', (_, code: string) => {
+  const language = isSupportedLanguage(code) ? code : DEFAULT_CAPTION_LANGUAGE;
+  store.set('captionLanguage', language);
+  // Language is a per-run argument, so no model reload is needed.
+  return { success: true, language };
+});
+
+// ─── Studio (cloud) handlers ────────────────────────────────────────────────
+// Studio credits apply only here. Local tools (multicam, silence, captions,
+// compressor) never call the web API and never spend credits.
+
+function studioErrorPayload(error: unknown) {
+  if (error instanceof webApi.NotSignedInError) {
+    return { success: false, requiresLogin: true, error: error.message };
+  }
+  return { success: false, error: error instanceof Error ? error.message : 'Request failed' };
+}
+
+ipcMain.handle('get-studio-credits', async () => {
+  try {
+    const credits = await webApi.getCredits();
+    return { success: true, credits };
+  } catch (error) {
+    return studioErrorPayload(error);
+  }
+});
+
+ipcMain.handle('get-shorts-history', async (_, page = 1) => {
+  try {
+    const history = await webApi.listShortsHistory(page);
+    return { success: true, ...history };
+  } catch (error) {
+    return studioErrorPayload(error);
+  }
+});
+
+ipcMain.handle('add-shorts-markers', async (_, shorts: StudioShort[]) => {
+  try {
+    if (!Array.isArray(shorts) || shorts.length === 0) {
+      return { success: false, error: 'No shorts to send' };
+    }
+    const markers = shorts.map((short, index) => ({
+      time: short.startTime,
+      endTime: short.endTime,
+      name: short.title || `Short ${index + 1}`,
+      comment: short.description || short.reason || ''
+    }));
+    const result = await addMarkersToSequence(markers);
+    return result;
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to add markers' };
+  }
+});
+
+ipcMain.handle('analyze-shorts', async (_, config: { trackIndices?: number[] } = {}) => {
+  trackTool('bestshorts');
+
+  const tempAudioFiles: string[] = [];
+  resetAudioExtractionCancel();
+  captionsJobActive = true;
+
+  const progress = (message: string) => {
+    mainWindow?.webContents.send('shorts-progress', { message });
+  };
+
+  try {
+    const seqInfo = getSequenceInfo();
+    if (!seqInfo || !seqInfo.hasSequence) {
+      return { success: false, error: 'No active sequence' };
+    }
+
+    const selectedTracks = Array.isArray(config.trackIndices) && config.trackIndices.length > 0
+      ? new Set<number>(config.trackIndices)
+      : null;
+
+    const timelineClips: TimelineAudioClip[] = [];
+    for (const track of seqInfo.audioTracks || []) {
+      if (selectedTracks && !selectedTracks.has(track.index)) continue;
+      for (const clip of track.clips || []) {
+        if (!clip || !clip.path) continue;
+        timelineClips.push({
+          path: clip.path,
+          start: Number(clip.start) || 0,
+          end: Number(clip.end) || 0,
+          inPoint: clip.inPoint,
+          outPoint: clip.outPoint
+        });
+      }
+    }
+
+    if (timelineClips.length === 0) {
+      return { success: false, error: 'No audio clips found on the selected tracks' };
+    }
+
+    // 1. Build one timeline-accurate WAV from the selected tracks.
+    progress(`Preparing audio (${timelineClips.length} clip${timelineClips.length === 1 ? '' : 's'})...`);
+    const stitched = await stitchTimelineAudio(timelineClips, `shorts_timeline_${Date.now()}`);
+    tempAudioFiles.push(stitched.path);
+
+    // 2. Transcribe locally with Whisper — free, offline, no credits.
+    const selectedModel = (store.get('captionModel') as string | null) || getDefaultModelId();
+    whisperService.setEnginePreference((store.get('captionEngine') as 'auto' | 'cuda' | 'cpu') || 'auto');
+
+    if (!whisperService.isModelLoaded() || whisperService.getCurrentModelId() !== selectedModel) {
+      progress('Preparing transcription engine...');
+      await whisperService.loadModel(selectedModel, (p) => {
+        progress(p.status === 'downloading'
+          ? `Downloading model: ${p.progress || 0}%`
+          : `Preparing: ${p.status}`);
+      });
+    }
+
+    progress('Transcribing audio locally...');
+    const transcription = await whisperService.transcribe(stitched.path, (p) => {
+      progress(p.status);
+    });
+
+    const captions = formatCaptions(transcription, {});
+    const subtitleText = toSRT(captions);
+    if (!subtitleText.trim()) {
+      return { success: false, error: 'No speech detected in the audio' };
+    }
+
+    // 3. Send only the text to Studio for analysis (this is what spends credits).
+    progress('Finding the best shorts...');
+    const { shorts } = await webApi.analyzeShorts(subtitleText, stitched.durationSeconds);
+    if (shorts.length === 0) {
+      return { success: false, error: 'No shorts found in this clip' };
+    }
+
+    // 4. Save to history so it appears on the web dashboard too.
+    progress('Saving to history...');
+    const historyText = JSON.stringify({ shorts }, null, 2);
+    const fileName = seqInfo.name ? `${seqInfo.name} — shorts` : 'shorts';
+    await webApi.saveShortsToHistory(historyText, fileName);
+
+    // 5. Refresh credits so the meter reflects the spend.
+    let credits = null;
+    try { credits = await webApi.getCredits(); } catch { /* non-fatal */ }
+
+    return { success: true, shorts, credits, duration: stitched.durationSeconds };
+  } catch (error) {
+    console.error('[Studio] analyze-shorts error:', error);
+    return studioErrorPayload(error);
+  } finally {
+    tempAudioFiles.forEach((file) => cleanupTempFile(file));
+    captionsJobActive = false;
+  }
+});
+
 // Auto-updater handlers
 ipcMain.handle('install-update', () => {
   // isForceRunAfter=true relaunches the app right after the installer finishes,
@@ -1091,6 +1409,8 @@ ipcMain.handle('get-bridge-status', () => {
   return {
     installed: cepStatus.installed,
     path: cepStatus.path,
+    version: getInstalledPanelVersion(),
+    bundledVersion: getBundledPanelVersion(),
     cep: cepStatus,
     extensionsPath: getCepExtensionsPath(),
     defaultPath: getDefaultCepPath(),

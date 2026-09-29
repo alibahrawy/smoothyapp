@@ -7,7 +7,8 @@
 import { runVad } from './autocut/vad-runner';
 import { generateShotDecisions } from './autocut/decision-engine';
 import { generateMulticamSequenceXML } from './autocut/xml-generator';
-import { extractAudioTrack, cleanupTempFile } from './autocut/audio-extractor';
+import { extractAudioTrack, stitchTimelineAudio, cleanupTempFile } from './autocut/audio-extractor';
+import type { TimelineAudioClip } from './autocut/audio-extractor';
 import { combineAudioTracks, analyzeSilence, cleanupTempFile as cleanupSilenceTemp, alignSegmentsToFrames } from './autocut/silence-detector';
 import { generateSilenceRemovalXML } from './autocut/silence-xml-generator';
 import path from 'path';
@@ -123,6 +124,56 @@ let pendingAddMarkers: {
 let pendingClearMarkers: { resolve: (value: any) => void; reject: (error: any) => void } | null = null;
 let pendingExportSubtitles: { resolve: (value: any) => void; reject: (error: any) => void; attemptedTypes: string[] } | null = null;
 let pendingImportCaptions: { resolve: (value: any) => void; reject: (error: any) => void } | null = null;
+let pendingImportXml: { resolve: (value: any) => void; reject: (error: any) => void } | null = null;
+let pendingRemoveSilence: { resolve: (value: any) => void; reject: (error: any) => void } | null = null;
+
+/**
+ * Ask Premiere to ripple-delete the silence segments, resolving only when the
+ * bridge reports back. Previously the UI said "Done" as soon as the message was
+ * sent, even if the edit failed.
+ */
+export function removeSilenceInPremiere(silenceSegments: any[]): Promise<{ success: boolean; error?: string; message?: string }> {
+  return new Promise((resolve, reject) => {
+    pendingRemoveSilence = { resolve, reject };
+    const sent = sendToPlugin({ type: 'removeSilence', silenceSegments });
+    if (!sent) {
+      pendingRemoveSilence = null;
+      reject(new Error('Not connected to Premiere'));
+      return;
+    }
+
+    setTimeout(() => {
+      if (pendingRemoveSilence) {
+        pendingRemoveSilence = null;
+        reject(new Error('Timed out - Premiere did not confirm the edit'));
+      }
+    }, 180000);
+  });
+}
+
+/**
+ * Import an FCP XML into Premiere and resolve only once Premiere reports the
+ * result. The autocut/silence flows used to fire-and-forget, telling the user
+ * "Done" before Premiere had imported anything.
+ */
+export function importXMLToPremiere(xmlPath: string): Promise<{ success: boolean; error?: string }> {
+  return new Promise((resolve, reject) => {
+    pendingImportXml = { resolve, reject };
+    const sent = sendToPlugin({ type: 'importXML', xmlPath });
+    if (!sent) {
+      pendingImportXml = null;
+      reject(new Error('Not connected to Premiere'));
+      return;
+    }
+
+    setTimeout(() => {
+      if (pendingImportXml) {
+        pendingImportXml = null;
+        reject(new Error('Import timed out - Premiere did not confirm the import'));
+      }
+    }, 120000);
+  });
+}
 
 export function exportAudio(): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -230,6 +281,24 @@ export function sendCaptionsToPremiere(srtPath: string): Promise<any> {
   });
 }
 
+/**
+ * Every clip on a track, with timeline offsets and source in/out points. The
+ * renderer sends these so Multicam and Silence Removal analyse the whole
+ * timeline instead of only the first clip of each track.
+ */
+function sourceTimelineClips(source: any): TimelineAudioClip[] {
+  const clips = Array.isArray(source?.clips) ? source.clips : [];
+  return clips
+    .filter((clip: any) => clip && clip.path)
+    .map((clip: any) => ({
+      path: clip.path,
+      start: Number(clip.start) || 0,
+      end: Number(clip.end) || 0,
+      inPoint: clip.inPoint,
+      outPoint: clip.outPoint
+    }));
+}
+
 export function startWebSocketServer() {
   if (wss) return;
 
@@ -327,7 +396,10 @@ async function handleMessage(msg: any, ws?: any) {
       break;
 
     case 'xmlImported':
-      if (msg.success) {
+      if (pendingImportXml) {
+        pendingImportXml.resolve({ success: !!msg.success, error: msg.error });
+        pendingImportXml = null;
+      } else if (msg.success) {
         callbacks.onResult({ success: true, message: 'XML imported successfully' });
       } else {
         callbacks.onResult({ success: false, error: msg.error });
@@ -335,7 +407,10 @@ async function handleMessage(msg: any, ws?: any) {
       break;
 
     case 'silenceRemoved':
-      if (msg.success) {
+      if (pendingRemoveSilence) {
+        pendingRemoveSilence.resolve({ success: !!msg.success, error: msg.error, message: msg.message });
+        pendingRemoveSilence = null;
+      } else if (msg.success) {
         callbacks.onResult({ success: true, message: msg.message || 'Silence removed from sequence' });
       } else {
         callbacks.onResult({ success: false, error: msg.error || 'Failed to remove silence' });
@@ -437,10 +512,19 @@ export async function runAutoCut(config: any) {
 
       callbacks.onProgress(10 + (i / sources.length) * 30, `Extracting audio: ${speaker}`);
 
-      // Extract audio
+      // Build a timeline-accurate WAV for this track. Using only the first
+      // clip from the start of the media file put a synced multicam interview
+      // on the wrong clock (and ignored every clip after the first).
       let tempWav: string;
       try {
-        tempWav = await extractAudioTrack(source.path, speaker, 0);
+        const timelineClips = sourceTimelineClips(source);
+        if (timelineClips.length > 0) {
+          const stitched = await stitchTimelineAudio(timelineClips, `multicam_${i}_${Date.now()}`);
+          tempWav = stitched.path;
+          console.log(`[AutoSwitch] ${speaker}: timeline audio ${stitched.durationSeconds.toFixed(1)}s from ${stitched.clipCount} clip(s)`);
+        } else {
+          tempWav = await extractAudioTrack(source.path, speaker, 0);
+        }
       } catch (err) {
         console.warn(`Failed to extract audio from ${source.path}:`, err);
         continue;
@@ -514,14 +598,13 @@ export async function runAutoCut(config: any) {
 
     callbacks.onProgress(95, 'Importing into Premiere...');
 
-    // Send to Premiere bridge plugin to import
-    sendToPlugin({
-      type: 'importXML',
-      xmlPath: xmlPath
-    });
+    // Wait for Premiere to actually confirm the import before reporting success.
+    const importResult = await importXMLToPremiere(xmlPath);
+    if (!importResult.success) {
+      callbacks.onResult({ success: false, error: importResult.error || 'Premiere could not import the sequence' });
+      return;
+    }
 
-    // Result will come via xmlImported message
-    const totalCuts = mainShots.length + wideShots.length;
     callbacks.onProgress(100, `Done! Created ${mainShots.length} cuts${wideShots.length > 0 ? ` + ${wideShots.length} wide shots` : ''}`);
     callbacks.onResult({
       success: true,
@@ -548,41 +631,58 @@ export async function runSilenceRemoval(config: any) {
   try {
     callbacks.onProgress(5, 'Starting silence analysis...');
 
-    // Extract audio from all selected tracks
-    const audioPaths: string[] = [];
-
-    for (let i = 0; i < sources.length; i++) {
-      const source = sources[i];
-      callbacks.onProgress(10 + (i / sources.length) * 20, `Extracting audio ${i + 1}/${sources.length}`);
-
-      try {
-        const tempWav = await extractAudioTrack(source.path, `track_${i}`, 0);
-        audioPaths.push(tempWav);
-      } catch (err) {
-        console.warn(`Failed to extract audio from ${source.path}:`, err);
-      }
+    // Build one timeline-accurate WAV from every clip on the selected tracks.
+    // The old code extracted only the first clip of each track from the start
+    // of the media file, which mis-timed synced audio and ignored later clips.
+    const timelineClips: TimelineAudioClip[] = [];
+    for (const source of sources) {
+      timelineClips.push(...sourceTimelineClips(source));
     }
 
-    if (audioPaths.length === 0) {
-      callbacks.onResult({ success: false, error: 'Failed to extract audio' });
-      return;
-    }
-
-    callbacks.onProgress(35, 'Combining audio tracks...');
-
-    // Combine all audio tracks into one
     let combinedPath: string;
-    try {
-      combinedPath = await combineAudioTracks(audioPaths);
-    } catch (err) {
-      // Cleanup individual files
-      audioPaths.forEach(p => cleanupTempFile(p));
-      callbacks.onResult({ success: false, error: 'Failed to combine audio tracks' });
-      return;
-    }
 
-    // Cleanup individual extractions
-    audioPaths.forEach(p => cleanupTempFile(p));
+    if (timelineClips.length > 0) {
+      callbacks.onProgress(20, `Preparing timeline audio (${timelineClips.length} clip${timelineClips.length === 1 ? '' : 's'})...`);
+      try {
+        const stitched = await stitchTimelineAudio(timelineClips, `silence_timeline_${Date.now()}`);
+        combinedPath = stitched.path;
+        console.log(`[SilenceRemoval] Timeline audio ${stitched.durationSeconds.toFixed(1)}s from ${stitched.clipCount} clip(s)`);
+      } catch (err) {
+        console.error('[SilenceRemoval] Failed to prepare timeline audio:', err);
+        callbacks.onResult({ success: false, error: 'Failed to extract audio' });
+        return;
+      }
+    } else {
+      // Fallback for callers that only send a single path per track.
+      const audioPaths: string[] = [];
+
+      for (let i = 0; i < sources.length; i++) {
+        const source = sources[i];
+        callbacks.onProgress(10 + (i / sources.length) * 20, `Extracting audio ${i + 1}/${sources.length}`);
+
+        try {
+          const tempWav = await extractAudioTrack(source.path, `track_${i}`, 0);
+          audioPaths.push(tempWav);
+        } catch (err) {
+          console.warn(`Failed to extract audio from ${source.path}:`, err);
+        }
+      }
+
+      if (audioPaths.length === 0) {
+        callbacks.onResult({ success: false, error: 'Failed to extract audio' });
+        return;
+      }
+
+      callbacks.onProgress(35, 'Combining audio tracks...');
+      try {
+        combinedPath = await combineAudioTracks(audioPaths);
+      } catch (err) {
+        audioPaths.forEach(p => cleanupTempFile(p));
+        callbacks.onResult({ success: false, error: 'Failed to combine audio tracks' });
+        return;
+      }
+      audioPaths.forEach(p => cleanupTempFile(p));
+    }
 
     callbacks.onProgress(50, 'Detecting silence...');
 
@@ -611,12 +711,13 @@ export async function runSilenceRemoval(config: any) {
 
       console.log(`[SilenceRemoval] Sending ${analysis.silenceSegments.length} segments to Premiere for removal`);
 
-      // Send raw silence segments to Premiere bridge plugin.
-      // CEP handles this with ExtendScript/QE; UXP reports unsupported until Adobe exposes parity.
-      sendToPlugin({
-        type: 'removeSilence',
-        silenceSegments: analysis.silenceSegments
-      });
+      // CEP edits the active sequence with ExtendScript/QE. Wait for it to
+      // finish before telling the user the edit is done.
+      const editResult = await removeSilenceInPremiere(analysis.silenceSegments);
+      if (!editResult.success) {
+        callbacks.onResult({ success: false, error: editResult.error || 'Premiere could not remove the silence' });
+        return;
+      }
 
       callbacks.onProgress(100, 'Done!');
       callbacks.onResult({
@@ -653,11 +754,12 @@ export async function runSilenceRemoval(config: any) {
 
       callbacks.onProgress(90, 'Importing into Premiere...');
 
-      // Send to Premiere bridge plugin to import
-      sendToPlugin({
-        type: 'importXML',
-        xmlPath: xmlPath
-      });
+      // Wait for Premiere to confirm the import before reporting success.
+      const importResult = await importXMLToPremiere(xmlPath);
+      if (!importResult.success) {
+        callbacks.onResult({ success: false, error: importResult.error || 'Premiere could not import the sequence' });
+        return;
+      }
 
       callbacks.onProgress(100, 'Done!');
       callbacks.onResult({

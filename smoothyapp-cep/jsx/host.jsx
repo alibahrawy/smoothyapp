@@ -48,7 +48,7 @@ if (typeof JSON === 'undefined') {
   };
 }
 
-var SMOOTHY_CEP_HOST_VERSION = "20260420-caption-host-v6";
+var SMOOTHY_CEP_HOST_VERSION = "20260930-caption-host-v20";
 
 function getSmoothyCepHostVersion() {
   return SMOOTHY_CEP_HOST_VERSION;
@@ -379,9 +379,6 @@ function removeSilenceWithQE(silenceSegmentsJSON) {
     var seqSettings = seq.getSettings();
     var ticksPerFrame = seqSettings.videoFrameRate.ticks;
 
-    // Buffer: extend cut by 2 frames on each side to ensure no gaps
-    var bufferTicks = ticksPerFrame * 2;
-
     for (var s = 0; s < segments.length; s++) {
       var segment = segments[s];
 
@@ -393,13 +390,13 @@ function removeSilenceWithQE(silenceSegmentsJSON) {
           var outTime = new Time();
           outTime.seconds = segment.end;
 
-          // Snap to frame boundaries using Premiere's native tick system
-          // Round IN point down to previous frame, minus buffer
-          var inTicks = Math.floor(inTime.ticks / ticksPerFrame) * ticksPerFrame - bufferTicks;
+          // Snap to frame boundaries using Premiere's native tick system.
+          // No extra buffer: the previous 2-frame padding on each side ate
+          // content around every cut.
+          var inTicks = Math.floor(inTime.ticks / ticksPerFrame) * ticksPerFrame;
           if (inTicks < 0) inTicks = 0;
 
-          // Round OUT point up to next frame, plus buffer
-          var outTicks = Math.ceil(outTime.ticks / ticksPerFrame) * ticksPerFrame + bufferTicks;
+          var outTicks = Math.ceil(outTime.ticks / ticksPerFrame) * ticksPerFrame;
 
           seq.setInPoint(inTicks.toString());
           seq.setOutPoint(outTicks.toString());

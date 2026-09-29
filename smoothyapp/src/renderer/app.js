@@ -14,6 +14,8 @@ const state = {
   currentTheme: 'cream',
   platform: 'unknown',
   captionResult: null,
+  captionRaw: null,
+  captionTransforms: { capitalize: false, removePunctuation: false },
   activeNLE: null,
   pendingUpdateNotes: null,
   updateModalOpen: false,
@@ -21,7 +23,8 @@ const state = {
   updateState: { status: 'idle', version: null, percent: 0 },
   captionSource: 'sequence',
   captionFilePath: null,
-  isTranscribing: false
+  isTranscribing: false,
+  currentShorts: []
 };
 
 // DOM Elements
@@ -72,8 +75,14 @@ const captionsSequenceSection = document.getElementById('captions-sequence-secti
 const captionsTracksSection = document.getElementById('captions-tracks-section');
 const progressCancelBtn = document.getElementById('progress-cancel-btn');
 const captionModelSelect = document.getElementById('caption-model-select');
+const captionLanguageSelect = document.getElementById('caption-language-select');
+const captionLanguageStatus = document.getElementById('caption-language-status');
 const captionEngineSelect = document.getElementById('caption-engine-select');
 const captionEngineStatus = document.getElementById('caption-engine-status');
+// "Force GPU" means CUDA on Windows/Linux and Metal on Apple Silicon. Label the
+// option to match the machine instead of always claiming CUDA.
+const isMacApp = /Mac/i.test(navigator.userAgent);
+const GPU_ENGINE_LABEL = isMacApp ? 'GPU (Metal)' : 'GPU (CUDA)';
 const captionsCapitalizeBtn = document.getElementById('captions-capitalize-btn');
 const captionsRemovePunctBtn = document.getElementById('captions-remove-punct-btn');
 
@@ -83,7 +92,6 @@ const bestshortsStatusText = document.getElementById('bestshorts-status-text');
 const bestshortsSequenceName = document.getElementById('bestshorts-sequence-name');
 const bestshortsSequenceDetails = document.getElementById('bestshorts-sequence-details');
 const bestshortsRefreshBtn = document.getElementById('bestshorts-refresh-btn');
-const exportAudioBtn = document.getElementById('export-audio-btn');
 const clearMarkersBtn = document.getElementById('clear-markers-btn');
 const bestshortsFooterStatus = document.getElementById('bestshorts-footer-status');
 const websiteStatusDot = document.getElementById('website-status-dot');
@@ -124,6 +132,8 @@ const settingsCurrentVersion = document.getElementById('settings-current-version
 const appVersionLabel = document.getElementById('app-version-label');
 const discordBtn = document.getElementById('discord-btn');
 const settingsDiscordBtn = document.getElementById('settings-discord-btn');
+const twitterBtn = document.getElementById('twitter-btn');
+const settingsTwitterBtn = document.getElementById('settings-twitter-btn');
 
 // Logs DOM Elements
 const logsContainer = document.getElementById('logs-container');
@@ -133,8 +143,7 @@ const logsClearBtn = document.getElementById('logs-clear-btn');
 const userInfo = document.getElementById('user-info');
 const trialInfo = document.getElementById('trial-info');
 const userName = document.getElementById('user-name');
-const userTier = document.getElementById('user-tier');
-const userInitial = document.getElementById('user-initial');
+const userPlan = document.getElementById('user-plan');
 const trialDays = document.getElementById('trial-days'); // may be null after free-pill redesign
 const loginBtn = document.getElementById('login-btn');
 const logoutBtn = document.getElementById('logout-btn');
@@ -156,9 +165,14 @@ const pinBtn = document.getElementById('pin-btn');
 async function init() {
   setupEventListeners();
   setupElectronListeners();
+  setupStudioEvents();
+  setupPreferenceEvents();
 
   // Initialize auth state
   await initAuth();
+
+  // Studio credits sit next to the sidebar "Studio" label.
+  refreshStudioCredits();
 
   // Get initial NLE status
   const status = await window.electronAPI.getStatus();
@@ -185,6 +199,7 @@ async function init() {
 
   // Caption model list + engine status
   loadCaptionModels();
+  loadCaptionLanguages();
   loadCaptionEnginePreference();
 }
 
@@ -215,12 +230,9 @@ function updateAuthUI() {
     // Set user display
     const displayName = authState.user.name || authState.user.email.split('@')[0];
     userName.textContent = displayName;
-    userInitial.textContent = displayName.charAt(0).toUpperCase();
-
-    // Set tier badge
-    const isPro = authState.user.tier === 'pro';
-    userTier.textContent = isPro ? 'Studio Pro' : 'Free';
-    userTier.className = 'tier-badge ' + (isPro ? 'pro' : 'free');
+    if (userPlan) {
+      userPlan.textContent = authState.user.tier === 'pro' ? 'Studio' : 'Free';
+    }
   } else {
     // Not logged in — local tools free forever, show free pill + Connect Studio
     userInfo.classList.add('hidden');
@@ -235,7 +247,7 @@ async function updateFeatureLocks() {
     multicamLock.classList.add('hidden');
   }
 
-  // Check bestshorts feature (cloud AI — Studio Pro only)
+  // Check bestshorts feature (cloud AI — part of Studio)
   const bestshortsAccess = await window.electronAPI.canUseFeature('bestshorts');
   if (bestshortsLock) {
     if (bestshortsAccess.allowed) {
@@ -333,8 +345,10 @@ function setupEventListeners() {
       if (tab === 'silence' && state.sequenceInfo) {
         displaySilenceSequenceInfo(state.sequenceInfo);
       }
-      if (tab === 'bestshorts' && state.sequenceInfo) {
-        displayBestshortsSequenceInfo(state.sequenceInfo);
+      if (tab === 'bestshorts') {
+        if (state.sequenceInfo) displayBestshortsSequenceInfo(state.sequenceInfo);
+        refreshStudioCredits();
+        loadShortsHistory();
       }
       if (tab === 'captions') {
         if (state.sequenceInfo) displayCaptionsSequenceInfo(state.sequenceInfo);
@@ -401,9 +415,10 @@ function setupEventListeners() {
   if (captionsFileBrowse) captionsFileBrowse.addEventListener('click', chooseCaptionFile);
   if (progressCancelBtn) progressCancelBtn.addEventListener('click', cancelCaptionGeneration);
   if (captionModelSelect) captionModelSelect.addEventListener('change', onCaptionModelChange);
+  if (captionLanguageSelect) captionLanguageSelect.addEventListener('change', onCaptionLanguageChange);
   if (captionEngineSelect) captionEngineSelect.addEventListener('change', onCaptionEngineChange);
-  if (captionsCapitalizeBtn) captionsCapitalizeBtn.addEventListener('click', () => transformCaptions('capitalize'));
-  if (captionsRemovePunctBtn) captionsRemovePunctBtn.addEventListener('click', () => transformCaptions('removePunctuation'));
+  if (captionsCapitalizeBtn) captionsCapitalizeBtn.addEventListener('click', () => toggleCaptionTransform('capitalize'));
+  if (captionsRemovePunctBtn) captionsRemovePunctBtn.addEventListener('click', () => toggleCaptionTransform('removePunctuation'));
 
   document.getElementById('caption-max-chars').addEventListener('input', (e) => {
     document.getElementById('caption-max-chars-value').textContent = e.target.value;
@@ -425,7 +440,6 @@ function setupEventListeners() {
     window.electronAPI.refreshSequence();
   });
 
-  exportAudioBtn.addEventListener('click', exportAudioToWebsite);
   clearMarkersBtn.addEventListener('click', clearAllMarkers);
 
   // Settings Modal
@@ -466,6 +480,12 @@ function setupEventListeners() {
   }
   if (settingsDiscordBtn) {
     settingsDiscordBtn.addEventListener('click', () => window.electronAPI.openExternal('https://discord.gg/KmJRqUZzDe'));
+  }
+  if (twitterBtn) {
+    twitterBtn.addEventListener('click', () => window.electronAPI.openExternal('https://x.com/alibahrawy34'));
+  }
+  if (settingsTwitterBtn) {
+    settingsTwitterBtn.addEventListener('click', () => window.electronAPI.openExternal('https://x.com/alibahrawy34'));
   }
 
   // Logs tab
@@ -510,6 +530,251 @@ function setupEventListeners() {
   }
   if (bestshortsLoginBtn) {
     bestshortsLoginBtn.addEventListener('click', openLoginModal);
+  }
+
+  // Open the Studio dashboard in the browser
+  const openStudioDashboardBtn = document.getElementById('open-studio-dashboard-btn');
+  const settingsOpenStudioBtn = document.getElementById('settings-open-studio-btn');
+  const openStudioDashboard = () => window.electronAPI.openExternal('https://smoothyedit.com/dashboard');
+  if (openStudioDashboardBtn) {
+    openStudioDashboardBtn.addEventListener('click', openStudioDashboard);
+  }
+  if (settingsOpenStudioBtn) {
+    settingsOpenStudioBtn.addEventListener('click', openStudioDashboard);
+  }
+}
+
+// ─── Preferences ────────────────────────────────────────────────────────────
+async function setupPreferenceEvents() {
+  const toggle = document.getElementById('show-logs-toggle');
+  let show = false;
+  try {
+    show = await window.electronAPI.getShowLogs();
+  } catch {}
+  if (toggle) toggle.checked = !!show;
+  applyLogsVisibility(!!show);
+
+  if (toggle) {
+    toggle.addEventListener('change', async () => {
+      applyLogsVisibility(toggle.checked);
+      try { await window.electronAPI.setShowLogs(toggle.checked); } catch {}
+    });
+  }
+}
+
+// The Logs tab is hidden by default and only shown from Settings → Advanced.
+function applyLogsVisibility(show) {
+  const navItem = document.querySelector('.nav-item[data-tab="logs"]');
+  const tab = document.getElementById('tab-logs');
+  if (navItem) navItem.classList.toggle('hidden', !show);
+  if (tab) tab.classList.toggle('hidden', !show);
+
+  if (!show && state.currentTab === 'logs') {
+    const fallback = document.querySelector('.nav-item[data-tab="multicam"]');
+    if (fallback) fallback.click();
+  }
+}
+
+// ─── Studio (cloud) — Best Shorts, credits, history ─────────────────────────
+let shortsHistoryItems = [];
+
+function setupStudioEvents() {
+  const analyzeBtn = document.getElementById('analyze-shorts-btn');
+  const sendBtn = document.getElementById('send-shorts-btn');
+  const upgradeBtn = document.getElementById('studio-upgrade-btn');
+  const historyRefreshBtn = document.getElementById('shorts-history-refresh-btn');
+  const historySelect = document.getElementById('shorts-history-select');
+
+  if (analyzeBtn) analyzeBtn.addEventListener('click', runStudioShorts);
+  if (sendBtn) sendBtn.addEventListener('click', () => sendShortsToPremiere(state.currentShorts, sendBtn));
+  if (upgradeBtn) {
+    upgradeBtn.addEventListener('click', () => window.electronAPI.openExternal('https://smoothyedit.com/pricing'));
+  }
+  if (historyRefreshBtn) historyRefreshBtn.addEventListener('click', loadShortsHistory);
+  if (historySelect) {
+    historySelect.addEventListener('change', () => {
+      const item = shortsHistoryItems[Number(historySelect.value)];
+      if (!item) return;
+      try {
+        const parsed = JSON.parse(item.result);
+        renderShorts(parsed?.shorts || []);
+        const statusEl = document.getElementById('shorts-status');
+        if (statusEl) statusEl.textContent = `${parsed?.shorts?.length || 0} shorts from history.`;
+      } catch {}
+    });
+  }
+}
+
+function formatCredits(n) {
+  return typeof n === 'number' ? n.toLocaleString() : '--';
+}
+
+function updateUpgradeButton(credits) {
+  const upgradeBtn = document.getElementById('studio-upgrade-btn');
+  if (!upgradeBtn || !credits) return;
+  const pct = Math.max(0, Math.min(100, Number(credits.percentage) || 0));
+  const low = credits.tier !== 'pro' || pct <= 20;
+  upgradeBtn.classList.toggle('hidden', !low);
+}
+
+// Credits only cover Studio's cloud AI; the local tools never touch them.
+function renderCredits(credits) {
+  // Shown next to the "Studio" label in the sidebar.
+  const textEl = document.getElementById('studio-credits-inline');
+  const barEl = document.getElementById('studio-credit-bar-fill');
+  if (!credits) return;
+
+  const pct = Math.max(0, Math.min(100, Number(credits.percentage) || 0));
+  const reset = credits.daysRemaining != null
+    ? ` · resets in ${credits.daysRemaining} day${credits.daysRemaining === 1 ? '' : 's'}`
+    : '';
+  if (textEl) {
+    textEl.textContent = `${formatCredits(credits.credits)} credits`;
+    textEl.title = `${formatCredits(credits.credits)} of ${formatCredits(credits.totalCredits)} Studio credits left${reset}`;
+  }
+  if (barEl) barEl.style.width = `${pct}%`;
+  updateUpgradeButton(credits);
+}
+
+async function refreshStudioCredits() {
+  const textEl = document.getElementById('studio-credits-inline');
+  const barEl = document.getElementById('studio-credit-bar-fill');
+  const upgradeBtn = document.getElementById('studio-upgrade-btn');
+
+  const result = await window.electronAPI.getStudioCredits();
+  if (!result || !result.success) {
+    if (textEl) {
+      textEl.textContent = result && result.requiresLogin ? 'sign in' : '—';
+      textEl.title = (result && result.error) || '';
+    }
+    if (barEl) barEl.style.width = '0%';
+    if (upgradeBtn) upgradeBtn.classList.toggle('hidden', !(result && result.requiresLogin));
+    return;
+  }
+  renderCredits(result.credits);
+}
+
+async function loadShortsHistory() {
+  const select = document.getElementById('shorts-history-select');
+  const empty = document.getElementById('shorts-history-empty');
+  if (!select) return;
+
+  select.disabled = true;
+  select.innerHTML = '<option value="">Loading…</option>';
+  if (empty) empty.classList.add('hidden');
+
+  const result = await window.electronAPI.getShortsHistory(1);
+  if (!result || !result.success) {
+    select.innerHTML = `<option value="">${result && result.requiresLogin ? 'Sign in to Studio to see history' : 'Could not load history'}</option>`;
+    return;
+  }
+
+  shortsHistoryItems = result.items || [];
+  if (shortsHistoryItems.length === 0) {
+    select.innerHTML = '<option value="">No saved shorts</option>';
+    if (empty) empty.classList.remove('hidden');
+    return;
+  }
+
+  select.innerHTML = '<option value="">Select a saved run…</option>';
+  shortsHistoryItems.forEach((item, index) => {
+    let count = 0;
+    try { count = (JSON.parse(item.result)?.shorts || []).length; } catch {}
+    const date = new Date(item.createdAt).toLocaleString();
+    const option = document.createElement('option');
+    option.value = String(index);
+    option.textContent = `${item.fileName || 'Shorts'} · ${date} (${count})`;
+    select.appendChild(option);
+  });
+  select.disabled = false;
+}
+
+function renderShorts(shorts) {
+  const container = document.getElementById('shorts-results');
+  if (!container) return;
+
+  state.currentShorts = Array.isArray(shorts) ? shorts : [];
+  container.innerHTML = '';
+
+  const sendBtn = document.getElementById('send-shorts-btn');
+  if (sendBtn) {
+    sendBtn.disabled = state.currentShorts.length === 0;
+    sendBtn.textContent = state.currentShorts.length > 1
+      ? `Send all ${state.currentShorts.length} to Premiere`
+      : 'Send to Premiere';
+  }
+
+  state.currentShorts.forEach((short, index) => {
+    const el = document.createElement('div');
+    el.className = 'short-card';
+    const time = short.startTime
+      ? `${escapeHtml(short.startTime)}${short.endTime ? ` – ${escapeHtml(short.endTime)}` : ''}`
+      : '';
+    const desc = short.description || short.reason || '';
+    el.innerHTML = `
+      <div class="short-card-header">
+        <span class="short-card-title">${escapeHtml(short.title || `Short ${index + 1}`)}</span>
+        <span class="short-card-time">${time}</span>
+      </div>
+      ${desc ? `<div class="short-card-desc">${escapeHtml(desc)}</div>` : ''}
+    `;
+    container.appendChild(el);
+  });
+}
+
+async function sendShortsToPremiere(shorts, btn) {
+  if (!Array.isArray(shorts) || shorts.length === 0) return;
+  const originalLabel = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  const result = await window.electronAPI.addShortsMarkers(shorts);
+  const ok = !!(result && result.success);
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = ok ? 'Sent to Premiere' : originalLabel;
+  }
+  if (!ok) {
+    showError((result && result.error) || 'Could not add markers to Premiere');
+  }
+}
+
+async function runStudioShorts() {
+  if (state.isProcessing) return;
+
+  const analyzeBtn = document.getElementById('analyze-shorts-btn');
+  const statusEl = document.getElementById('shorts-status');
+
+  if (!state.sequenceInfo || !state.sequenceInfo.hasSequence) {
+    showError('Open a sequence first');
+    return;
+  }
+
+  state.isProcessing = true;
+  if (analyzeBtn) analyzeBtn.disabled = true;
+  renderShorts([]);
+  if (statusEl) statusEl.textContent = 'Starting…';
+
+  try {
+    const result = await window.electronAPI.analyzeShorts({});
+    if (!result || !result.success) {
+      const message = (result && result.error) || 'Best Shorts failed';
+      if (statusEl) statusEl.textContent = message;
+      if (!(result && result.requiresLogin)) showError(message);
+      return;
+    }
+
+    if (statusEl) {
+      statusEl.textContent = `Found ${result.shorts.length} short${result.shorts.length === 1 ? '' : 's'}.`;
+    }
+    renderShorts(result.shorts);
+    if (result.credits) renderCredits(result.credits);
+    loadShortsHistory();
+  } catch (error) {
+    const message = error && error.message ? error.message : 'Best Shorts failed';
+    if (statusEl) statusEl.textContent = message;
+    showError(message);
+  } finally {
+    state.isProcessing = false;
+    if (analyzeBtn) analyzeBtn.disabled = false;
   }
 }
 
@@ -575,6 +840,12 @@ function setupElectronListeners() {
     setProgress(data.progress, data.message);
   });
 
+  // Studio Best Shorts progress
+  window.electronAPI.onShortsProgress((data) => {
+    const statusEl = document.getElementById('shorts-status');
+    if (statusEl && data && data.message) statusEl.textContent = data.message;
+  });
+
   // Caption progress listener
   window.electronAPI.onCaptionProgress((data) => {
     if (data.status === 'complete') {
@@ -606,6 +877,7 @@ function setupElectronListeners() {
     state.authState = newState;
     updateAuthUI();
     updateFeatureLocks();
+    refreshStudioCredits();
   });
 
   // Single brand theme — theme sync from the website is ignored.
@@ -765,9 +1037,6 @@ function displaySequenceInfo(info) {
   }
 
   // Display video tracks
-  const wideSelect = document.getElementById('wide-camera-select');
-  wideSelect.innerHTML = '<option value="-1">None</option>';
-
   if (info.videoTracks && info.videoTracks.length > 0) {
     videoTracksList.innerHTML = '';
     info.videoTracks.forEach((track, index) => {
@@ -788,12 +1057,16 @@ function displaySequenceInfo(info) {
         </div>
       `;
       videoTracksList.appendChild(trackEl);
+    });
 
-      wideSelect.innerHTML += `<option value="${index}">Camera ${index + 1} (${track.name})</option>`;
+    videoTracksList.querySelectorAll('.camera-index').forEach(sel => {
+      sel.addEventListener('change', refreshWideCameraOptions);
     });
   } else {
     videoTracksList.innerHTML = '<p class="empty-message">No video tracks found</p>';
   }
+
+  refreshWideCameraOptions();
 
   // Enable button if we have both
   const hasAudio = info.audioTracks && info.audioTracks.length > 0;
@@ -815,6 +1088,29 @@ function generateCameraOptions(count, defaultIndex) {
   return html;
 }
 
+// Keep the wide-shot camera list in sync with the per-track camera dropdowns so
+// the selected wide camera is one the cut list actually understands.
+function refreshWideCameraOptions() {
+  const wideSelect = document.getElementById('wide-camera-select');
+  if (!wideSelect) return;
+
+  const previous = wideSelect.value;
+  let html = '<option value="-1">None</option>';
+
+  document.querySelectorAll('.camera-index').forEach(sel => {
+    const trackIndex = parseInt(sel.dataset.trackIndex);
+    const track = state.sequenceInfo?.videoTracks?.find(t => t.index === trackIndex);
+    const camera = parseInt(sel.value);
+    if (!Number.isFinite(camera)) return;
+    html += `<option value="${camera}">Camera ${camera + 1}${track ? ` (${track.name})` : ''}</option>`;
+  });
+
+  wideSelect.innerHTML = html;
+  if (Array.from(wideSelect.options).some(option => option.value === previous)) {
+    wideSelect.value = previous;
+  }
+}
+
 async function runAutoCut() {
   if (state.isProcessing || !state.sequenceInfo) return;
 
@@ -831,6 +1127,7 @@ async function runAutoCut() {
         trackIndex,
         speaker: speakerName.toLowerCase().replace(/\s+/g, '_'),
         path: track.clips[0].path,
+        clips: track.clips,
         trackName: track.name
       });
     }
@@ -864,25 +1161,31 @@ async function runAutoCut() {
     return;
   }
 
-  // Build sources - map each audio track to its corresponding camera index
-  const sources = audioMappings.map((audio, index) => {
-    // Use the index directly as camera number (speaker 1 -> camera 0, speaker 2 -> camera 1, etc.)
-    // This ensures each speaker gets a unique camera
-    return {
-      path: audio.path,
-      speaker: audio.speaker,
-      camera: index  // Direct mapping: audio track 0 = camera 0, audio track 1 = camera 1
-    };
-  });
+  // Sort the selected video tracks by the camera number picked in their
+  // dropdown, then assign dense camera slots. The cut list now follows those
+  // dropdowns instead of blindly numbering audio tracks Camera 1, Camera 2.
+  const cameraTracks = videoMappings
+    .filter(v => Number.isFinite(v.camera))
+    .sort((a, b) => a.camera - b.camera);
+  const cameraSlot = new Map();
+  cameraTracks.forEach((v, slot) => cameraSlot.set(v.camera, slot));
 
-  const clips = videoMappings.map(v => ({
+  const clips = cameraTracks.map(v => ({
     name: v.trackName,
-    path: v.path,
-    camera: v.camera
+    path: v.path
+  }));
+
+  // Speakers map to camera slots in checkbox order (speaker 1 -> Camera 1).
+  const sources = audioMappings.map((audio, index) => ({
+    path: audio.path,
+    clips: audio.clips,
+    speaker: audio.speaker,
+    camera: cameraSlot.get(index) ?? index
   }));
 
   const useWideShot = document.getElementById('use-wide-shot').checked;
-  const wideIndex = useWideShot ? parseInt(document.getElementById('wide-camera-select').value) : -1;
+  const wideValue = useWideShot ? parseInt(document.getElementById('wide-camera-select').value) : -1;
+  const wideIndex = wideValue >= 0 ? (cameraSlot.get(wideValue) ?? wideValue) : -1;
   const jcutOffset = parseFloat(document.getElementById('jcut-offset').value);
 
   const config = {
@@ -968,6 +1271,7 @@ async function runSilenceRemoval() {
       audioSources.push({
         trackIndex,
         path: track.clips[0].path,
+        clips: track.clips,
         trackName: track.name
       });
     }
@@ -992,6 +1296,14 @@ async function runSilenceRemoval() {
   }
 
   const editInPlace = document.getElementById('edit-in-place').checked;
+
+  if (editInPlace) {
+    const confirmed = window.confirm(
+      'Silence Removal will ripple-delete the silent parts directly from the current sequence. ' +
+      'Premiere records each cut as a separate undo step. Continue?'
+    );
+    if (!confirmed) return;
+  }
 
   const config = {
     sources: audioSources,
@@ -1281,21 +1593,21 @@ function updateWebsiteConnection(connected) {
 }
 
 function updateExportButton() {
-  const canExport = state.isConnected && state.isWebsiteConnected && state.sequenceInfo?.hasSequence && !state.isExporting;
-  exportAudioBtn.disabled = !canExport;
+  const hasSequence = !!(state.isConnected && state.sequenceInfo?.hasSequence);
 
   // Clear markers only requires Premiere connection and sequence
-  const canClear = state.isConnected && state.sequenceInfo?.hasSequence;
-  clearMarkersBtn.disabled = !canClear;
+  clearMarkersBtn.disabled = !hasSequence;
+
+  // Find Best Shorts needs Premiere + an open sequence (analysis runs in-app).
+  const analyzeBtn = document.getElementById('analyze-shorts-btn');
+  if (analyzeBtn) analyzeBtn.disabled = !hasSequence || state.isProcessing;
 
   if (!state.isConnected) {
     bestshortsFooterStatus.textContent = 'Connect to Premiere Pro first';
-  } else if (!state.isWebsiteConnected) {
-    bestshortsFooterStatus.textContent = 'Connect to website in Settings';
   } else if (!state.sequenceInfo?.hasSequence) {
     bestshortsFooterStatus.textContent = 'Open a sequence in Premiere';
   } else {
-    bestshortsFooterStatus.textContent = 'Ready to export';
+    bestshortsFooterStatus.textContent = 'Ready';
   }
 }
 
@@ -1312,36 +1624,8 @@ function displayBestshortsSequenceInfo(info) {
   updateExportButton();
 }
 
-async function exportAudioToWebsite() {
-  if (state.isExporting || !state.isWebsiteConnected) return;
-
-  state.isExporting = true;
-  exportAudioBtn.disabled = true;
-  showProgress('Exporting audio...');
-  setBestshortsStatus('Exporting audio...', 'processing');
-
-  try {
-    const result = await window.electronAPI.exportAudioToWebsite();
-
-    if (result.success) {
-      setBestshortsStatus('Audio sent to website!', 'success');
-      bestshortsFooterStatus.textContent = 'Check smoothyedit.com for analysis results';
-    } else {
-      setBestshortsStatus('Export failed', 'error');
-      showError(result.error || 'Failed to export audio');
-    }
-  } catch (error) {
-    setBestshortsStatus('Export failed', 'error');
-    showError(error.message || 'Failed to export audio');
-  } finally {
-    state.isExporting = false;
-    hideProgress();
-    updateExportButton();
-  }
-}
-
 function setBestshortsStatus(text, type) {
-  bestshortsStatusBar.className = `status-bar status-${type}`;
+  bestshortsStatusBar.className = `status-bar status-${type} bestshorts-statusbar-row`;
   bestshortsStatusText.textContent = text;
 }
 
@@ -1459,6 +1743,7 @@ async function loadCaptionModels() {
   } catch (error) {
     console.warn('Failed to load caption models', error);
   }
+  updateCaptionLanguageHint();
   refreshCaptionEngineStatus();
 }
 
@@ -1486,13 +1771,67 @@ async function onCaptionModelChange() {
   try {
     await window.electronAPI.setSelectedCaptionModel(captionModelSelect.value);
     captionEngineStatus.textContent = 'Model set — applies to your next transcription';
+    updateCaptionLanguageHint();
   } catch (error) {
     showError(error.message || 'Could not change the model');
   }
 }
 
+async function loadCaptionLanguages() {
+  if (!captionLanguageSelect) return;
+  try {
+    const [languages, selected] = await Promise.all([
+      window.electronAPI.getCaptionLanguages(),
+      window.electronAPI.getCaptionLanguage()
+    ]);
+    captionLanguageSelect.innerHTML = '';
+    (languages || []).forEach((lang) => {
+      const opt = document.createElement('option');
+      opt.value = lang.code;
+      opt.textContent = lang.name;
+      if (lang.code === selected) opt.selected = true;
+      captionLanguageSelect.appendChild(opt);
+    });
+    if (!captionLanguageSelect.value) captionLanguageSelect.value = 'auto';
+  } catch (error) {
+    console.warn('Failed to load caption languages', error);
+  }
+  updateCaptionLanguageHint();
+}
+
+async function onCaptionLanguageChange() {
+  if (!captionLanguageSelect) return;
+  try {
+    await window.electronAPI.setCaptionLanguage(captionLanguageSelect.value);
+    updateCaptionLanguageHint();
+  } catch (error) {
+    showError(error.message || 'Could not change the language');
+  }
+}
+
+/**
+ * Warn when a non-English language is paired with an English-only (.en) model,
+ * which cannot transcribe it. The main process refuses such a run, so this is
+ * the early heads-up.
+ */
+function updateCaptionLanguageHint() {
+  if (!captionLanguageStatus || !captionLanguageSelect) return;
+  const code = captionLanguageSelect.value;
+  const modelId = captionModelSelect ? captionModelSelect.value : '';
+  if (/\.en\.bin$/i.test(modelId) && code !== 'auto' && code !== 'en') {
+    const label = captionLanguageSelect.options[captionLanguageSelect.selectedIndex]?.textContent || code;
+    captionLanguageStatus.textContent = `${label} needs a multilingual model — choose one above (e.g. Large v3 Turbo).`;
+    return;
+  }
+  captionLanguageStatus.textContent = code === 'auto'
+    ? 'Auto-detect works for any spoken language. Non-English languages need a multilingual model.'
+    : 'Applies to your next transcription.';
+}
+
 async function loadCaptionEnginePreference() {
   if (!captionEngineSelect) return;
+  const gpuOption = captionEngineSelect.querySelector('option[value="cuda"]');
+  if (gpuOption) gpuOption.textContent = GPU_ENGINE_LABEL;
   try {
     const engine = await window.electronAPI.getCaptionEngine();
     if (engine && ['auto', 'cuda', 'cpu'].includes(engine)) {
@@ -1509,7 +1848,7 @@ async function onCaptionEngineChange() {
     const result = await window.electronAPI.setCaptionEngine(captionEngineSelect.value);
     if (result && result.success) {
       const label = result.engine === 'cpu' ? 'CPU (all cores)'
-        : result.engine === 'cuda' ? 'GPU (CUDA)'
+        : result.engine === 'cuda' ? GPU_ENGINE_LABEL
         : 'Auto';
       captionEngineStatus.textContent = `Engine set to ${label} — applies to your next transcription`;
     }
@@ -1519,36 +1858,53 @@ async function onCaptionEngineChange() {
 }
 
 /**
- * Apply a text transform to every generated caption and rebuild the SRT/VTT.
+ * Toggle a text transform. It is applied to the generated captions on top of
+ * the raw transcription, so it can be turned on or off before or after
+ * generating without losing the original text.
  */
-function transformCaptions(kind) {
-  if (!state.captionResult || !Array.isArray(state.captionResult.captions)) return;
+function toggleCaptionTransform(kind) {
+  state.captionTransforms[kind] = !state.captionTransforms[kind];
+  syncCaptionTransformButtons();
+  applyCaptionTransforms();
+}
 
+function syncCaptionTransformButtons() {
+  if (captionsCapitalizeBtn) captionsCapitalizeBtn.classList.toggle('active', state.captionTransforms.capitalize);
+  if (captionsRemovePunctBtn) captionsRemovePunctBtn.classList.toggle('active', state.captionTransforms.removePunctuation);
+}
+
+/**
+ * Rebuild the visible captions (and their SRT/VTT) from the raw transcription
+ * with the active text transforms applied.
+ */
+function applyCaptionTransforms() {
+  if (!state.captionResult || !Array.isArray(state.captionRaw)) return;
+
+  const { capitalize, removePunctuation } = state.captionTransforms;
   const transform = (text) => {
-    if (kind === 'capitalize') {
-      return text.replace(/(^|\n)([a-z])/g, (_, prefix, ch) => prefix + ch.toUpperCase());
-    }
-    if (kind === 'removePunctuation') {
-      return text
+    let out = text;
+    if (removePunctuation) {
+      out = out
         .replace(/[.,!?;:"'`´’‘“”\-–—…()\[\]{}]/g, '')
         .replace(/\s{2,}/g, ' ')
         .trim();
     }
-    return text;
+    if (capitalize) {
+      out = out.replace(/(^|\n)([a-z])/g, (_, prefix, ch) => prefix + ch.toUpperCase());
+    }
+    return out;
   };
 
-  state.captionResult.captions = state.captionResult.captions.map((cap) => ({
+  state.captionResult.captions = state.captionRaw.map((cap) => ({
     ...cap,
     text: transform(cap.text)
   }));
-
   state.captionResult.srt = buildSRT(state.captionResult.captions);
   state.captionResult.vtt = buildVTT(state.captionResult.captions);
 
-  displayCaptionsPreview(state.captionResult.captions);
-  captionsFooterStatus.textContent = kind === 'capitalize'
-    ? 'Capitalized all captions'
-    : 'Removed punctuation from all captions';
+  if (captionsPreviewSection.style.display !== 'none') {
+    displayCaptionsPreview(state.captionResult.captions);
+  }
 }
 
 function buildSRT(captions) {
@@ -1659,6 +2015,8 @@ async function runGenerateCaptions() {
 
     if (result.success) {
       state.captionResult = result;
+      // Keep the raw transcription so the text-style toggles stay reversible.
+      state.captionRaw = result.captions.map((cap) => ({ ...cap }));
 
       if (result.captions.length === 0) {
         // Warn user — no speech detected
@@ -1673,8 +2031,9 @@ async function runGenerateCaptions() {
         importCaptionsBtn.disabled = !state.isConnected;
       }
 
-      // Show preview
-      displayCaptionsPreview(result.captions);
+      // Apply the active text-style toggles, then show the preview.
+      applyCaptionTransforms();
+      displayCaptionsPreview(state.captionResult.captions);
     } else {
       setCaptionsStatus('Generation failed', 'error');
       showError(result.error || 'Caption generation failed');
