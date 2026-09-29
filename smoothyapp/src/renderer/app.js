@@ -326,6 +326,18 @@ function setupEventListeners() {
     document.getElementById('update-bar').classList.add('hidden');
   });
 
+  // Update bar install button (was silently doing nothing before)
+  const updateBarBtn = document.getElementById('update-bar-btn');
+  if (updateBarBtn) {
+    updateBarBtn.addEventListener('click', () => {
+      if (state.updateState.status === 'stuck') {
+        window.electronAPI.openExternal('https://smoothyedit.com/features/smoothy-app');
+      } else {
+        window.electronAPI.installUpdate();
+      }
+    });
+  }
+
   // Tab navigation
   document.querySelectorAll('.nav-item:not(.disabled)').forEach(item => {
     item.addEventListener('click', (e) => {
@@ -1392,7 +1404,7 @@ function renderUpdateState() {
   const updateBar = document.getElementById('update-bar');
   const updateText = document.getElementById('update-bar-text');
   const updateBtn = document.getElementById('update-bar-btn');
-  const upgradeable = status === 'available' || status === 'downloading' || status === 'downloaded';
+  const upgradeable = status === 'available' || status === 'downloading' || status === 'downloaded' || status === 'stuck';
 
   // Reset shared controls to a known-good baseline on every event.
   checkUpdateBtn.disabled = false;
@@ -1434,6 +1446,13 @@ function renderUpdateState() {
 
     case 'up-to-date':
       settingsUpdateStatus.textContent = `You're on the latest version (v${state.appVersion || '?'})`;
+      break;
+
+    case 'stuck':
+      settingsUpdateStatus.textContent = `Update v${version} downloaded but didn't install — download it manually from smoothyedit.com`;
+      updateText.textContent = `Update v${version} didn't install — download manually`;
+      updateBtn.textContent = 'Open smoothyedit.com';
+      updateBar.classList.remove('hidden');
       break;
 
     case 'error':

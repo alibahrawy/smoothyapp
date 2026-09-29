@@ -145,6 +145,18 @@ function sendLog(level: string, message: string) {
   mainWindow?.webContents.send('log-message', { level, message, timestamp });
 }
 
+/** Compare dotted numeric versions: -1 when a < b, 1 when a > b, 0 when equal. */
+function compareVersions(a: string, b: string): number {
+  const pa = String(a).replace(/^v/, '').split('.').map((p) => parseInt(p, 10) || 0);
+  const pb = String(b).replace(/^v/, '').split('.').map((p) => parseInt(p, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
 function bindCompressorEventForwarding() {
   if (compressorEventsBound) return;
   compressorEventsBound = true;
@@ -629,6 +641,9 @@ app.whenReady().then(() => {
 
   autoUpdater.on('update-downloaded', (info) => {
     console.log('[Updater] Update downloaded:', info.version);
+    // Remember the downloaded version so a relaunch that is still on the old
+    // version can be detected ("stuck" update) and surfaced to the user.
+    store.set('lastDownloadedUpdateVersion', info.version);
     mainWindow?.webContents.send('update-status', { status: 'downloaded', version: info.version });
 
     const emit = (notes: string | null) => mainWindow?.webContents.send('update-notes', { version: info.version, notes });
@@ -649,6 +664,22 @@ app.whenReady().then(() => {
 
   // Check for updates (don't block app startup)
   setTimeout(() => {
+    // If a previously downloaded update never actually installed (the running
+    // version is older than what was downloaded), tell the user explicitly and
+    // skip the automatic check — re-downloading the same broken update would
+    // just repeat the loop.
+    const lastDownloaded = store.get('lastDownloadedUpdateVersion') as string | null;
+    if (lastDownloaded && compareVersions(app.getVersion(), lastDownloaded) < 0) {
+      console.warn(`[Updater] Update to v${lastDownloaded} was downloaded but never installed`);
+      mainWindow?.webContents.send('update-status', { status: 'stuck', version: lastDownloaded });
+      return;
+    }
+
+    // The running version caught up with the last downloaded update — clear the flag.
+    if (lastDownloaded) {
+      store.delete('lastDownloadedUpdateVersion');
+    }
+
     autoUpdater.checkForUpdatesAndNotify().catch((err) => {
       console.error('[Updater] Check failed:', err.message);
     });
