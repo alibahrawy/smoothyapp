@@ -1,6 +1,6 @@
 {
   "name": "smoothyedit",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "SmoothyEdit - AI-powered multicam editing for Premiere Pro",
   "main": "out/main/index.js",
   "author": "SmoothyEdit",
@@ -96,6 +96,12 @@
       "target": [
         {
           "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
           "arch": [
             "arm64"
           ]

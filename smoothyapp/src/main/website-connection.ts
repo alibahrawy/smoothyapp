@@ -6,7 +6,7 @@
 // @ts-ignore
 const WebSocket = require('ws');
 import Store from 'electron-store';
-import { getStoredUserId } from './auth-service';
+import { getAuthHeaders } from './auth-service';
 
 const isDev = process.env.NODE_ENV === 'development';
 const LOCAL_WS_URL = 'ws://localhost:4321/api/ws';
@@ -63,17 +63,16 @@ export function connectToWebsite(): Promise<boolean> {
 function connectToWebsiteAt(index: number): Promise<boolean> {
   return new Promise((resolve) => {
     const token = getConnectionToken();
-    const userId = getStoredUserId();
     const wsBase = WS_URLS[index];
     const wsParams = new URLSearchParams({ role: 'plugin' });
-    if (userId) wsParams.set('userId', userId);
-    else if (token) wsParams.set('token', token);
+    // The relay only accepts a scoped connection token. A bare user id is not
+    // a credential and must never be sent.
+    if (token) wsParams.set('token', token);
     const wsUrl = `${wsBase}${wsBase.includes('?') ? '&' : '?'}${wsParams.toString()}`;
     let socket: any = null;
 
-    // Need either a token or a logged-in user
-    if (!token && !userId) {
-      console.log('[Website] No connection token and not logged in');
+    if (!token) {
+      console.log('[Website] No connection token available');
       resolve(false);
       return;
     }
@@ -165,22 +164,15 @@ function connectToWebsiteAt(index: number): Promise<boolean> {
       socket.on('open', () => {
         console.log('[Website] Socket opened:', wsUrl);
 
-        // Send handshake with userId (preferred) or token (fallback)
+        // Send handshake. The connection token is the only credential.
         const handshake: any = {
           type: 'handshake',
           source: 'premiere-plugin',
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          connectionToken: token
         };
 
-        // Use userId if logged in, otherwise use token
-        if (userId) {
-          handshake.userId = userId;
-          console.log('[Website] Authenticating with userId:', userId);
-        } else if (token) {
-          handshake.connectionToken = token;
-          console.log('[Website] Authenticating with token');
-        }
-
+        console.log('[Website] Authenticating with connection token');
         socket.send(JSON.stringify(handshake));
       });
 
@@ -311,18 +303,16 @@ export function sendToWebsite(message: any): boolean {
  * Fetch user's theme from website API
  */
 export async function fetchUserTheme(): Promise<string | null> {
-  const userId = getStoredUserId();
-  if (!userId) {
-    console.log('[Website] No user ID, cannot fetch theme');
+  const headers = getAuthHeaders();
+  if (!headers['Authorization']) {
+    console.log('[Website] Not signed in, cannot fetch theme');
     return null;
   }
 
   for (const apiUrl of API_URLS) {
     try {
       const response = await fetch(`${apiUrl}/api/user/theme`, {
-        headers: {
-          'x-member-id': userId
-        }
+        headers
       });
 
       if (!response.ok) {
@@ -345,9 +335,9 @@ export async function fetchUserTheme(): Promise<string | null> {
  * Save user's theme to website API
  */
 export async function saveUserTheme(theme: string): Promise<boolean> {
-  const userId = getStoredUserId();
-  if (!userId) {
-    console.log('[Website] No user ID, cannot save theme');
+  const headers = getAuthHeaders();
+  if (!headers['Authorization']) {
+    console.log('[Website] Not signed in, cannot save theme');
     return false;
   }
 
@@ -355,10 +345,7 @@ export async function saveUserTheme(theme: string): Promise<boolean> {
     try {
       const response = await fetch(`${apiUrl}/api/user/theme`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-member-id': userId
-        },
+        headers,
         body: JSON.stringify({ theme })
       });
 

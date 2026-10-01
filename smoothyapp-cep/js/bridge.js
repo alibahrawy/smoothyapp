@@ -9,7 +9,7 @@
   'use strict';
 
   const csInterface = new CSInterface();
-  const HOST_SCRIPT_VERSION = '20260930-caption-host-v20';
+  const HOST_SCRIPT_VERSION = '20261001-review-host-v22';
   const MARKER_PAYLOAD_CHUNK_SIZE = 8000;
   let ws = null;
   let isConnected = false;
@@ -25,18 +25,62 @@
     statusText.textContent = message;
   }
 
+  // The Electron app writes a per-install secret next to the panel. Presenting
+  // it lets the local WebSocket server trust this panel over any other client.
+  function getBridgeToken() {
+    var configPath;
+    try {
+      var ext = csInterface.getSystemPath(SystemPath.EXTENSION).replace(/\\/g, '/');
+      configPath = ext + '/smoothy-config.json';
+    } catch (e) {
+      return null;
+    }
+
+    // Preferred: Node's fs (available when the panel loads with --enable-nodejs).
+    try {
+      var nodeRequire = window.cep_node && window.cep_node.require;
+      if (nodeRequire) {
+        var fs = nodeRequire('fs');
+        if (fs.existsSync(configPath)) {
+          var parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+          if (parsed && typeof parsed.bridgeToken === 'string') return parsed.bridgeToken;
+        }
+      }
+    } catch (e) {
+      // Fall through to the CEP fs bridge.
+    }
+
+    // Fallback: the built-in CEP fs API, which does not require Node.
+    try {
+      if (window.cep && window.cep.fs && window.cep.fs.readFile) {
+        var result = window.cep.fs.readFile(configPath);
+        if (result && result.err === 0 && result.data) {
+          var parsedCep = JSON.parse(result.data);
+          if (parsedCep && typeof parsedCep.bridgeToken === 'string') return parsedCep.bridgeToken;
+        }
+      }
+    } catch (e) {
+      // Ignore; treated as "no token".
+    }
+
+    return null;
+  }
+
   function connect() {
     if (ws && ws.readyState === WebSocket.OPEN) return;
 
     try {
-      ws = new WebSocket('ws://localhost:3456');
+      // Loopback only — the server does not listen on the network.
+      const token = getBridgeToken();
+      const wsUrl = 'ws://127.0.0.1:3456' + (token ? '?token=' + encodeURIComponent(token) : '');
+      ws = new WebSocket(wsUrl);
 
       ws.onopen = function() {
         updateStatus(true, 'Connected to SmoothyEdit');
         clearInterval(reconnectTimer);
 
         // Identify ourselves
-        send({ type: 'pluginConnected', pluginType: 'cep', bridgeVersion: HOST_SCRIPT_VERSION });
+        send({ type: 'pluginConnected', pluginType: 'cep', bridgeVersion: HOST_SCRIPT_VERSION, protocolVersion: 2 });
 
         // Send initial sequence info
         sendSequenceInfo();
@@ -136,23 +180,23 @@
         break;
 
       case 'importXML':
-        importXML(data.xmlPath);
+        importXML(data.xmlPath, data.requestId);
         break;
 
       case 'removeSilence':
-        removeSilenceInPlace(data.silenceSegments);
+        removeSilenceInPlace(data.silenceSegments, data.sequenceId, data.requestId);
         break;
 
       case 'exportAudio':
-        exportAudioForWebsite();
+        exportAudioForWebsite(data.requestId);
         break;
 
       case 'addMarkers':
-        addMarkersToSequence(data.markers);
+        addMarkersToSequence(data.markers, data.requestId);
         break;
 
       case 'clearMarkers':
-        clearAllMarkers();
+        clearAllMarkers(data.scope, data.sequenceId, data.requestId);
         break;
 
       case 'cutMarkedShorts':
@@ -160,25 +204,67 @@
         break;
 
       case 'exportSubtitles':
-        exportSubtitles();
+        exportSubtitles(data.requestId);
         break;
 
       case 'importCaptions':
-        importCaptions(data.srtPath);
+        importCaptions(data.srtPath, data.requestId);
+        break;
+
+      case 'importImage':
+        importImageToTimeline(data.imagePath, data.durationSeconds, data.requestId);
         break;
     }
   }
 
-  function importCaptions(srtPath) {
+  function importImageToTimeline(imagePath, durationSeconds, requestId) {
+    const reply = (message) => send(Object.assign({}, message, { requestId: requestId }));
+    if (!imagePath) {
+      reply({ type: 'imageImported', success: false, error: 'No image path provided' });
+      return;
+    }
+
+    ensureHostScriptLoaded(function(loadResult) {
+      if (!loadResult.success) {
+        reply({ type: 'imageImported', success: false, error: loadResult.error });
+        return;
+      }
+
+      const escaped = String(imagePath).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const duration = Number(durationSeconds) > 0 ? Number(durationSeconds) : 5;
+
+      csInterface.evalScript("importImageToTimeline('" + escaped + "', " + duration + ")", function(result) {
+        try {
+          const res = JSON.parse(result);
+          reply({
+            type: 'imageImported',
+            success: res.success,
+            message: res.message,
+            error: res.error
+          });
+        } catch (e) {
+          const raw = typeof result === 'string' ? result.slice(0, 300) : String(result);
+          reply({
+            type: 'imageImported',
+            success: false,
+            error: 'Failed to import image: ' + e.message + ' | Premiere response: ' + raw
+          });
+        }
+      });
+    });
+  }
+
+  function importCaptions(srtPath, requestId) {
+    const reply = (message) => send(Object.assign({}, message, { requestId: requestId }));
     if (!srtPath) {
-      send({ type: 'captionsImported', success: false, error: 'No caption file path provided' });
+      reply({ type: 'captionsImported', success: false, error: 'No caption file path provided' });
       return;
     }
     const escaped = String(srtPath).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     csInterface.evalScript(`importCaptions('${escaped}')`, function(result) {
       try {
         const res = JSON.parse(result);
-        send({
+        reply({
           type: 'captionsImported',
           success: res.success,
           count: res.count,
@@ -187,16 +273,17 @@
         });
       } catch (e) {
         const raw = typeof result === 'string' ? result.slice(0, 300) : String(result);
-        send({ type: 'captionsImported', success: false, error: 'Failed to import captions: ' + e.message + ' | Premiere response: ' + raw });
+        reply({ type: 'captionsImported', success: false, error: 'Failed to import captions: ' + e.message + ' | Premiere response: ' + raw });
       }
     });
   }
 
-  function exportSubtitles() {
+  function exportSubtitles(requestId) {
+    const reply = (message) => send(Object.assign({}, message, { requestId: requestId }));
     csInterface.evalScript('exportSubtitles()', function(result) {
       try {
         var res = JSON.parse(result);
-        send({
+        reply({
           type: 'subtitlesExported',
           success: res.success,
           subtitles: res.subtitles,
@@ -207,16 +294,17 @@
           error: res.error
         });
       } catch (e) {
-        send({ type: 'subtitlesExported', success: false, error: 'Failed to export subtitles: ' + e.message });
+        reply({ type: 'subtitlesExported', success: false, error: 'Failed to export subtitles: ' + e.message });
       }
     });
   }
 
-  function clearAllMarkers() {
-    csInterface.evalScript('clearAllMarkers()', function(result) {
+  function clearAllMarkers(scope, sequenceId, requestId) {
+    const reply = (message) => send(Object.assign({}, message, { requestId: requestId }));
+    csInterface.evalScript('clearAllMarkers(' + JSON.stringify(scope || 'smoothy') + ', ' + JSON.stringify(sequenceId || '') + ')', function(result) {
       try {
         var res = JSON.parse(result);
-        send({
+        reply({
           type: 'markersCleared',
           success: res.success,
           count: res.count,
@@ -224,7 +312,7 @@
           error: res.error
         });
       } catch (e) {
-        send({ type: 'markersCleared', success: false, error: 'Failed to parse response: ' + result });
+        reply({ type: 'markersCleared', success: false, error: 'Failed to parse response: ' + result });
       }
     });
   }
@@ -260,62 +348,66 @@
     });
   }
 
-  function importXML(xmlPath) {
+  function importXML(xmlPath, requestId) {
+    const reply = (message) => send(Object.assign({}, message, { requestId: requestId }));
     const escaped = xmlPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     csInterface.evalScript(`importFCPXML('${escaped}')`, function(result) {
       try {
         const res = JSON.parse(result);
-        send({
+        reply({
           type: 'xmlImported',
           success: res.success,
           error: res.error
         });
       } catch (e) {
-        send({ type: 'xmlImported', success: false, error: 'Import failed' });
+        reply({ type: 'xmlImported', success: false, error: 'Import failed' });
       }
     });
   }
 
-  function removeSilenceInPlace(silenceSegments) {
+  function removeSilenceInPlace(silenceSegments, sequenceId, requestId) {
+    const reply = (message) => send(Object.assign({}, message, { requestId: requestId }));
     // Convert to JSON string for ExtendScript
-    const segmentsJson = JSON.stringify(silenceSegments).replace(/'/g, "\\'");
+    const segmentsJson = JSON.stringify({ segments: silenceSegments, sequenceId: sequenceId });
+    const encoded = encodeURIComponent(segmentsJson);
     // Use QE DOM to extract (ripple delete) silence regions
-    csInterface.evalScript(`removeSilenceWithQE('${segmentsJson}')`, function(result) {
+    csInterface.evalScript(`removeSilenceWithQE(decodeURIComponent('${encoded}'))`, function(result) {
       try {
         const res = JSON.parse(result);
-        send({
+        reply({
           type: 'silenceRemoved',
           success: res.success,
           message: res.message,
           error: res.error
         });
       } catch (e) {
-        send({ type: 'silenceRemoved', success: false, error: 'Failed to remove silence: ' + e.message });
+        reply({ type: 'silenceRemoved', success: false, error: 'Failed to remove silence: ' + e.message });
       }
     });
   }
 
-  function exportAudioForWebsite() {
+  function exportAudioForWebsite(requestId) {
+    const reply = (message) => send(Object.assign({}, message, { requestId: requestId }));
     csInterface.evalScript('exportSequenceAudio()', function(result) {
       try {
         const res = JSON.parse(result);
         if (!res.success || !res.filePath) {
-          send({ type: 'audioExported', success: false, error: res.error || 'Premiere did not create an audio file.' });
+          reply({ type: 'audioExported', success: false, error: res.error || 'Premiere did not create an audio file.' });
           return;
         }
         const nodeRequire = window.cep_node && window.cep_node.require;
         if (!nodeRequire) {
-          send({ type: 'audioExported', success: false, error: 'CEP Node access is unavailable, so the temporary audio file cannot be read.' });
+          reply({ type: 'audioExported', success: false, error: 'CEP Node access is unavailable, so the temporary audio file cannot be read.' });
           return;
         }
         const fs = nodeRequire('fs');
         fs.readFile(res.filePath, function(readError, buffer) {
           if (readError) {
-            send({ type: 'audioExported', success: false, error: 'Failed to read exported audio: ' + readError.message });
+            reply({ type: 'audioExported', success: false, error: 'Failed to read exported audio: ' + readError.message });
             return;
           }
           try { fs.unlinkSync(res.filePath); } catch (_) {}
-          send({
+          reply({
             type: 'audioExported',
             success: true,
             audioBase64: buffer.toString('base64'),
@@ -325,7 +417,7 @@
           });
         });
       } catch (e) {
-        send({ type: 'audioExported', success: false, error: 'Export failed: ' + e.message });
+        reply({ type: 'audioExported', success: false, error: 'Export failed: ' + e.message });
       }
     });
   }
@@ -372,7 +464,8 @@
     });
   }
 
-  function evalMarkerResultScript(script, loadResult, stageResult) {
+  function evalMarkerResultScript(script, loadResult, stageResult, requestId) {
+    const reply = (message) => send(Object.assign({}, message, { requestId: requestId }));
     csInterface.evalScript(script, function(result) {
       try {
         const res = JSON.parse(result);
@@ -380,7 +473,7 @@
         if (res.debug) {
           console.log('[Bridge] Debug:', res.debug);
         }
-        send({
+        reply({
           type: 'markersAdded',
           success: res.success,
           count: res.count,
@@ -404,7 +497,7 @@
           '__smoothyDiag;'
         ].join('\n');
         csInterface.evalScript(diagnosticsScript, function(diagnostics) {
-          send({
+          reply({
             type: 'markersAdded',
             success: false,
             error: 'Failed to add markers: ' + e.message + ' | Premiere response: ' + raw + ' | Host script: ' + loadResult.version + ' | Payload chunks: ' + stageResult.chunks + ' | Diagnostics: ' + diagnostics
@@ -414,13 +507,14 @@
     });
   }
 
-  function addMarkersToSequence(markers) {
+  function addMarkersToSequence(markers, requestId) {
+    const reply = (message) => send(Object.assign({}, message, { requestId: requestId }));
     const markersJson = JSON.stringify(markers || []);
     const encodedMarkers = encodeURIComponent(markersJson);
 
     ensureHostScriptLoaded(function(loadResult) {
       if (!loadResult.success) {
-        send({
+        reply({
           type: 'markersAdded',
           success: false,
           error: loadResult.error
@@ -441,13 +535,13 @@
           '}',
           '__smoothyMarkerResult;'
         ].join('\n');
-        evalMarkerResultScript(directScript, loadResult, { chunks: 0, direct: true });
+        evalMarkerResultScript(directScript, loadResult, { chunks: 0, direct: true }, requestId);
         return;
       }
 
       stageEncodedMarkerPayload(encodedMarkers, function(stageResult) {
         if (!stageResult.success) {
-          send({
+          reply({
             type: 'markersAdded',
             success: false,
             error: stageResult.error + ' | Host script: ' + loadResult.version
@@ -465,7 +559,7 @@
           '__smoothyMarkerResult;'
         ].join('\n');
 
-        evalMarkerResultScript(script, loadResult, stageResult);
+        evalMarkerResultScript(script, loadResult, stageResult, requestId);
       });
     });
   }

@@ -2,7 +2,7 @@
  * SmoothyEdit Electron App - Main Process
  */
 
-import { app, BrowserWindow, ipcMain, shell, dialog, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog, Menu, clipboard } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import Store from 'electron-store';
 import { initTelemetry, trackEvent, trackTool, startHeartbeat } from './telemetry';
@@ -10,6 +10,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { execFileSync } from 'child_process';
+import { randomBytes } from 'crypto';
 import {
   startNLEServers,
   stopNLEServers,
@@ -25,10 +26,12 @@ import {
   addMarkersToSequence,
   clearMarkersFromSequence,
   exportSubtitles,
-  sendCaptionsToNLE
+  sendCaptionsToNLE,
+  importImageToNLE
 } from './nle-router';
 import {
-  getConnectionStatus as getPremiereConnectionStatus
+  getConnectionStatus as getPremiereConnectionStatus,
+  setBridgeToken
 } from './websocket-server';
 import {
   setWebsiteCallbacks,
@@ -75,6 +78,7 @@ import {
   FormattedCaption
 } from './captions/caption-formatter';
 import * as whisperService from './captions/whisper-service';
+import { checkCancellation } from './captions/download-file';
 import {
   stitchTimelineAudio,
   extractAudioTrack,
@@ -86,6 +90,7 @@ import {
 import videoCompressor, { CompressionSettings, VideoFile } from './compressor/video-compressor';
 import * as webApi from './web-api';
 import type { StudioShort } from './web-api';
+import { runShortsAnalysis, type ShortsAnalysisConfig } from './shorts-service';
 
 function swallowStdIOMaybeEpipe() {
   const handle = (err: any) => {
@@ -112,6 +117,8 @@ let updateNotesCache: string | null = null;
 
 // Whether a caption/transcription job is currently running (for cancellation).
 let captionsJobActive = false;
+let captionJobController: AbortController | null = null;
+let shortsJobController: AbortController | null = null;
 
 /**
  * Fetch the release body for a specific version from the public releases repo.
@@ -143,6 +150,18 @@ async function fetchUpdateNotes(version: string): Promise<string | null> {
 function sendLog(level: string, message: string) {
   const timestamp = new Date().toLocaleTimeString();
   mainWindow?.webContents.send('log-message', { level, message, timestamp });
+}
+
+/** Compare dotted numeric versions: -1 when a < b, 1 when a > b, 0 when equal. */
+function compareVersions(a: string, b: string): number {
+  const pa = String(a).replace(/^v/, '').split('.').map((p) => parseInt(p, 10) || 0);
+  const pb = String(b).replace(/^v/, '').split('.').map((p) => parseInt(p, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff !== 0) return diff < 0 ? -1 : 1;
+  }
+  return 0;
 }
 
 function bindCompressorEventForwarding() {
@@ -347,6 +366,7 @@ function installBridge(): { success: boolean; path?: string; version?: string; e
     fs.rmSync(dest, { recursive: true, force: true });
     copyDirSync(source, dest);
     writeCepDebugFile(dest);
+    writeCepBridgeConfig(dest, getOrCreateBridgeToken());
 
     const version = getBundledPanelVersion() || undefined;
 
@@ -359,6 +379,34 @@ function installBridge(): { success: boolean; path?: string; version?: string; e
   } catch (error) {
     console.error('[CEP] installBridge failed:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Failed to install the Premiere panel' };
+  }
+}
+
+/**
+ * Persistent shared secret for the local Premiere bridge. Generated once and
+ * injected into the installed CEP panel so the WebSocket server can tell the
+ * real panel apart from any other local client.
+ */
+function getOrCreateBridgeToken(): string {
+  let token = store.get('bridgeToken') as string | null;
+  if (!token) {
+    token = randomBytes(24).toString('hex');
+    store.set('bridgeToken', token);
+  }
+  return token;
+}
+
+/** Write the bridge secret next to the installed panel so `bridge.js` can read it. */
+function writeCepBridgeConfig(pluginDir: string, token: string): void {
+  try {
+    if (!fs.existsSync(path.join(pluginDir, 'CSXS', 'manifest.xml'))) return;
+    fs.writeFileSync(
+      path.join(pluginDir, 'smoothy-config.json'),
+      JSON.stringify({ bridgeToken: token }, null, 2),
+      'utf-8'
+    );
+  } catch (error) {
+    console.warn('[CEP] Failed to write bridge config:', error);
   }
 }
 
@@ -455,6 +503,11 @@ app.whenReady().then(() => {
     mainWindow?.webContents.send('auth-state-change', state);
   });
 
+  // Authenticate the local Premiere bridge with a per-install secret before
+  // the server starts accepting connections.
+  const bridgeToken = getOrCreateBridgeToken();
+  setBridgeToken(bridgeToken);
+
   // Start the Premiere WebSocket server
   startNLEServers();
 
@@ -532,7 +585,7 @@ app.whenReady().then(() => {
         });
       } else if (data.type === 'clearMarkers') {
         sendLog('info', 'Clearing markers from website request');
-        const result = await clearMarkersFromSequence();
+        const result = await clearMarkersFromSequence(options.scope === 'all' ? 'all' : 'smoothy', options.sequenceId);
         mainWindow?.webContents.send('website-message', {
           type: 'markersCleared',
           success: result.success,
@@ -589,6 +642,10 @@ app.whenReady().then(() => {
     console.log(`[CEP] Panel ${installedPanelVersion} is up to date at ${getInstalledPanelPath()}`);
   }
 
+  // Make sure the installed panel can present the current bridge secret, even
+  // when the panel itself did not need reinstalling.
+  writeCepBridgeConfig(getInstalledPanelPath(), bridgeToken);
+
   // Auto-updater setup
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -629,6 +686,9 @@ app.whenReady().then(() => {
 
   autoUpdater.on('update-downloaded', (info) => {
     console.log('[Updater] Update downloaded:', info.version);
+    // Remember the downloaded version so a relaunch that is still on the old
+    // version can be detected ("stuck" update) and surfaced to the user.
+    store.set('lastDownloadedUpdateVersion', info.version);
     mainWindow?.webContents.send('update-status', { status: 'downloaded', version: info.version });
 
     const emit = (notes: string | null) => mainWindow?.webContents.send('update-notes', { version: info.version, notes });
@@ -649,6 +709,22 @@ app.whenReady().then(() => {
 
   // Check for updates (don't block app startup)
   setTimeout(() => {
+    // If a previously downloaded update never actually installed (the running
+    // version is older than what was downloaded), tell the user explicitly and
+    // skip the automatic check — re-downloading the same broken update would
+    // just repeat the loop.
+    const lastDownloaded = store.get('lastDownloadedUpdateVersion') as string | null;
+    if (lastDownloaded && compareVersions(app.getVersion(), lastDownloaded) < 0) {
+      console.warn(`[Updater] Update to v${lastDownloaded} was downloaded but never installed`);
+      mainWindow?.webContents.send('update-status', { status: 'stuck', version: lastDownloaded });
+      return;
+    }
+
+    // The running version caught up with the last downloaded update — clear the flag.
+    if (lastDownloaded) {
+      store.delete('lastDownloadedUpdateVersion');
+    }
+
     autoUpdater.checkForUpdatesAndNotify().catch((err) => {
       console.error('[Updater] Check failed:', err.message);
     });
@@ -740,9 +816,9 @@ ipcMain.handle('export-audio-to-website', async () => {
   }
 });
 
-ipcMain.handle('clear-markers', async () => {
+ipcMain.handle('clear-markers', async (_, options = {}) => {
   try {
-    const result = await clearMarkersFromSequence();
+    const result = await clearMarkersFromSequence(options.scope === 'all' ? 'all' : 'smoothy', options.sequenceId);
     return result;
   } catch (error) {
     console.error('[Main] Clear markers error:', error);
@@ -879,6 +955,7 @@ ipcMain.handle('get-caption-model-status', () => {
 });
 
 ipcMain.handle('download-caption-model', async (_, modelId: string) => {
+  if (captionsJobActive) return { success: false, error: 'Wait for the current transcription to finish.' };
   try {
     const model = getModelById(modelId);
     if (!model) {
@@ -905,16 +982,40 @@ ipcMain.handle('download-caption-model', async (_, modelId: string) => {
   }
 });
 
+ipcMain.handle('reformat-captions', async (_, input) => {
+  if (!Array.isArray(input?.chunks) || input.chunks.length > 200000 || input.chunks.some((chunk: any) =>
+      typeof chunk.text !== 'string' || !Array.isArray(chunk.timestamp) || chunk.timestamp.length !== 2 ||
+      !chunk.timestamp.every(Number.isFinite))) return { success: false, error: 'Invalid caption source.' };
+  const settings = input.settings || {};
+  if (![settings.maxCharsPerLine, settings.maxLines, settings.maxDurationSeconds].every(Number.isFinite) ||
+      settings.maxCharsPerLine < 1 || settings.maxCharsPerLine > 120 || ![1, 2].includes(settings.maxLines) || settings.maxDurationSeconds <= 0 || settings.maxDurationSeconds > 30) return { success: false, error: 'Invalid caption settings.' };
+  const captions = formatCaptions({ text: input.chunks.map((chunk: any) => chunk.text).join(' '), chunks: input.chunks }, settings);
+  return { success: true, captions };
+});
+
+ipcMain.handle('retry-shorts-history', async (_, payload) => {
+  if (typeof payload?.text !== 'string' || payload.text.length > 2000000 || typeof payload.fileName !== 'string') return { success: false, error: 'Invalid history result.' };
+  try {
+    await webApi.saveShortsToHistory(payload.text, payload.fileName);
+    return { success: true };
+  } catch (error) { return studioErrorPayload(error); }
+});
+
 ipcMain.handle('generate-captions', async (_, config: {
   audioPath?: string;
   settings: Partial<CaptionSettings>;
   trackIndices?: number[];
 }) => {
+  if (captionsJobActive) {
+    return { success: false, error: 'Wait for the current transcription to finish.' };
+  }
   trackTool('captions');
   let tempAudioFiles: string[] = [];
 
   resetAudioExtractionCancel();
   captionsJobActive = true;
+  const controller = new AbortController();
+  captionJobController = controller;
 
   try {
     let audioPath = config.audioPath;
@@ -964,7 +1065,7 @@ ipcMain.handle('generate-captions', async (_, config: {
       for (const track of seqInfo.audioTracks) {
         if (selectedTracks && !selectedTracks.has(track.index)) continue;
         for (const clip of track.clips || []) {
-          if (!clip || !clip.path) continue;
+          if (!clip || !clip.path || clip.disabled) continue;
           timelineClips.push({
             path: clip.path,
             start: Number(clip.start) || 0,
@@ -1041,8 +1142,9 @@ ipcMain.handle('generate-captions', async (_, config: {
           message,
           progress: (isEngineDownload || isModelDownload) ? (pct ?? 0) : undefined
         });
-      });
+      }, controller.signal);
     }
+    checkCancellation(controller.signal);
 
     // Transcribe
     mainWindow?.webContents.send('caption-progress', {
@@ -1058,7 +1160,8 @@ ipcMain.handle('generate-captions', async (_, config: {
         message: progress.status,
         progress: progress.progress
       });
-    }, selectedModel, effectiveLanguage);
+    }, selectedModel, effectiveLanguage, controller.signal);
+    checkCancellation(controller.signal);
 
     // Format captions
     mainWindow?.webContents.send('caption-progress', {
@@ -1082,25 +1185,21 @@ ipcMain.handle('generate-captions', async (_, config: {
     });
 
     // Cleanup temp files
-    tempAudioFiles.forEach(f => cleanupTempFile(f));
-    captionsJobActive = false;
+
 
     return {
       success: true,
       captions,
       srt,
       vtt,
-      text: transcriptionResult.text
+      text: transcriptionResult.text,
+      chunks: transcriptionResult.chunks
     };
   } catch (error) {
-    captionsJobActive = false;
-
-    // Cleanup temp files on error
-    tempAudioFiles.forEach(f => cleanupTempFile(f));
 
     const message = error instanceof Error ? error.message : 'Generation failed';
 
-    if (message === 'TRANSCRIPTION_CANCELLED' || message === 'AUDIO_EXTRACTION_CANCELLED') {
+    if (controller.signal.aborted || message === 'TRANSCRIPTION_CANCELLED' || message === 'AUDIO_EXTRACTION_CANCELLED') {
       console.log('[Main] Caption generation cancelled by user');
       mainWindow?.webContents.send('caption-progress', { status: 'cancelled', message: 'Cancelled' });
       return { success: false, cancelled: true, error: 'Cancelled' };
@@ -1108,11 +1207,16 @@ ipcMain.handle('generate-captions', async (_, config: {
 
     console.error('[Main] Caption generation error:', error);
     return { success: false, error: message };
+  } finally {
+    tempAudioFiles.forEach(f => cleanupTempFile(f));
+    captionsJobActive = false;
+    captionJobController = null;
   }
 });
 
 ipcMain.handle('cancel-generate-captions', async () => {
-  if (!captionsJobActive) return { success: true };
+  if (!captionJobController) return { success: true };
+  captionJobController?.abort();
   await whisperService.cancelTranscription();
   cancelAudioExtraction();
   return { success: true };
@@ -1292,100 +1396,130 @@ ipcMain.handle('add-shorts-markers', async (_, shorts: StudioShort[]) => {
   }
 });
 
-ipcMain.handle('analyze-shorts', async (_, config: { trackIndices?: number[] } = {}) => {
+ipcMain.handle('get-shorts-youtube-transcript', async (_, url: string) => {
+  try {
+    if (typeof url !== 'string' || url.length > 2048) throw new Error('Enter a valid YouTube URL.');
+    return { success: true, ...await webApi.getYoutubeTranscript(url) };
+  } catch (error) {
+    return studioErrorPayload(error);
+  }
+});
+
+ipcMain.handle('copy-shorts-text', (_, text: string) => {
+  if (typeof text !== 'string' || text.length > 2_000_000) {
+    return { success: false, error: 'Could not copy this text.' };
+  }
+  clipboard.writeText(text);
+  return { success: true };
+});
+
+let shortsJobActive = false;
+let shortsUsesAudio = false;
+ipcMain.handle('analyze-shorts', async (_, config: ShortsAnalysisConfig = {}) => {
+  if (!config || typeof config !== 'object') return { success: false, error: 'Choose a Shorts source.' };
+  if (!getAuthState().user) return studioErrorPayload(new webApi.NotSignedInError());
+  const needsAudio = !config.source || config.source === 'sequence' || config.source === 'audio';
+  if (shortsJobActive || (needsAudio && captionsJobActive)) {
+    return { success: false, error: 'Wait for the current analysis or transcription to finish.' };
+  }
   trackTool('bestshorts');
-
+  shortsJobActive = true;
+  shortsUsesAudio = needsAudio;
+  const controller = new AbortController();
+  shortsJobController = controller;
   const tempAudioFiles: string[] = [];
-  resetAudioExtractionCancel();
-  captionsJobActive = true;
-
-  const progress = (message: string) => {
-    mainWindow?.webContents.send('shorts-progress', { message });
-  };
+  if (needsAudio) {
+    resetAudioExtractionCancel();
+    captionsJobActive = true;
+  }
+  const progress = (message: string) => mainWindow?.webContents.send('shorts-progress', { message });
 
   try {
-    const seqInfo = getSequenceInfo();
-    if (!seqInfo || !seqInfo.hasSequence) {
-      return { success: false, error: 'No active sequence' };
-    }
+    const result = await runShortsAnalysis(config, {
+      progress,
+      signal: controller.signal,
+      analyze: webApi.analyzeShorts,
+      saveHistory: webApi.saveShortsToHistory,
+      getCredits: webApi.getCredits,
+      prepareAudio: async (input) => {
+        let audioPath: string;
+        let fileName: string;
+        let duration: number | undefined;
+        if (input.source === 'audio') {
+          if (typeof input.audioPath !== 'string' || !path.isAbsolute(input.audioPath) || !fs.existsSync(input.audioPath) || !fs.statSync(input.audioPath).isFile()) {
+            throw new Error('Choose an audio or video file first.');
+          }
+          fileName = path.basename(input.audioPath);
+          progress('Preparing audio file…');
+          audioPath = await extractAudioTrack(input.audioPath, `shorts_file_${Date.now()}`);
+          tempAudioFiles.push(audioPath);
+        } else {
+          const seqInfo = getSequenceInfo();
+          if (!seqInfo?.hasSequence) throw new Error('Open a sequence in Premiere first.');
+          const selectedTracks = Array.isArray(input.trackIndices) && input.trackIndices.length > 0
+            ? new Set(input.trackIndices) : null;
+          const clips: TimelineAudioClip[] = [];
+          for (const track of seqInfo.audioTracks || []) {
+            if (selectedTracks && !selectedTracks.has(track.index)) continue;
+            for (const clip of track.clips || []) {
+              if (!clip?.path || clip.disabled) continue;
+              clips.push({ path: clip.path, start: Number(clip.start) || 0, end: Number(clip.end) || 0,
+                inPoint: clip.inPoint, outPoint: clip.outPoint });
+            }
+          }
+          if (!clips.length) throw new Error('No audio clips found on the selected tracks.');
+          progress(`Preparing timeline audio (${clips.length} clips)…`);
+          const stitched = await stitchTimelineAudio(clips, `shorts_timeline_${Date.now()}`);
+          audioPath = stitched.path;
+          tempAudioFiles.push(audioPath);
+          duration = stitched.durationSeconds;
+          fileName = seqInfo.name || 'Premiere sequence';
+        }
 
-    const selectedTracks = Array.isArray(config.trackIndices) && config.trackIndices.length > 0
-      ? new Set<number>(config.trackIndices)
-      : null;
-
-    const timelineClips: TimelineAudioClip[] = [];
-    for (const track of seqInfo.audioTracks || []) {
-      if (selectedTracks && !selectedTracks.has(track.index)) continue;
-      for (const clip of track.clips || []) {
-        if (!clip || !clip.path) continue;
-        timelineClips.push({
-          path: clip.path,
-          start: Number(clip.start) || 0,
-          end: Number(clip.end) || 0,
-          inPoint: clip.inPoint,
-          outPoint: clip.outPoint
-        });
+        const selectedModel = (store.get('captionModel') as string | null) || getDefaultModelId();
+        const language = (store.get('captionLanguage') as string | null) || DEFAULT_CAPTION_LANGUAGE;
+        if (isEnglishOnlyModel(selectedModel) && language !== 'auto' && language !== 'en') {
+          throw new Error(`Choose a multilingual model in Settings to transcribe ${getLanguageName(language)}.`);
+        }
+        whisperService.setEnginePreference((store.get('captionEngine') as 'auto' | 'cuda' | 'cpu') || 'auto');
+        if (!whisperService.isModelLoaded() || whisperService.getCurrentModelId() !== selectedModel) {
+          progress('Preparing transcription engine…');
+          await whisperService.loadModel(selectedModel, (p) => progress(p.status === 'downloading'
+            ? `Downloading model: ${p.progress || 0}%` : `Preparing: ${p.status}`), controller.signal);
+        }
+        checkCancellation(controller.signal);
+        progress(language === 'auto' && !isEnglishOnlyModel(selectedModel)
+          ? 'Detecting language and transcribing audio locally…'
+          : `Transcribing ${getLanguageName(isEnglishOnlyModel(selectedModel) ? 'en' : language)} locally…`);
+        const transcription = await whisperService.transcribe(audioPath, (p) => progress(p.status),
+          selectedModel, isEnglishOnlyModel(selectedModel) ? 'en' : language, controller.signal);
+        checkCancellation(controller.signal);
+        const subtitleText = toSRT(formatCaptions(transcription, {}));
+        if (!duration) duration = Math.max(0, ...transcription.chunks.map(chunk => chunk.timestamp[1])) || undefined;
+        return { subtitleText, fileName, duration };
       }
-    }
-
-    if (timelineClips.length === 0) {
-      return { success: false, error: 'No audio clips found on the selected tracks' };
-    }
-
-    // 1. Build one timeline-accurate WAV from the selected tracks.
-    progress(`Preparing audio (${timelineClips.length} clip${timelineClips.length === 1 ? '' : 's'})...`);
-    const stitched = await stitchTimelineAudio(timelineClips, `shorts_timeline_${Date.now()}`);
-    tempAudioFiles.push(stitched.path);
-
-    // 2. Transcribe locally with Whisper — free, offline, no credits.
-    const selectedModel = (store.get('captionModel') as string | null) || getDefaultModelId();
-    whisperService.setEnginePreference((store.get('captionEngine') as 'auto' | 'cuda' | 'cpu') || 'auto');
-
-    if (!whisperService.isModelLoaded() || whisperService.getCurrentModelId() !== selectedModel) {
-      progress('Preparing transcription engine...');
-      await whisperService.loadModel(selectedModel, (p) => {
-        progress(p.status === 'downloading'
-          ? `Downloading model: ${p.progress || 0}%`
-          : `Preparing: ${p.status}`);
-      });
-    }
-
-    progress('Transcribing audio locally...');
-    const transcription = await whisperService.transcribe(stitched.path, (p) => {
-      progress(p.status);
     });
-
-    const captions = formatCaptions(transcription, {});
-    const subtitleText = toSRT(captions);
-    if (!subtitleText.trim()) {
-      return { success: false, error: 'No speech detected in the audio' };
-    }
-
-    // 3. Send only the text to Studio for analysis (this is what spends credits).
-    progress('Finding the best shorts...');
-    const { shorts } = await webApi.analyzeShorts(subtitleText, stitched.durationSeconds);
-    if (shorts.length === 0) {
-      return { success: false, error: 'No shorts found in this clip' };
-    }
-
-    // 4. Save to history so it appears on the web dashboard too.
-    progress('Saving to history...');
-    const historyText = JSON.stringify({ shorts }, null, 2);
-    const fileName = seqInfo.name ? `${seqInfo.name} — shorts` : 'shorts';
-    await webApi.saveShortsToHistory(historyText, fileName);
-
-    // 5. Refresh credits so the meter reflects the spend.
-    let credits = null;
-    try { credits = await webApi.getCredits(); } catch { /* non-fatal */ }
-
-    return { success: true, shorts, credits, duration: stitched.durationSeconds };
+    return { success: true, ...result };
   } catch (error) {
+    if (controller.signal.aborted) return { success: false, cancelled: true, error: 'Cancelled. If cloud analysis had started, credits may have been used.' };
     console.error('[Studio] analyze-shorts error:', error);
     return studioErrorPayload(error);
   } finally {
-    tempAudioFiles.forEach((file) => cleanupTempFile(file));
-    captionsJobActive = false;
+    tempAudioFiles.forEach(file => cleanupTempFile(file));
+    if (needsAudio) captionsJobActive = false;
+    shortsJobActive = false;
+    shortsUsesAudio = false;
+    shortsJobController = null;
   }
+});
+
+ipcMain.handle('cancel-analyze-shorts', async () => {
+  shortsJobController?.abort();
+  if (shortsJobActive && shortsUsesAudio) {
+    await whisperService.cancelTranscription();
+    cancelAudioExtraction();
+  }
+  return { success: true };
 });
 
 // Auto-updater handlers
@@ -1396,8 +1530,13 @@ ipcMain.handle('install-update', () => {
 });
 
 ipcMain.handle('check-for-updates', () => {
+  if (!app.isPackaged) {
+    mainWindow?.webContents.send('update-status', { status: 'dev-build' });
+    return;
+  }
   autoUpdater.checkForUpdatesAndNotify().catch((err) => {
     console.error('[Updater] Manual check failed:', err.message);
+    mainWindow?.webContents.send('update-status', { status: 'error' });
   });
 });
 
@@ -1446,6 +1585,195 @@ ipcMain.handle('browse-cep-path', async () => {
     return { canceled: true };
   }
   return { canceled: false, path: result.filePaths[0] };
+});
+
+// ─── Assets (SVG / image -> PNG) ────────────────────────────────────────────
+
+function getDefaultAssetsOutputFolder(): string {
+  try {
+    return path.join(app.getPath('downloads'), 'SmoothyEdit Assets');
+  } catch {
+    return path.join(os.homedir(), 'Downloads', 'SmoothyEdit Assets');
+  }
+}
+
+function getAssetsOutputFolder(): string {
+  return (store.get('assetsOutputFolder') as string | null) || getDefaultAssetsOutputFolder();
+}
+
+function sanitizePngName(fileName?: string): string {
+  const base = (fileName || 'asset').replace(/\.[^.]+$/, '') || 'asset';
+  const safe = base.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, ' ').trim() || 'asset';
+  return `${safe}.png`;
+}
+
+/** Write a PNG into a folder, avoiding overwriting an existing file. */
+function writePngFile(folder: string, fileName: string, bytes: Uint8Array): string {
+  fs.mkdirSync(folder, { recursive: true });
+  const ext = path.extname(fileName) || '.png';
+  const base = fileName.slice(0, fileName.length - ext.length);
+  let candidate = path.join(folder, fileName);
+  let counter = 1;
+  while (fs.existsSync(candidate)) {
+    candidate = path.join(folder, `${base}-${counter}${ext}`);
+    counter += 1;
+  }
+  fs.writeFileSync(candidate, Buffer.from(bytes));
+  return candidate;
+}
+
+function extractImageUrl(text: string): string | null {
+  if (!text) return null;
+  const imgMatch = text.match(/<img[^>]+src=["']([^"']+)["']/i);
+  if (imgMatch && /^https?:\/\//i.test(imgMatch[1])) return imgMatch[1];
+  const trimmed = text.trim();
+  if (/^https?:\/\/\S+/i.test(trimmed)) {
+    return trimmed.split(/\s+/)[0];
+  }
+  return null;
+}
+
+async function fetchRemoteImage(url: string): Promise<{ name: string; mime?: string; base64?: string; svgText?: string } | null> {
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': 'SmoothyEdit' } });
+    if (!res.ok) return null;
+    const mime = (res.headers.get('content-type') || 'image/png').split(';')[0].trim();
+    const buffer = Buffer.from(await res.arrayBuffer());
+    if (buffer.length === 0 || buffer.length > 25 * 1024 * 1024) return null;
+
+    const extByMime: Record<string, string> = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/jpg': 'jpg',
+      'image/webp': 'webp',
+      'image/gif': 'gif',
+      'image/avif': 'avif',
+      'image/bmp': 'bmp',
+      'image/svg+xml': 'svg'
+    };
+    const ext = extByMime[mime] || 'png';
+
+    if (mime === 'image/svg+xml') {
+      return { name: `clipboard.${ext}`, svgText: buffer.toString('utf-8') };
+    }
+    return { name: `clipboard.${ext}`, mime, base64: buffer.toString('base64') };
+  } catch (error) {
+    console.warn('[Assets] Remote image fetch failed:', error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+ipcMain.handle('assets-get-output-folder', () => getAssetsOutputFolder());
+
+ipcMain.handle('assets-select-output-folder', async (_, defaultPath?: string) => {
+  if (!mainWindow) return { canceled: true };
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choose where converted PNGs are saved',
+    defaultPath: defaultPath || getAssetsOutputFolder(),
+    properties: ['openDirectory', 'createDirectory']
+  });
+  if (result.canceled || !result.filePaths[0]) {
+    return { canceled: true };
+  }
+  store.set('assetsOutputFolder', result.filePaths[0]);
+  return { canceled: false, path: result.filePaths[0] };
+});
+
+ipcMain.handle('assets-save-png', async (_, options: { fileName: string; bytes: Uint8Array; saveAs?: boolean }) => {
+  try {
+    const bytes = options?.bytes;
+    if (!bytes || !bytes.length) {
+      return { success: false, error: 'No image data to save' };
+    }
+    const fileName = sanitizePngName(options.fileName);
+
+    if (options.saveAs && mainWindow) {
+      const result = await dialog.showSaveDialog(mainWindow, {
+        title: 'Save PNG',
+        defaultPath: path.join(getAssetsOutputFolder(), fileName),
+        filters: [{ name: 'PNG Image', extensions: ['png'] }]
+      });
+      if (result.canceled || !result.filePath) {
+        return { success: false, canceled: true };
+      }
+      fs.mkdirSync(path.dirname(result.filePath), { recursive: true });
+      fs.writeFileSync(result.filePath, Buffer.from(bytes));
+      return { success: true, path: result.filePath };
+    }
+
+    const filePath = writePngFile(getAssetsOutputFolder(), fileName, bytes);
+    return { success: true, path: filePath };
+  } catch (error) {
+    console.error('[Assets] Save PNG failed:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Save failed' };
+  }
+});
+
+ipcMain.handle('assets-send-to-premiere', async (_, options: { fileName: string; bytes: Uint8Array; durationSeconds?: number }) => {
+  try {
+    const bytes = options?.bytes;
+    if (!bytes || !bytes.length) {
+      return { success: false, error: 'No image data to send' };
+    }
+
+    // Persist the PNG next to the other converted assets: Premiere links media
+    // by reference, so the file must outlive the import.
+    const fileName = sanitizePngName(options.fileName);
+    const filePath = writePngFile(getAssetsOutputFolder(), fileName, bytes);
+
+    const result = await importImageToNLE(filePath, options.durationSeconds || 5);
+    if (!result.success) {
+      return { success: false, error: result.error || 'Premiere could not import the image' };
+    }
+    return { success: true, path: filePath };
+  } catch (error) {
+    console.error('[Assets] Send to Premiere failed:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Send failed' };
+  }
+});
+
+ipcMain.handle('assets-read-clipboard', async () => {
+  try {
+    const image = clipboard.readImage();
+    if (image && !image.isEmpty()) {
+      return {
+        hasImage: true,
+        name: 'clipboard.png',
+        mime: 'image/png',
+        base64: image.toPNG().toString('base64')
+      };
+    }
+
+    const formats = clipboard.availableFormats();
+    const svgFormat = formats.find((format) => /svg/i.test(format));
+    if (svgFormat) {
+      const svg = clipboard.read(svgFormat);
+      if (svg && /<svg[\s>]/i.test(String(svg))) {
+        return { hasImage: true, name: 'clipboard.svg', svgText: String(svg) };
+      }
+    }
+
+    const html = clipboard.readHTML() || '';
+    if (/<svg[\s>]/i.test(html)) {
+      const match = html.match(/<svg[\s\S]*?<\/svg>/i);
+      if (match) {
+        return { hasImage: true, name: 'clipboard.svg', svgText: match[0] };
+      }
+    }
+
+    const url = extractImageUrl(html) || extractImageUrl(clipboard.readText() || '');
+    if (url) {
+      const remote = await fetchRemoteImage(url);
+      if (remote) {
+        return { hasImage: true, ...remote };
+      }
+    }
+
+    return { hasImage: false };
+  } catch (error) {
+    console.error('[Assets] Read clipboard failed:', error);
+    return { hasImage: false, error: error instanceof Error ? error.message : 'Clipboard read failed' };
+  }
 });
 
 // NLE switching handlers

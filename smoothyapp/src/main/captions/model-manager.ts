@@ -5,8 +5,7 @@
 import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import https from 'https';
-import http from 'http';
+import { downloadFile, checkCancellation } from './download-file';
 
 export interface ModelInfo {
   id: string;
@@ -153,7 +152,7 @@ export function getModelById(modelId: string): ModelInfo | undefined {
  * Get the default model ID
  */
 export function getDefaultModelId(): string {
-  return 'ggml-base.en.bin';
+  return 'ggml-base.bin';
 }
 
 /**
@@ -175,89 +174,15 @@ export type DownloadProgressCallback = (progress: {
 /**
  * Download a file from a URL with progress callback, following redirects
  */
-function downloadFile(
-  url: string,
-  destPath: string,
-  onProgress?: DownloadProgressCallback,
-  label?: string
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const tempPath = destPath + '.tmp';
-    const file = fs.createWriteStream(tempPath);
-
-    const doRequest = (requestUrl: string, redirectCount: number) => {
-      if (redirectCount > 5) {
-        file.close();
-        fs.unlinkSync(tempPath);
-        reject(new Error('Too many redirects'));
-        return;
-      }
-
-      const protocol = requestUrl.startsWith('https') ? https : http;
-
-      protocol.get(requestUrl, (response) => {
-        // Handle redirects
-        if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-          response.resume(); // Consume response to free memory
-          doRequest(response.headers.location, redirectCount + 1);
-          return;
-        }
-
-        if (response.statusCode !== 200) {
-          file.close();
-          fs.unlinkSync(tempPath);
-          reject(new Error(`Download failed with status ${response.statusCode}`));
-          return;
-        }
-
-        const totalSize = parseInt(response.headers['content-length'] || '0', 10);
-        let downloadedSize = 0;
-
-        response.on('data', (chunk: Buffer) => {
-          downloadedSize += chunk.length;
-          if (onProgress && totalSize > 0) {
-            onProgress({
-              status: 'downloading',
-              progress: Math.round((downloadedSize / totalSize) * 100),
-              file: label || path.basename(destPath),
-              loaded: downloadedSize,
-              total: totalSize
-            });
-          }
-        });
-
-        response.pipe(file);
-
-        file.on('finish', () => {
-          file.close(() => {
-            // Rename temp file to final path
-            fs.renameSync(tempPath, destPath);
-            resolve();
-          });
-        });
-      }).on('error', (err) => {
-        file.close();
-        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-        reject(err);
-      });
-    };
-
-    file.on('error', (err) => {
-      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-      reject(err);
-    });
-
-    doRequest(url, 0);
-  });
-}
-
 /**
  * Download a Whisper model if not already present
  */
 export async function ensureModelDownloaded(
   modelId: string,
-  onProgress?: DownloadProgressCallback
+  onProgress?: DownloadProgressCallback,
+  signal?: AbortSignal
 ): Promise<string> {
+  checkCancellation(signal);
   const filePath = getModelFilePath(modelId);
 
   if (fs.existsSync(filePath)) {
@@ -267,7 +192,7 @@ export async function ensureModelDownloaded(
 
   console.log(`[ModelManager] Downloading model ${modelId}...`);
   const url = WHISPER_MODEL_BASE_URL + modelId;
-  await downloadFile(url, filePath, onProgress, modelId);
+  await downloadFile(url, filePath, onProgress, modelId, signal);
   console.log(`[ModelManager] Model ${modelId} downloaded to ${filePath}`);
   return filePath;
 }
@@ -276,8 +201,10 @@ export async function ensureModelDownloaded(
  * Download the VAD model if not already present
  */
 export async function ensureVadModelDownloaded(
-  onProgress?: DownloadProgressCallback
+  onProgress?: DownloadProgressCallback,
+  signal?: AbortSignal
 ): Promise<string> {
+  checkCancellation(signal);
   const filePath = getVadModelPath();
 
   if (fs.existsSync(filePath)) {
@@ -286,7 +213,7 @@ export async function ensureVadModelDownloaded(
   }
 
   console.log(`[ModelManager] Downloading VAD model...`);
-  await downloadFile(VAD_MODEL_URL, filePath, onProgress, 'VAD model');
+  await downloadFile(VAD_MODEL_URL, filePath, onProgress, 'VAD model', signal);
   console.log(`[ModelManager] VAD model downloaded to ${filePath}`);
   return filePath;
 }

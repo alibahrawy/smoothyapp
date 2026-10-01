@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Smoothy</title>
+  <title>SmoothyEdit</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -13,33 +13,14 @@
       <!-- Traffic light spacer (macOS) -->
       <div class="traffic-light-spacer"></div>
 
-      <!-- Logo -->
-      <div class="sidebar-logo">
-        <span class="logo-icon">
-          <svg viewBox="0 0 400.354 400.354" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-            <path d="M314.671,23.379l-9.26-20.149c-1.278-2.783-4.568-4-7.353-2.723l-55.668,25.58c-0.916,0.42-1.697,1.082-2.265,1.913
-              l-29.18,42.757c-4.76-1.243-9.748-1.916-14.896-1.916c-25.453,0-47.123,16.176-55.306,38.806h-38.938
-              c-9.185,0-16.631,7.446-16.631,16.631v58.109c0,9.185,7.446,16.631,16.631,16.631h7.703l13.407,185.901
-              c0.626,8.699,7.866,15.435,16.588,15.435h113.092c8.72,0,15.961-6.734,16.588-15.435l13.406-185.901h7.703
-              c9.185,0,16.631-7.446,16.631-16.631v-58.109c0-9.185-7.446-16.631-16.631-16.631h-38.939c-2.654-7.343-6.736-14.001-11.9-19.652
-              L263.267,53.1l48.68-22.369c1.338-0.614,2.374-1.733,2.887-3.112C315.343,26.24,315.285,24.715,314.671,23.379z M163.166,369.308
-              c-6.581,0.482-12.189-4.506-12.653-10.948l-7.099-98.438c-0.228-3.151,0.786-6.205,2.854-8.594
-              c2.068-2.391,4.943-3.831,8.096-4.059c0.288-0.021,0.574-0.032,0.857-0.032c6.169,0,11.351,4.823,11.793,10.98l7.098,98.438
-              C174.584,363.166,169.672,368.839,163.166,369.308z"/>
-          </svg>
-        </span>
-        <span class="logo-text">Smoothy</span>
-        <button class="pin-btn" id="pin-btn" title="Stay on Top">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 17v5"></path>
-            <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path>
-          </svg>
-        </button>
-      </div>
-
       <!-- Navigation -->
-      <nav class="sidebar-nav">
-        <div class="nav-group-label">Free forever</div>
+      <nav class="sidebar-nav" id="sidebar-nav" aria-label="Tools">
+        <div class="nav-group-label nav-group-header">
+          <span class="nav-group-title">Free forever</span>
+          <button type="button" id="sidebar-toggle-btn" class="settings-btn sidebar-toggle-btn" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="sidebar-nav" title="Collapse sidebar">
+            <svg class="sidebar-toggle-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 17-5-5 5-5m7 10-5-5 5-5"/></svg>
+          </button>
+        </div>
         <a href="#" class="nav-item active" data-tab="multicam">
           <span class="nav-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -70,17 +51,39 @@
         </a>
         <a href="#" class="nav-item" data-tab="compressor">
           <span class="nav-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="m4 4 6 6M4 10h6V4m10 16-6-6m6 0h-6v6"/>
             </svg>
           </span>
           <span class="nav-label">Compressor</span>
         </a>
+        <a href="#" class="nav-item" data-tab="assets">
+          <span class="nav-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+          </span>
+          <span class="nav-label">Assets</span>
+        </a>
 
         <!-- Studio: paid cloud tools live here, never on the free tabs -->
-        <div class="nav-group-label">Studio <span id="studio-credits-inline" class="nav-credits">—</span></div>
+        <div class="sidebar-divider" role="separator" aria-label="Studio tools"></div>
+        <div class="nav-group-label">
+          <span>Studio</span>
+          <span id="studio-credits-inline" class="nav-credits hidden">—</span>
+        </div>
+        <button type="button" id="studio-dashboard-btn" class="studio-dashboard-btn" title="Open Studio Dashboard in your browser">
+          <span class="nav-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+              <path d="M3 9h18M9 9v12"></path>
+            </svg>
+          </span>
+          <span class="nav-label">Dashboard</span>
+          <svg class="external-link-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"></path></svg>
+        </button>
         <a href="#" class="nav-item" data-tab="bestshorts">
           <span class="nav-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -89,7 +92,7 @@
             </svg>
           </span>
           <span class="nav-label">Best Shorts</span>
-          <span class="paid-badge">Paid</span>
+          <span class="paid-badge">Credits</span>
         </a>
 
         <a href="#" class="nav-item hidden" data-tab="logs">
@@ -105,8 +108,13 @@
 
       <!-- Sidebar footer -->
       <div class="sidebar-footer">
+        <button id="login-btn" type="button" class="sidebar-signin-btn" aria-label="Sign in" title="Sign in">
+          <svg class="sidebar-account-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg>
+          <span class="sidebar-account-label">Sign in</span>
+        </button>
         <!-- User info (when logged in) -->
         <div id="user-info" class="user-info hidden">
+          <span id="sidebar-user-initial" class="sidebar-user-initial" aria-hidden="true"></span>
           <div class="user-details">
             <span id="user-name" class="user-name">Not logged in</span>
             <span id="user-plan" class="user-plan">Studio</span>
@@ -120,37 +128,32 @@
           </button>
         </div>
 
-        <!-- Free plan info (local tools free forever, no account) -->
-        <div id="trial-info" class="trial-info">
-          <div id="trial-countdown" class="trial-countdown">
-            <span class="trial-text">Free · No account · AI optional</span>
-          </div>
-          <button id="login-btn" class="btn btn-secondary btn-small">Connect Studio (AI)</button>
-        </div>
-
-        <div class="connection-status" id="connection-status">
-          <span class="status-dot disconnected"></span>
-          <span class="status-label" id="connection-nle-label">Premiere Pro</span>
+        <div class="connection-status" id="connection-status" role="status" aria-live="polite">
+          <span class="connection-status-icon" aria-hidden="true"><span class="status-dot disconnected"></span></span>
+          <span class="connection-status-copy">
+            <span class="status-label" id="connection-nle-label">Premiere Pro</span>
+            <span class="connection-state-label" id="connection-state-label">Not connected</span>
+          </span>
         </div>
         <div class="footer-row">
-          <span class="version" id="app-version-label">v1.3.5</span>
           <div class="footer-actions">
-            <button class="settings-btn" id="discord-btn" title="Join our Discord">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M20.317 4.369a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.865-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.009c.12.099.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.891.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.331c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.211 0 2.176 1.094 2.157 2.418 0 1.334-.955 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.211 0 2.176 1.094 2.157 2.418 0 1.334-.946 2.419-2.157 2.419z"/>
-              </svg>
-            </button>
-            <button class="settings-btn" id="twitter-btn" title="Follow on X">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-              </svg>
-            </button>
-            <button class="settings-btn" id="settings-btn" title="Settings">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="3"></circle>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-              </svg>
-            </button>
+            <span id="sidebar-version" class="version">Version…</span>
+            <div class="footer-utilities">
+              <button class="settings-btn pin-btn" id="pin-btn" type="button" aria-label="Stay on top" aria-pressed="false" title="Keep SmoothyEdit above other windows">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
+              </button>
+              <button class="settings-btn" id="discord-btn" type="button" aria-label="Join our Discord" title="Join our Discord">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M20.317 4.369a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.865-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.009c.12.099.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.891.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.331c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.211 0 2.176 1.094 2.157 2.418 0 1.334-.955 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.211 0 2.176 1.094 2.157 2.418 0 1.334-.946 2.419-2.157 2.419z"/>
+                </svg>
+              </button>
+              <button class="settings-btn" id="settings-btn" title="Settings" aria-label="Settings">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -158,9 +161,6 @@
 
     <!-- Main content area -->
     <main class="main-content">
-      <!-- Title bar spacer for traffic lights on main area -->
-      <div class="titlebar-spacer"></div>
-
       <!-- Multicam Tab Content -->
       <div class="tab-content active" id="tab-multicam">
         <!-- Status bar -->
@@ -183,7 +183,7 @@
           <!-- Audio Track to Speaker Mapping -->
           <section class="section">
             <h2>Audio Tracks</h2>
-            <p class="help-text">Select which audio track belongs to each speaker</p>
+            <p class="help-text">Choose each speaker’s audio and camera. Your choices are saved per sequence.</p>
 
             <div id="audio-tracks-list" class="tracks-list">
               <p class="empty-message">Connect to Premiere to see audio tracks</p>
@@ -193,7 +193,7 @@
           <!-- Video Track to Camera Mapping -->
           <section class="section">
             <h2>Video Tracks</h2>
-            <p class="help-text">Select which video track is each camera angle</p>
+            <p class="help-text">Enable the cameras to use. Each enabled track needs its own camera number.</p>
 
             <div id="video-tracks-list" class="tracks-list">
               <p class="empty-message">Connect to Premiere to see video tracks</p>
@@ -215,8 +215,8 @@
           </section>
 
           <!-- Cut Settings -->
-          <section class="section">
-            <h2>Cut Settings</h2>
+          <details class="section advanced-settings">
+            <summary>Advanced cut settings</summary>
 
             <div class="form-group">
               <label for="min-cut-duration">
@@ -241,14 +241,16 @@
                 <span class="value-display" id="jcut-value">0.3s</span>
               </label>
               <input type="range" id="jcut-offset" min="0" max="1.0" step="0.05" value="0.3">
-              <p class="help-text">How much earlier the audio cuts before video</p>
+              <p class="help-text">Delay the camera switch after a speaker starts. Selected microphone audio stays in sync.</p>
             </div>
-          </section>
+          </details>
         </div>
 
         <!-- Action footer -->
         <footer class="content-footer">
-          <button id="autocut-btn" class="btn btn-primary btn-large" disabled>
+          <p id="multicam-action-note" class="footer-action-note">Creates a new sequence from source media. Existing effects and titles are not copied.</p>
+          <p id="footer-status" class="footer-status"></p>
+          <button id="autocut-btn" class="btn btn-primary btn-large" aria-describedby="multicam-action-note" disabled>
             <span class="btn-icon">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="5 3 19 12 5 21 5 3"></polygon>
@@ -256,7 +258,6 @@
             </span>
             Apply Auto-Switch
           </button>
-          <p id="footer-status" class="footer-status">Connect to Premiere to begin</p>
         </footer>
 
         <!-- Multicam is free forever (lock removed) -->
@@ -289,6 +290,34 @@
             </div>
           </section>
 
+          <section class="section" id="caption-transcription-section">
+            <h2>Transcription</h2>
+            <div class="form-group">
+              <label for="caption-language-select">Language</label>
+              <select id="caption-language-select" class="select-input">
+                <option value="auto">Auto-detect</option>
+              </select>
+              <p class="help-text" id="caption-language-status">Auto-detect works for any spoken language. Non-English languages need a multilingual model.</p>
+            </div>
+
+            <div class="form-group">
+              <label for="caption-model-select">Transcription Model</label>
+              <select id="caption-model-select" class="select-input">
+                <option value="">Loading…</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="caption-engine-select">Transcription Engine</label>
+              <select id="caption-engine-select" class="select-input">
+                <option value="auto">Auto — GPU if available</option>
+                <option value="cuda">GPU</option>
+                <option value="cpu">CPU (all cores)</option>
+              </select>
+              <p class="help-text" id="caption-engine-status">Checking engine…</p>
+              <p class="help-text">If the GPU engine keeps failing or is slow, switch to CPU. Auto retries on CPU whenever the GPU fails.</p>
+            </div>
+          </section>
           <!-- Sequence Info -->
           <section class="section" id="captions-sequence-section">
             <div class="section-header-row">
@@ -317,34 +346,9 @@
           </section>
 
           <!-- Caption Settings -->
-          <section class="section">
-            <h2>Caption Settings</h2>
-
-            <div class="form-group">
-              <label for="caption-model-select">Transcription Model</label>
-              <select id="caption-model-select" class="select-input">
-                <option value="">Loading…</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label for="caption-language-select">Language</label>
-              <select id="caption-language-select" class="select-input">
-                <option value="auto">Auto-detect</option>
-              </select>
-              <p class="help-text" id="caption-language-status">Auto-detect works for any spoken language. Non-English languages need a multilingual model.</p>
-            </div>
-
-            <div class="form-group">
-              <label for="caption-engine-select">Transcription Engine</label>
-              <select id="caption-engine-select" class="select-input">
-                <option value="auto">Auto — GPU if available</option>
-                <option value="cuda">GPU</option>
-                <option value="cpu">CPU (all cores)</option>
-              </select>
-              <p class="help-text" id="caption-engine-status">Checking engine…</p>
-              <p class="help-text">If the GPU engine keeps failing or is slow, switch to CPU. Auto retries on CPU whenever the GPU fails.</p>
-            </div>
+          <section class="section" id="caption-format-section">
+            <h2>Caption formatting</h2>
+            <p id="caption-reformat-note" class="help-text">Choose your own line length, line count, and duration. Changing these updates existing captions without transcribing again.</p>
 
             <div class="form-group">
               <label for="caption-max-chars">
@@ -355,10 +359,10 @@
             </div>
 
             <div class="form-group">
-              <label>Max Lines</label>
-              <div class="toggle-group" id="caption-max-lines-group">
-                <button class="toggle-btn" data-value="1">1 Line</button>
-                <button class="toggle-btn active" data-value="2">2 Lines</button>
+              <label id="caption-max-lines-label">Max Lines</label>
+              <div class="toggle-group" id="caption-max-lines-group" role="group" aria-labelledby="caption-max-lines-label">
+                <button type="button" class="toggle-btn" data-value="1" aria-pressed="false">1 Line</button>
+                <button type="button" class="toggle-btn active" data-value="2" aria-pressed="true">2 Lines</button>
               </div>
             </div>
 
@@ -373,18 +377,47 @@
             <div class="form-group">
               <label>Text Style</label>
               <div class="caption-text-actions">
-                <button id="captions-capitalize-btn" class="btn btn-secondary btn-small" title="Capitalise the first letter of every caption">Capitalize All</button>
-                <button id="captions-remove-punct-btn" class="btn btn-secondary btn-small" title="Strip punctuation from every caption">Remove Punctuation</button>
+                <button id="captions-capitalize-btn" type="button" class="btn btn-secondary btn-small" aria-pressed="false" title="Capitalise the first letter of every caption">Sentence case</button>
+                <button id="captions-remove-punct-btn" type="button" class="btn btn-secondary btn-small" aria-pressed="false" title="Strip punctuation from every caption">Remove Punctuation</button>
               </div>
-              <p class="help-text">Applied when you generate captions. Click again to turn off.</p>
+              <p class="help-text">Apply before or after generating captions. Click again to turn off.</p>
             </div>
           </section>
 
           <!-- Generated Captions Preview -->
           <section class="section" id="captions-preview-section" style="display: none;">
             <div class="section-header-row">
-              <h2>Generated Captions</h2>
+              <h2>Edit captions</h2>
               <span id="captions-count" class="help-text"></span>
+            </div>
+            <p class="help-text">Edit any subtitle or timing below. Search and replace words across the whole transcript. Changes apply to Save SRT and Send to Premiere.</p>
+            <div class="caption-find-replace" role="group" aria-label="Find and replace captions">
+              <div class="caption-search-fields">
+                <div class="form-group">
+                  <label for="caption-find">Find</label>
+                  <input id="caption-find" type="search" placeholder="Search subtitle text" autocomplete="off" spellcheck="false">
+                </div>
+                <div class="form-group">
+                  <label for="caption-replace">Replace with</label>
+                  <input id="caption-replace" type="text" placeholder="Correct word or phrase" autocomplete="off">
+                </div>
+              </div>
+              <div class="caption-search-options">
+                <label class="checkbox-label"><input id="caption-find-case" type="checkbox">Match case</label>
+                <label class="checkbox-label"><input id="caption-find-whole" type="checkbox" checked>Whole words</label>
+              </div>
+              <div class="caption-search-actions">
+                <button id="caption-find-previous" type="button" class="btn btn-secondary btn-small" disabled>Previous</button>
+                <button id="caption-find-next" type="button" class="btn btn-secondary btn-small" disabled>Next</button>
+                <button id="caption-replace-one" type="button" class="btn btn-secondary btn-small" disabled>Replace</button>
+                <button id="caption-replace-all" type="button" class="btn btn-secondary btn-small" disabled>Replace all</button>
+              </div>
+              <p id="caption-search-status" class="help-text" role="status" aria-live="polite">Search your generated captions.</p>
+              <p id="caption-replace-status" class="help-text" role="status" aria-live="polite"></p>
+            </div>
+            <div class="caption-edit-actions">
+              <button id="caption-undo-replace" class="btn btn-secondary btn-small hidden" type="button">Undo replacement</button>
+              <button id="captions-reset-edits" class="btn btn-secondary btn-small" type="button">Reset edits</button>
             </div>
             <div id="captions-preview" class="captions-preview"></div>
           </section>
@@ -392,8 +425,10 @@
 
         <!-- Action footer -->
         <footer class="content-footer">
+          <p id="captions-action-note" class="footer-action-note">Generate editable captions. Save an SRT or add a caption track to your Premiere sequence.</p>
+          <p id="captions-footer-status" class="footer-status"></p>
           <div class="footer-buttons">
-            <button id="generate-captions-btn" class="btn btn-primary btn-large" disabled>
+            <button id="generate-captions-btn" class="btn btn-primary btn-large" aria-describedby="captions-action-note" disabled>
               <span class="btn-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
@@ -401,7 +436,7 @@
               </span>
               Generate Captions
             </button>
-            <button id="save-captions-btn" class="btn btn-secondary" disabled>
+            <button id="save-captions-btn" class="btn btn-secondary" aria-describedby="captions-action-note" disabled>
               <span class="btn-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -411,7 +446,7 @@
               </span>
               Save SRT
             </button>
-            <button id="import-captions-btn" class="btn btn-secondary" disabled>
+            <button id="import-captions-btn" class="btn btn-secondary" aria-describedby="captions-action-note" disabled>
               <span class="btn-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polygon points="5 3 19 12 5 21 5 3"></polygon>
@@ -420,7 +455,6 @@
               Send to Premiere
             </button>
           </div>
-          <p id="captions-footer-status" class="footer-status">Connect to Premiere to begin</p>
         </footer>
       </div>
 
@@ -519,7 +553,9 @@
 
         <!-- Action footer -->
         <footer class="content-footer">
-          <button id="silence-remove-btn" class="btn btn-primary btn-large" disabled>
+          <p id="silence-action-note" class="footer-action-note">Creates a new sequence from source media. Existing effects and titles are not copied.</p>
+          <p id="silence-footer-status" class="footer-status"></p>
+          <button id="silence-remove-btn" class="btn btn-primary btn-large" aria-describedby="silence-action-note" disabled>
             <span class="btn-icon">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -529,104 +565,114 @@
             </span>
             Remove Silence
           </button>
-          <p id="silence-footer-status" class="footer-status">Connect to Premiere to begin</p>
         </footer>
       </div>
 
       <!-- Best Shorts Tab Content -->
       <div class="tab-content" id="tab-bestshorts">
-        <!-- Status bar with the history menu at the top-right -->
         <div id="bestshorts-status-bar" class="status-bar status-idle bestshorts-statusbar-row">
-          <span id="bestshorts-status-text">Connect to SmoothyEdit website to start</span>
-          <select id="shorts-history-select" class="select-input select-input--compact" disabled>
-            <option value="">History</option>
-          </select>
+          <span id="bestshorts-status-text">Best Shorts</span>
+          <button id="shorts-history-btn" type="button" class="shorts-toolbar-btn" disabled>History</button>
         </div>
 
-        <!-- Scrollable content -->
-        <div class="content-scroll">
-          <!-- Results -->
+        <div id="bestshorts-lock" class="content-scroll hidden">
+          <section class="section shorts-signin-page">
+            <span class="shorts-eyebrow">STUDIO</span>
+            <h1>Find your next great short.</h1>
+            <p>Turn a Premiere sequence, transcript, audio file, or YouTube video into moments worth sharing.</p>
+            <div class="shorts-signin-features">
+              <span>Multiple clips or one best part</span>
+              <span>Titles and descriptions ready to copy</span>
+              <span>Your saved results, shared with the web app</span>
+            </div>
+            <button id="bestshorts-login-btn" type="button" class="btn btn-primary">Sign in</button>
+            <p class="help-text">Use your SmoothyEdit account. Free accounts get 100 Studio credits each month.</p>
+          </section>
+        </div>
+
+        <div id="shorts-workspace" class="content-scroll hidden">
           <section class="section">
-            <h2>Shorts</h2>
-            <p id="shorts-status" class="help-text"></p>
+            <h2>Choose your source</h2><p id="shorts-credit-help" class="help-text">Studio analysis uses credits based on transcript length. Local transcription is free.</p>
+            <div class="shorts-source-tabs" role="group" aria-label="Shorts source">
+              <button type="button" class="shorts-source-btn active" data-shorts-source="sequence" aria-pressed="true">Premiere</button>
+              <button type="button" class="shorts-source-btn" data-shorts-source="transcript" aria-pressed="false">Transcript</button>
+              <button type="button" class="shorts-source-btn" data-shorts-source="audio" aria-pressed="false">Audio / Video</button>
+              <button type="button" class="shorts-source-btn" data-shorts-source="youtube" aria-pressed="false">YouTube</button>
+            </div>
+            <div id="shorts-source-sequence" class="shorts-source-panel">
+              <div class="section-header-row">
+                <p id="bestshorts-sequence-name" class="sequence-info">No sequence loaded</p>
+                <button id="bestshorts-refresh-btn" type="button" class="btn btn-secondary btn-small">Refresh</button>
+              </div>
+              <p id="bestshorts-sequence-details" class="help-text"></p>
+              <p class="help-text">Find shorts from the audio in your active Premiere sequence.</p>
+            </div>
+            <div id="shorts-source-transcript" class="shorts-source-panel hidden">
+              <input id="shorts-transcript-file" type="file" accept=".txt,.srt,.vtt" class="hidden">
+              <button id="shorts-transcript-browse" type="button" class="btn btn-secondary btn-small">Upload transcript</button>
+              <p id="shorts-transcript-name" class="help-text">TXT, SRT, or VTT · up to 5 MB</p>
+              <label class="shorts-input-label" for="shorts-transcript-text">Transcript</label>
+              <textarea id="shorts-transcript-text" class="text-input shorts-transcript" rows="4" placeholder="Or paste your transcript here…"></textarea>
+              <p class="help-text">Include timestamps for accurate time ranges.</p>
+            </div>
+            <div id="shorts-source-audio" class="shorts-source-panel hidden">
+              <button id="shorts-audio-browse" type="button" class="btn btn-secondary btn-small">Choose audio or video</button>
+              <p id="shorts-audio-name" class="help-text">MP3, WAV, M4A, MP4, MOV, and more</p>
+              <p class="help-text">Audio is transcribed locally using your Captions model and language. Studio analyzes the transcript.</p>
+            </div>
+            <div id="shorts-source-youtube" class="shorts-source-panel hidden">
+              <label class="shorts-input-label" for="shorts-youtube-url">YouTube video URL</label>
+              <div class="shorts-youtube-row">
+                <input id="shorts-youtube-url" type="url" class="text-input" placeholder="https://www.youtube.com/watch?v=…">
+                <button id="shorts-youtube-load" type="button" class="btn btn-secondary btn-small">Load transcript</button>
+              </div>
+              <p id="shorts-youtube-name" class="help-text">Load the video's transcript, then choose your Shorts mode.</p>
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>Shorts mode</h2>
+            <div class="shorts-mode-options">
+              <label class="shorts-mode-option">
+                <input type="radio" name="shorts-mode" value="multiple" checked>
+                <span><strong>Multiple</strong><small>More clips · about one short per 3 minutes</small></span>
+              </label>
+              <label class="shorts-mode-option">
+                <input type="radio" name="shorts-mode" value="best">
+                <span><strong>Best Part</strong><small>Quality first · the single strongest moment</small></span>
+              </label>
+            </div>
+          </section>
+
+          <section id="shorts-results-section" class="section">
+            <div class="section-header-row"><h2 id="shorts-results-title">Your shorts</h2><span id="shorts-results-source" class="shorts-source-caption"></span></div>
+            <button id="shorts-history-retry" type="button" class="btn btn-secondary btn-small hidden">Retry saving history</button><button id="shorts-cancel-btn" type="button" class="btn btn-secondary btn-small hidden">Cancel</button><span id="shorts-elapsed" class="help-text"></span>
+            <p id="shorts-status" class="help-text" role="status" aria-live="polite">Choose a source to get started.</p>
             <div id="shorts-results" class="shorts-results"></div>
           </section>
+        </div>
 
-          <!-- Sequence Info -->
+        <div id="shorts-history-page" class="content-scroll hidden">
           <section class="section">
-            <div class="section-header-row">
-              <h2>Active Sequence</h2>
-              <button id="bestshorts-refresh-btn" class="btn btn-secondary btn-small">Refresh</button>
-            </div>
-            <p id="bestshorts-sequence-name" class="sequence-info">No sequence loaded</p>
-            <p id="bestshorts-sequence-details" class="help-text"></p>
+            <div class="section-header-row"><h2>Shorts history</h2><button id="shorts-history-refresh-btn" type="button" class="btn btn-secondary btn-small">Refresh</button></div>
+            <p class="help-text">Saved Shorts from this app and the web dashboard.</p>
+            <label class="shorts-input-label" for="shorts-history-search">Search history</label>
+            <input id="shorts-history-search" type="search" class="text-input" placeholder="Search sources, titles, or descriptions…">
+            <p id="shorts-history-status" class="help-text" role="status" aria-live="polite"></p>
+            <div id="shorts-history-list" class="shorts-history"></div>
           </section>
-
         </div>
 
-        <!-- Action footer -->
-        <footer class="content-footer">
-          <div class="footer-buttons footer-buttons--primary">
-            <button id="analyze-shorts-btn" class="btn btn-primary btn-large" disabled>
-              <span class="btn-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polygon points="23 7 16 12 23 17 23 7"></polygon>
-                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
-                </svg>
-              </span>
-              Find Best Shorts
-            </button>
-            <button id="send-shorts-btn" class="btn btn-primary" disabled>
-              <span class="btn-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="22" y1="2" x2="11" y2="13"></line>
-                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                </svg>
-              </span>
-              Send to Premiere
-            </button>
+        <footer id="shorts-footer" class="content-footer shorts-footer hidden">
+          <p id="shorts-action-note" class="footer-action-note">Find clip ideas using Studio credits. Add markers to locate them in your Premiere timeline.</p>
+          <p id="bestshorts-footer-status" class="footer-status"></p>
+          <div class="shorts-footer-actions">
+            <button id="analyze-shorts-btn" type="button" class="btn btn-primary" aria-describedby="shorts-action-note" disabled>Find Shorts</button>
+            <button id="send-shorts-btn" type="button" class="btn btn-secondary" aria-describedby="shorts-action-note" disabled>Add markers in Premiere</button>
+            <button id="clear-markers-btn" type="button" class="btn btn-secondary btn-small" disabled>Clear Smoothy markers</button>
+            <button id="clear-all-markers-btn" type="button" class="btn btn-secondary btn-small" disabled>Clear all…</button>
           </div>
-          <div class="footer-buttons footer-buttons--secondary">
-            <button id="clear-markers-btn" class="btn btn-secondary" disabled>
-              <span class="btn-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                </svg>
-              </span>
-              Clear Markers
-            </button>
-            <button id="open-studio-dashboard-btn" class="btn btn-secondary">
-              <span class="btn-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                  <polyline points="15 3 21 3 21 9"></polyline>
-                  <line x1="10" y1="14" x2="21" y2="3"></line>
-                </svg>
-              </span>
-              Open Dashboard
-            </button>
-          </div>
-          <p id="bestshorts-footer-status" class="footer-status">Connect to website in Settings</p>
         </footer>
-
-        <!-- Best Shorts upsell (cloud AI — part of Studio) -->
-        <div id="bestshorts-lock" class="feature-lock-overlay hidden">
-          <div class="lock-content">
-            <div class="lock-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-              </svg>
-            </div>
-            <h3>Sign in to Studio</h3>
-            <p>Best Shorts uses cloud AI and your Studio credits.<br>Free accounts get 100 credits a month. The other tools in this app stay free.</p>
-            <div class="lock-actions">
-              <button id="bestshorts-upgrade-btn" class="btn btn-primary">Connect Studio</button>
-              <button id="bestshorts-login-btn" class="btn btn-secondary">Learn more</button>
-            </div>
-          </div>
-        </div>
       </div>
 
       <!-- Logs Tab Content -->
@@ -649,7 +695,7 @@
       <div class="tab-content" id="tab-compressor">
         <!-- Status bar -->
         <div id="compressor-status-bar" class="status-bar status-idle">
-          <span id="compressor-status-text">Ready - Drop a video or folder to begin</span>
+          <span id="compressor-status-text">Compressor</span>
         </div>
 
         <!-- Scrollable content -->
@@ -657,18 +703,26 @@
           <!-- Drop Zone -->
           <section class="section" id="compressor-drop-section">
             <h2>Select Videos</h2>
+            <p class="help-text">Reduce video file size with HEVC compression. Choose one video or a folder; processing runs locally on your computer.</p>
             <div id="compressor-drop-zone" class="drop-zone">
               <div class="drop-zone-content">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.5; margin-bottom: 12px;">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="7 10 12 15 17 10"></polyline>
-                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="opacity: 0.5; margin-bottom: 12px;">
+                  <path d="m4 4 6 6M4 10h6V4m10 16-6-6m6 0h-6v6"/>
                 </svg>
                 <p class="drop-text">Drop video or folder here or click to browse</p>
                 <p class="help-text">Supports: MP4, MOV, MKV, AVI, WEBM, M4V, MTS</p>
               </div>
             </div>
             <button id="compressor-browse-btn" class="btn btn-secondary btn-small" style="margin-top: 12px;">Browse Video or Folder</button>
+          </section>
+
+          <section id="compressor-empty-guide" class="compressor-empty-guide" aria-labelledby="compressor-guide-title">
+            <h3 id="compressor-guide-title">Compress videos locally</h3>
+            <p>Create HEVC MP4 copies for easier storage and sharing.</p>
+            <ul class="compressor-feature-list">
+              <li><span class="compressor-feature-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg></span><span><strong>Control quality and speed</strong><br>Choose High, Balanced, or Fast. Hardware acceleration is used when available.</span></li>
+              <li><span class="compressor-feature-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></span><span><strong>Keep your originals</strong><br>Compressed copies go to a separate output folder. Your original files stay untouched.</span></li>
+            </ul>
           </section>
 
           <!-- Selected Source Info -->
@@ -805,17 +859,172 @@
 
         <!-- Action footer -->
         <footer class="content-footer">
-          <button id="compressor-start-btn" class="btn btn-primary btn-large" disabled>
+          <p id="compressor-action-note" class="footer-action-note">Creates HEVC MP4 copies in a separate folder. Your original files stay unchanged.</p>
+          <p id="compressor-footer-status" class="footer-status"></p>
+          <button id="compressor-start-btn" class="btn btn-primary btn-large" aria-describedby="compressor-action-note" disabled>
             <span class="btn-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m4 4 6 6M4 10h6V4m10 16-6-6m6 0h-6v6"/>
               </svg>
             </span>
             Start Compression
           </button>
-          <p id="compressor-footer-status" class="footer-status">Select a video or folder to begin</p>
+        </footer>
+      </div>
+
+      <!-- Assets Tab Content -->
+      <div class="tab-content" id="tab-assets">
+        <!-- Status bar -->
+        <div id="assets-status-bar" class="status-bar status-idle">
+          <span id="assets-status-text">Assets</span>
+        </div>
+
+        <!-- Scrollable content -->
+        <div class="content-scroll">
+          <!-- Input -->
+          <section class="section" id="assets-input-section">
+            <h2>Add an image</h2>
+            <p class="help-text">Import an SVG or a regular image, convert it to PNG, then send it straight to your Premiere timeline.</p>
+
+            <div id="assets-drop-zone" class="drop-zone">
+              <div class="drop-zone-content">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.5; margin-bottom: 12px;">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+                <p class="drop-text">Drop an SVG or image here or click to browse</p>
+                <p class="help-text">SVG, PNG, JPG, WEBP, GIF, BMP, AVIF</p>
+              </div>
+            </div>
+
+            <div class="assets-input-actions">
+              <button id="assets-browse-btn" class="btn btn-secondary btn-small">Browse Files</button>
+              <button id="assets-paste-btn" class="btn btn-secondary btn-small">Paste from Clipboard</button>
+            </div>
+            <p class="help-text">Tip: copy an image in your browser, then press ⌘V (Ctrl+V) in this window to pull it in.</p>
+          </section>
+
+          <section id="assets-empty-guide" class="assets-empty-guide" aria-labelledby="assets-guide-title">
+            <h3 id="assets-guide-title">Your images, ready for Premiere</h3>
+            <p>Bring graphics into your edit in a few clicks.</p>
+            <ul class="assets-feature-list">
+              <li><span class="assets-feature-icon" aria-hidden="true">↗</span><span><strong>Convert SVG to PNG</strong><br>Export a PNG with a transparent or custom background.</span></li>
+              <li><span class="assets-feature-icon" aria-hidden="true">+</span><span><strong>Copy, paste, and import</strong><br>Copy an image, paste it here, and send it straight to your Premiere Pro timeline.</span></li>
+            </ul>
+          </section>
+
+          <!-- Preview -->
+          <section class="section hidden" id="assets-preview-section">
+            <div class="section-header-row">
+              <h2>Preview</h2>
+              <button id="assets-clear-btn" class="btn btn-secondary btn-small">Clear</button>
+            </div>
+            <div id="assets-file-list" class="assets-file-list" role="group" aria-label="Loaded assets"></div><p id="assets-file-errors" class="help-text" role="status"></p>
+            <div class="assets-preview-card">
+              <div class="assets-preview-frame">
+                <img id="assets-preview-img" alt="Asset preview">
+              </div>
+              <div class="assets-preview-meta">
+                <p id="assets-file-name" class="sequence-info">—</p>
+                <p id="assets-file-info" class="help-text"></p>
+              </div>
+            </div>
+          </section>
+
+          <!-- SVG optimization (SVG only) -->
+          <section class="section hidden" id="assets-optimize-section">
+            <h2>SVG Optimization</h2>
+            <p class="help-text">Trim the SVG a little before it becomes a PNG.</p>
+
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="assets-optimize-toggle" checked>
+                <span>Optimize SVG (strip metadata, comments, whitespace)</span>
+              </label>
+            </div>
+
+            <div class="form-group">
+              <label for="assets-svg-precision">
+                Coordinate Precision
+                <span class="value-display" id="assets-svg-precision-value">2</span>
+              </label>
+              <input type="range" id="assets-svg-precision" min="0" max="4" step="1" value="2">
+              <p class="help-text">Lower = smaller file, slightly less precise curves. 2 is a good default.</p>
+            </div>
+
+            <p class="help-text" id="assets-optimize-result"></p>
+          </section>
+
+          <!-- Output settings -->
+          <section class="section hidden" id="assets-output-section">
+            <h2>Output</h2>
+
+            <div class="form-group">
+              <label for="assets-width">
+                Width (px)
+                <span class="value-display" id="assets-width-value">auto</span>
+              </label>
+              <input type="number" id="assets-width" class="select-input" min="16" max="8192" step="1" placeholder="auto">
+              <p class="help-text">SVGs default to 1000px wide; images keep their own size. Height follows the aspect ratio. Large images scale down to fit 8192px in either direction.</p>
+            </div>
+
+            <div class="form-group">
+              <label for="assets-background">Background</label>
+              <select id="assets-background" class="select-input">
+                <option value="transparent">Transparent</option>
+                <option value="white">White</option>
+                <option value="black">Black</option>
+                <option value="custom">Custom color…</option>
+              </select>
+              <input type="color" id="assets-background-color" class="hidden" value="#ffffff">
+            </div>
+
+            <div class="form-group">
+              <label for="assets-duration">
+                Still Duration in Premiere
+                <span class="value-display" id="assets-duration-value">5.0s</span>
+              </label>
+              <input type="range" id="assets-duration" min="1" max="30" step="0.5" value="5">
+              <p class="help-text">How long the still is placed on the topmost video track.</p>
+            </div>
+
+            <div class="form-group">
+              <div class="section-header-row">
+                <label>Output Folder</label>
+              </div>
+              <p id="assets-output-path" class="sequence-info">Loading…</p>
+              <button id="assets-output-change-btn" class="btn btn-secondary btn-small">Change Folder</button>
+              <p class="help-text">Exported PNGs are saved here. Use “Save As…” to choose a location each time.</p>
+            </div>
+          </section>
+        </div>
+
+        <!-- Action footer -->
+        <footer class="content-footer assets-footer">
+          <p id="assets-action-note" class="footer-action-note">Export PNG saves all images. Save As and Send to Premiere use the selected image.</p>
+          <p id="assets-footer-status" class="footer-status"></p>
+          <div class="assets-actions">
+            <button id="assets-convert-btn" class="btn btn-secondary" aria-describedby="assets-action-note" disabled>
+              <span class="btn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+              </span>
+              Export PNG
+            </button>
+            <button id="assets-send-btn" class="btn btn-primary" aria-describedby="assets-action-note" disabled>
+              <span class="btn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+              </span>
+              Send to Premiere
+            </button>
+            <button id="assets-saveas-btn" class="btn btn-secondary" aria-describedby="assets-action-note" disabled>Save As…</button>
+          </div>
         </footer>
       </div>
     </main>
@@ -832,9 +1041,10 @@
   <div id="progress-overlay" class="overlay hidden">
     <div class="progress-content">
       <div class="spinner"></div>
-      <p id="progress-text">Processing...</p>
+      <p id="progress-elapsed" class="help-text"></p>
+      <p id="progress-text" role="status">Processing...</p>
       <div class="progress-bar">
-        <div id="progress-fill" class="progress-fill"></div>
+        <div id="progress-fill" role="progressbar" aria-label="Job progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="progress-fill"></div>
       </div>
       <button id="progress-cancel-btn" class="btn btn-secondary hidden">Cancel</button>
     </div>
@@ -861,12 +1071,12 @@
     </div>
   </div>
 
-  <!-- Settings modal -->
-  <div id="settings-modal" class="overlay hidden">
+  <!-- Full-window settings view -->
+  <div id="settings-modal" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
     <div class="modal-content settings-modal">
       <div class="modal-header">
-        <h3>Settings</h3>
-        <button id="settings-close-btn" class="modal-close-btn">
+        <div><h3 id="settings-title">Settings</h3><p class="settings-version">SmoothyEdit <span id="settings-current-version">Version…</span></p></div>
+        <button id="settings-close-btn" class="modal-close-btn" aria-label="Close settings">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -874,30 +1084,9 @@
         </button>
       </div>
 
-      <div class="settings-section">
-        <h4>Studio</h4>
-        <p class="help-text">Connect to smoothyedit.com to use Studio, the optional paid cloud tools like Best Shorts. The rest of the app works without it.</p>
-
-        <div class="form-group">
-          <label for="connection-token">Connection Token</label>
-          <input type="text" id="connection-token" placeholder="Paste your token here...">
-          <p class="help-text">Get your token at <a href="#" id="get-token-link" class="link">smoothyedit.com/connection</a></p>
-        </div>
-
-        <div class="connection-status-row">
-          <span class="connection-dot" id="settings-connection-dot"></span>
-          <span id="settings-connection-status">Not connected</span>
-        </div>
-
-        <div class="settings-actions">
-          <button id="save-token-btn" class="btn btn-secondary">Save Token</button>
-          <button id="connect-website-btn" class="btn btn-primary">Connect</button>
-          <button id="settings-open-studio-btn" class="btn btn-secondary">Open Dashboard</button>
-        </div>
-      </div>
-
+      <div class="settings-body" id="settings-body">
       <!-- Active NLE Selector -->
-      <div class="settings-section">
+      <div class="settings-section hidden">
         <h4>Active Editor</h4>
         <p class="help-text">SmoothyEdit connects to Premiere Pro. DaVinci Resolve support is coming soon.</p>
         <div class="nle-selector">
@@ -937,8 +1126,25 @@
       </div>
 
       <div class="settings-section">
+        <h4>Studio</h4>
+        <p class="help-text">Sign in to your account to use Shorts and shared history. Studio uses credits; all local tools remain free.</p>
+        <button id="settings-account-btn" class="btn btn-secondary btn-small" type="button">Sign in</button>
+        <details class="advanced-settings">
+          <summary>Pair the web dashboard with Premiere</summary>
+          <p class="help-text">Optional: this token pairs the website with Premiere. App Shorts uses your account sign-in.</p>
+          <div class="form-group">
+            <label for="connection-token">Connection Token</label>
+            <input type="password" id="connection-token" placeholder="Paste your token here..." autocomplete="off" spellcheck="false">
+            <p class="help-text">Get your token at <a href="#" id="get-token-link" class="link">smoothyedit.com/connection</a></p>
+          </div>
+          <div class="connection-status-row"><span class="connection-dot" id="settings-connection-dot"></span><span id="settings-connection-status">Not connected</span></div>
+          <div class="settings-actions"><button id="save-token-btn" class="btn btn-secondary">Save Token</button><button id="connect-website-btn" class="btn btn-primary">Connect</button><button id="settings-open-studio-btn" class="btn btn-secondary">Open Dashboard</button></div>
+        </details>
+      </div>
+
+      <div class="settings-section" id="settings-update-section">
         <h4>App Updates</h4>
-        <p class="help-text">SmoothyEdit checks for updates automatically on startup. This is your current version: <strong id="settings-current-version">v1.3.5</strong></p>
+        <p class="help-text">SmoothyEdit checks for updates automatically on startup.</p>
 
         <div class="update-status-row">
           <span id="settings-update-status">No updates checked yet</span>
@@ -958,6 +1164,7 @@
         <div class="settings-actions">
           <button id="settings-discord-btn" class="btn btn-secondary">Join our Discord</button>
           <button id="settings-twitter-btn" class="btn btn-secondary">Follow on X</button>
+          <button id="settings-instagram-btn" class="btn btn-secondary">Instagram</button>
         </div>
       </div>
 
@@ -968,6 +1175,7 @@
           <span>Show the Logs tab</span>
         </label>
         <p class="help-text">Hidden by default. Turn this on to see live debug logs.</p>
+      </div>
       </div>
     </div>
   </div>

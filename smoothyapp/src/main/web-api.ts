@@ -160,11 +160,13 @@ function extractJsonObject(text: string): any | null {
  */
 export async function analyzeShorts(
   subtitleText: string,
-  duration: number,
-  shortsMode: 'multiple' | 'best' = 'multiple'
+  duration: number | undefined,
+  shortsMode: 'multiple' | 'best' = 'multiple',
+  signal?: AbortSignal
 ): Promise<{ shorts: StudioShort[]; raw: string }> {
   const response = await fetch(`${API_BASE}/api/analyze`, {
     method: 'POST',
+    signal,
     headers: requireAuth(),
     body: JSON.stringify({
       subtitleText,
@@ -186,4 +188,24 @@ export async function analyzeShorts(
   const parsed = extractJsonObject(text);
   const shorts: StudioShort[] = Array.isArray(parsed?.shorts) ? parsed.shorts : [];
   return { shorts, raw: text };
+}
+
+/** Use the same authenticated YouTube transcript endpoint as the dashboard. */
+export async function getYoutubeTranscript(url: string): Promise<{ transcript: string; fileName: string }> {
+  let parsed: URL;
+  try { parsed = new URL(url.trim()); } catch { throw new Error('Enter a valid YouTube URL.'); }
+  const hosts = ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be', 'www.youtu.be'];
+  if (!['http:', 'https:'].includes(parsed.protocol) || !hosts.includes(parsed.hostname.toLowerCase())) {
+    throw new Error('Enter a YouTube video URL.');
+  }
+  const response = await fetch(`${API_BASE}/api/youtube-transcript`, {
+    method: 'POST', headers: requireAuth(), body: JSON.stringify({ url: parsed.href })
+  });
+  if (response.status === 401) throw new NotSignedInError();
+  if (!response.ok) throw new Error(await readError(response));
+  const data: any = await response.json();
+  if (typeof data.transcript !== 'string' || !data.transcript.trim()) {
+    throw new Error('No transcript is available for this video.');
+  }
+  return { transcript: data.transcript, fileName: data.videoTitle || `YouTube ${data.videoId || 'video'}` };
 }

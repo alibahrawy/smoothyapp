@@ -21,7 +21,8 @@ import {
   addMarkersToSequence as wsAddMarkersToSequence,
   clearMarkersFromSequence as wsClearMarkersFromSequence,
   exportSubtitles as wsExportSubtitles,
-  sendCaptionsToPremiere
+  sendCaptionsToPremiere,
+  sendImageToPremiere
 } from './websocket-server';
 
 let activeNLE: 'premiere' | null = null;
@@ -74,8 +75,8 @@ export function addMarkersToSequence(markers: any[]) {
   return wsAddMarkersToSequence(markers);
 }
 
-export function clearMarkersFromSequence() {
-  return wsClearMarkersFromSequence();
+export function clearMarkersFromSequence(scope: 'smoothy' | 'all' = 'smoothy', sequenceId?: string) {
+  return wsClearMarkersFromSequence(scope, sequenceId);
 }
 
 export function exportSubtitles() {
@@ -84,4 +85,8 @@ export function exportSubtitles() {
 
 export function sendCaptionsToNLE(srtPath: string) {
   return sendCaptionsToPremiere(srtPath);
+}
+
+export function importImageToNLE(imagePath: string, durationSeconds = 5) {
+  return sendImageToPremiere(imagePath, durationSeconds);
 }

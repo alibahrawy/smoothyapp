@@ -13,8 +13,8 @@
 import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
-import https from 'https';
-import http from 'http';
+import { downloadFile, checkCancellation } from './download-file';
+import { createHash } from 'crypto';
 import { execFileSync } from 'child_process';
 
 export type WhisperVariant = 'cuda' | 'cpu' | 'metal';
@@ -29,6 +29,38 @@ const UPSTREAM_BIN_RELEASE_BASE =
 
 const isMac = process.platform === 'darwin';
 const isWindows = process.platform === 'win32';
+
+/**
+ * SHA-256 of every asset we are willing to execute, keyed by filename. These
+ * are the digests published by the GitHub release that hosts each archive.
+ * Downloads are verified against this map before extraction; an asset without
+ * a pinned digest is refused rather than run.
+ */
+const SHA256_BY_ASSET: Record<string, string> = {
+  'whisper-cpp-win32-x64-cpu.zip':
+    '80f6b6481794825f65043001e408e70aea4257918b15906b7e070d2c7b205da5',
+  'whisper-cpp-win32-x64-cuda.zip':
+    '8526fec5594bfd0dfbefcfe1036a3a2f0dd02630760fd9a0418b8b96f4c1be2d',
+  'whisper-cpp-darwin-arm64.zip':
+    'd033bd3f590cad50f39957bf86354f87b44394cb001e3f78a7b47264358103e3',
+  'whisper-cpp-darwin-x64.zip':
+    'f0f2ab6c2e92b7022ac02f0759a7a38f3ea110764e00b05a6f0d6c1dcadd571c',
+  'whisper-cpp-linux-x64-cpu.zip':
+    'e59d97d05bf7fc0361ad621e2a08e9541862f80dc071b265b2fa6d0ff3d85c08',
+  'whisper-cpp-linux-x64-cuda.zip':
+    '286ad85d70ef9dd753b313f5d82c2ee3ce9015a1286e523f029fe215fdd7da61',
+};
+
+/** Hash a file without loading it fully into memory. */
+function sha256File(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+    stream.on('error', reject);
+  });
+}
 
 /** Asset filename for a variant on the current platform. */
 function getAssetName(variant: WhisperVariant): string | null {
@@ -96,9 +128,12 @@ export function isBinaryInstalled(variant: WhisperVariant): boolean {
   return findExe(getVariantDir(variant), variant) !== null;
 }
 
-/** User-chosen engine: 'auto' (best detected), 'cuda' (force GPU), 'cpu' (force CPU). */
+/**
+ * User-chosen engine. 'cuda' means "force GPU" and resolves to whatever GPU
+ * backend this machine actually has (CUDA on Windows/Linux with an NVIDIA card,
+ * Metal on Apple Silicon). 'cpu' forces CPU. 'auto' picks the best available.
+ */
 export type EnginePreference = 'auto' | 'cuda' | 'cpu';
-
 let enginePreference: EnginePreference = 'auto';
 
 export function setEnginePreference(pref: EnginePreference): void {
@@ -127,9 +162,11 @@ export function getVariantOrder(): WhisperVariant[] {
     return ['cpu'];
   }
   if (enginePreference === 'cuda') {
-    // Forced GPU: try CUDA first, CPU as a safety net so a forced choice
-    // never blocks transcription entirely.
-    return ['cuda', 'cpu'];
+    // Forced GPU: use this machine's actual GPU backend (CUDA on Windows/Linux
+    // with an NVIDIA card, Metal on Apple Silicon), with CPU as a safety net so
+    // a forced choice never blocks transcription entirely.
+    const gpu = getPreferredVariant();
+    return gpu === 'cpu' ? ['cpu'] : [gpu, 'cpu'];
   }
   const preferred = getPreferredVariant();
   const fallbacks: WhisperVariant[] = preferred === 'cuda' ? ['cuda', 'cpu'] : [preferred];
@@ -143,84 +180,6 @@ export type BinProgressCallback = (progress: {
   loaded?: number;
   total?: number;
 }) => void;
-
-function downloadFile(
-  url: string,
-  destPath: string,
-  onProgress?: BinProgressCallback,
-  label?: string
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const tempPath = destPath + '.tmp';
-    const file = fs.createWriteStream(tempPath);
-
-    const doRequest = (requestUrl: string, redirectCount: number) => {
-      if (redirectCount > 6) {
-        file.close();
-        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-        reject(new Error('Too many redirects'));
-        return;
-      }
-      const protocol = requestUrl.startsWith('https') ? https : http;
-      protocol
-        .get(requestUrl, (response) => {
-          if (
-            response.statusCode &&
-            response.statusCode >= 300 &&
-            response.statusCode < 400 &&
-            response.headers.location
-          ) {
-            response.resume();
-            doRequest(response.headers.location, redirectCount + 1);
-            return;
-          }
-          if (response.statusCode !== 200) {
-            file.close();
-            if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-            reject(new Error(`Download failed with status ${response.statusCode}`));
-            return;
-          }
-          const totalSize = parseInt(response.headers['content-length'] || '0', 10);
-          let downloaded = 0;
-          response.on('data', (chunk: Buffer) => {
-            downloaded += chunk.length;
-            if (onProgress && totalSize > 0) {
-              onProgress({
-                status: 'downloading',
-                progress: Math.round((downloaded / totalSize) * 100),
-                file: label || path.basename(destPath),
-                loaded: downloaded,
-                total: totalSize
-              });
-            }
-          });
-          response.pipe(file);
-          file.on('finish', () => {
-            file.close(() => {
-              try {
-                fs.renameSync(tempPath, destPath);
-                resolve();
-              } catch (err) {
-                reject(err);
-              }
-            });
-          });
-        })
-        .on('error', (err) => {
-          file.close();
-          if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-          reject(err);
-        });
-    };
-
-    file.on('error', (err) => {
-      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-      reject(err);
-    });
-
-    doRequest(url, 0);
-  });
-}
 
 /** Extract a zip using PowerShell (Windows) or `unzip`/`ditto` (macOS/Linux). */
 function extractZip(zipPath: string, destDir: string): void {
@@ -254,8 +213,10 @@ function extractZip(zipPath: string, destDir: string): void {
  */
 export async function ensureBinary(
   variant: WhisperVariant,
-  onProgress?: BinProgressCallback
+  onProgress?: BinProgressCallback,
+  signal?: AbortSignal
 ): Promise<string> {
+  checkCancellation(signal);
   const existing = findExe(getVariantDir(variant), variant);
   if (existing) return existing;
 
@@ -275,11 +236,29 @@ export async function ensureBinary(
     onProgress({ status: 'downloading', progress: 0, file: asset });
   }
 
+  const expectedSha256 = SHA256_BY_ASSET[asset];
+  if (!expectedSha256) {
+    throw new Error(`No pinned checksum for ${asset}; refusing to run an unverified binary`);
+  }
+
   let lastError: unknown = null;
   for (const url of urls) {
     try {
-      await downloadFile(url, zipPath, onProgress, asset);
+      await downloadFile(url, zipPath, onProgress, asset, signal);
+      checkCancellation(signal);
+
+      // Verify the archive before extracting or executing anything from it.
+      const actualSha256 = await sha256File(zipPath);
+      if (actualSha256 !== expectedSha256) {
+        fs.rmSync(zipPath, { force: true });
+        throw new Error(
+          `Checksum mismatch for ${asset} (expected ${expectedSha256}, got ${actualSha256})`
+        );
+      }
+
+      checkCancellation(signal);
       extractZip(zipPath, variantDir);
+      checkCancellation(signal);
       fs.rmSync(zipPath, { force: true });
 
       const exe = findExe(variantDir, variant);
@@ -290,6 +269,7 @@ export async function ensureBinary(
       if (onProgress) onProgress({ status: 'ready', progress: 100 });
       return exe;
     } catch (err) {
+      checkCancellation(signal);
       lastError = err;
       console.warn(`[WhisperBin] Failed from ${url}:`, err);
     }

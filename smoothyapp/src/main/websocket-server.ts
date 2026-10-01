@@ -7,25 +7,39 @@
 import { runVad } from './autocut/vad-runner';
 import { generateShotDecisions } from './autocut/decision-engine';
 import { generateMulticamSequenceXML } from './autocut/xml-generator';
-import { extractAudioTrack, stitchTimelineAudio, cleanupTempFile } from './autocut/audio-extractor';
+import { extractAudioTrack, stitchTimelineAudio, cleanupTempFile, resetAudioExtractionCancel } from './autocut/audio-extractor';
 import type { TimelineAudioClip } from './autocut/audio-extractor';
 import { combineAudioTracks, analyzeSilence, cleanupTempFile as cleanupSilenceTemp, alignSegmentsToFrames } from './autocut/silence-detector';
 import { generateSilenceRemovalXML } from './autocut/silence-xml-generator';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
+import { BridgeRequests } from './bridge-requests';
+import { validateTimelineTracks } from './autocut/timeline-xml';
 
 // @ts-ignore
 const WebSocket = require('ws');
 const WebSocketServer = WebSocket.Server;
 
 const PORT = 3456;
+// Bind to loopback only so other devices on the network cannot impersonate the
+// Premiere bridge.
+const HOST = '127.0.0.1';
+
+// Shared secret written into the installed CEP panel. When set, clients must
+// present it to connect, so another local process cannot pose as the bridge.
+let bridgeToken: string | null = null;
+
+export function setBridgeToken(token: string | null): void {
+  bridgeToken = token && token.trim() ? token.trim() : null;
+}
 
 let wss: any = null;
 let pluginSocket: any = null;
 let pluginSocketType: string | null = null;
 const pluginSockets: Record<string, any> = {};
 const pluginVersions: Record<string, string> = {};
+const pluginProtocols: Record<string, number> = {};
 let isConnected = false;
 let currentSequenceInfo: any = null;
 
@@ -52,6 +66,9 @@ export function getSequenceInfo() {
 function sendToPlugin(message: any) {
   const target = selectPluginSocketForMessage(message);
   if (target && target.socket.readyState === WebSocket.OPEN) {
+    if (message.requestId && (pluginProtocols[target.type] || 0) < 2) {
+      throw new Error('Restart Premiere and reopen Window → Extensions → SmoothyEdit to load the updated bridge.');
+    }
     pluginSocket = target.socket;
     pluginSocketType = target.type;
     isConnected = true;
@@ -113,172 +130,35 @@ export function requestSequenceInfo() {
   sendToPlugin({ type: 'getSequenceInfo' });
 }
 
-// Pending promises for async Premiere bridge responses
-let pendingExportAudio: { resolve: (value: any) => void; reject: (error: any) => void; attemptedTypes: string[] } | null = null;
-let pendingAddMarkers: {
-  resolve: (value: any) => void;
-  reject: (error: any) => void;
-  markers: any[];
-  attemptedTypes: string[];
-} | null = null;
-let pendingClearMarkers: { resolve: (value: any) => void; reject: (error: any) => void } | null = null;
-let pendingExportSubtitles: { resolve: (value: any) => void; reject: (error: any) => void; attemptedTypes: string[] } | null = null;
-let pendingImportCaptions: { resolve: (value: any) => void; reject: (error: any) => void } | null = null;
-let pendingImportXml: { resolve: (value: any) => void; reject: (error: any) => void } | null = null;
-let pendingRemoveSilence: { resolve: (value: any) => void; reject: (error: any) => void } | null = null;
+const bridgeRequests = new BridgeRequests(sendToPlugin);
 
-/**
- * Ask Premiere to ripple-delete the silence segments, resolving only when the
- * bridge reports back. Previously the UI said "Done" as soon as the message was
- * sent, even if the edit failed.
- */
-export function removeSilenceInPremiere(silenceSegments: any[]): Promise<{ success: boolean; error?: string; message?: string }> {
-  return new Promise((resolve, reject) => {
-    pendingRemoveSilence = { resolve, reject };
-    const sent = sendToPlugin({ type: 'removeSilence', silenceSegments });
-    if (!sent) {
-      pendingRemoveSilence = null;
-      reject(new Error('Not connected to Premiere'));
-      return;
-    }
-
-    setTimeout(() => {
-      if (pendingRemoveSilence) {
-        pendingRemoveSilence = null;
-        reject(new Error('Timed out - Premiere did not confirm the edit'));
-      }
-    }, 180000);
-  });
+export function removeSilenceInPremiere(silenceSegments: any[], sequenceId: string): Promise<any> {
+  if (!sequenceId) return Promise.reject(new Error('Refresh the sequence before removing silence.'));
+  return bridgeRequests.request('removeSilence', 'silenceRemoved', { silenceSegments, sequenceId }, 180000);
 }
-
-/**
- * Import an FCP XML into Premiere and resolve only once Premiere reports the
- * result. The autocut/silence flows used to fire-and-forget, telling the user
- * "Done" before Premiere had imported anything.
- */
-export function importXMLToPremiere(xmlPath: string): Promise<{ success: boolean; error?: string }> {
-  return new Promise((resolve, reject) => {
-    pendingImportXml = { resolve, reject };
-    const sent = sendToPlugin({ type: 'importXML', xmlPath });
-    if (!sent) {
-      pendingImportXml = null;
-      reject(new Error('Not connected to Premiere'));
-      return;
-    }
-
-    setTimeout(() => {
-      if (pendingImportXml) {
-        pendingImportXml = null;
-        reject(new Error('Import timed out - Premiere did not confirm the import'));
-      }
-    }, 120000);
-  });
+export function importXMLToPremiere(xmlPath: string): Promise<any> {
+  return bridgeRequests.request('importXML', 'xmlImported', { xmlPath }, 120000);
 }
-
+export function sendImageToPremiere(imagePath: string, durationSeconds = 5): Promise<any> {
+  return bridgeRequests.request('importImage', 'imageImported', { imagePath, atPlayhead: true, durationSeconds }, 60000);
+}
 export function exportAudio(): Promise<any> {
-  return new Promise((resolve, reject) => {
-    pendingExportAudio = { resolve, reject, attemptedTypes: [] };
-    const sent = sendToPlugin({ type: 'exportAudio' });
-    if (!sent) {
-      pendingExportAudio = null;
-      reject(new Error('Not connected to Premiere'));
-    }
-    pendingExportAudio?.attemptedTypes.push(pluginSocketType || 'unknown');
-
-    // Timeout after 60 seconds
-    setTimeout(() => {
-      if (pendingExportAudio) {
-        pendingExportAudio = null;
-        reject(new Error('Export timeout'));
-      }
-    }, 60000);
-  });
+  return bridgeRequests.request('exportAudio', 'audioExported', {}, 60000);
 }
-
 export function addMarkersToSequence(markers: any[]): Promise<any> {
-  return new Promise((resolve, reject) => {
-    pendingAddMarkers = { resolve, reject, markers, attemptedTypes: [] };
-    const sent = sendToPlugin({ type: 'addMarkers', markers });
-    if (!sent) {
-      pendingAddMarkers = null;
-      reject(new Error('Not connected to Premiere'));
-      return;
-    }
-
-    pendingAddMarkers.attemptedTypes.push(pluginSocketType || 'unknown');
-
-    // Timeout after 30 seconds
-    setTimeout(() => {
-      if (pendingAddMarkers) {
-        pendingAddMarkers = null;
-        reject(new Error('Add markers timeout'));
-      }
-    }, 30000);
-  });
+  return bridgeRequests.request('addMarkers', 'markersAdded', { markers }, 30000);
 }
-
-export function clearMarkersFromSequence(): Promise<any> {
-  return new Promise((resolve, reject) => {
-    pendingClearMarkers = { resolve, reject };
-    const sent = sendToPlugin({ type: 'clearMarkers' });
-    if (!sent) {
-      pendingClearMarkers = null;
-      reject(new Error('Not connected to Premiere'));
-    }
-
-    // Timeout after 30 seconds
-    setTimeout(() => {
-      if (pendingClearMarkers) {
-        pendingClearMarkers = null;
-        reject(new Error('Clear markers timeout'));
-      }
-    }, 30000);
-  });
+export function clearMarkersFromSequence(scope: 'smoothy' | 'all' = 'smoothy', sequenceId?: string): Promise<any> {
+  return bridgeRequests.request('clearMarkers', 'markersCleared', { scope, sequenceId }, 30000);
 }
-
 export function exportSubtitles(): Promise<any> {
-  return new Promise((resolve, reject) => {
-    pendingExportSubtitles = { resolve, reject, attemptedTypes: [] };
-    const sent = sendToPlugin({ type: 'exportSubtitles' });
-    if (!sent) {
-      pendingExportSubtitles = null;
-      reject(new Error('Not connected to Premiere'));
-    }
-    pendingExportSubtitles?.attemptedTypes.push(pluginSocketType || 'unknown');
-
-    // Timeout after 30 seconds
-    setTimeout(() => {
-      if (pendingExportSubtitles) {
-        pendingExportSubtitles = null;
-        reject(new Error('Export subtitles timeout'));
-      }
-    }, 30000);
-  });
+  return bridgeRequests.request('exportSubtitles', 'subtitlesExported', {}, 30000);
 }
-
 export function createShortsAssembly(_markers: any[], _options: any = {}): Promise<any> {
-  // Vertical-sequence assembly required the Premiere UXP plugin, which was
-  // removed in v1.3.3. Kept as a clear error so callers degrade gracefully.
   return Promise.reject(new Error('Building a vertical sequence is coming back soon with the Premiere plugin.'));
 }
-
 export function sendCaptionsToPremiere(srtPath: string): Promise<any> {
-  return new Promise((resolve, reject) => {
-    pendingImportCaptions = { resolve, reject };
-    const sent = sendToPlugin({ type: 'importCaptions', srtPath });
-    if (!sent) {
-      pendingImportCaptions = null;
-      reject(new Error('Not connected to Premiere'));
-    }
-
-    // Timeout after 60 seconds (caption import can take time)
-    setTimeout(() => {
-      if (pendingImportCaptions) {
-        pendingImportCaptions = null;
-        reject(new Error('Import captions timeout'));
-      }
-    }, 60000);
-  });
+  return bridgeRequests.request('importCaptions', 'captionsImported', { srtPath }, 60000);
 }
 
 /**
@@ -289,7 +169,7 @@ export function sendCaptionsToPremiere(srtPath: string): Promise<any> {
 function sourceTimelineClips(source: any): TimelineAudioClip[] {
   const clips = Array.isArray(source?.clips) ? source.clips : [];
   return clips
-    .filter((clip: any) => clip && clip.path)
+    .filter((clip: any) => clip && clip.path && !clip.disabled)
     .map((clip: any) => ({
       path: clip.path,
       start: Number(clip.start) || 0,
@@ -302,17 +182,31 @@ function sourceTimelineClips(source: any): TimelineAudioClip[] {
 export function startWebSocketServer() {
   if (wss) return;
 
-  wss = new WebSocketServer({ port: PORT });
+  wss = new WebSocketServer({ port: PORT, host: HOST });
 
   wss.on('listening', () => {
-    console.log(`[WebSocket] Server listening on ws://localhost:${PORT}`);
+    console.log(`[WebSocket] Server listening on ws://${HOST}:${PORT}`);
   });
 
   wss.on('error', (err: Error) => {
     console.error('[WebSocket] Server error:', err.message);
   });
 
-  wss.on('connection', (ws: any) => {
+  wss.on('connection', (ws: any, req: any) => {
+    if (bridgeToken) {
+      let provided: string | null = null;
+      try {
+        provided = new URL(req?.url || '', `ws://${HOST}`).searchParams.get('token');
+      } catch {
+        provided = null;
+      }
+      if (provided !== bridgeToken) {
+        console.warn('[WebSocket] Rejected connection with an invalid bridge token');
+        try { ws.close(1008, 'Unauthorized'); } catch {}
+        return;
+      }
+    }
+
     console.log('[WebSocket] Plugin connected');
 
     ws.on('message', async (data: Buffer) => {
@@ -330,6 +224,7 @@ export function startWebSocketServer() {
         if (socket === ws) {
           delete pluginSockets[type];
           delete pluginVersions[type];
+          delete pluginProtocols[type];
         }
       }
 
@@ -337,6 +232,7 @@ export function startWebSocketServer() {
       selectActivePluginSocket();
 
       if (previousSocket === ws) {
+        bridgeRequests.disconnect();
         currentSequenceInfo = null;
         callbacks.onConnectionChange(isConnected);
         if (isConnected) {
@@ -351,6 +247,7 @@ export function startWebSocketServer() {
 }
 
 export function stopWebSocketServer() {
+  bridgeRequests.disconnect();
   if (wss) {
     wss.close();
     wss = null;
@@ -361,18 +258,22 @@ export function stopWebSocketServer() {
     }
     for (const type of Object.keys(pluginVersions)) {
       delete pluginVersions[type];
+      delete pluginProtocols[type];
     }
     isConnected = false;
   }
 }
 
 async function handleMessage(msg: any, ws?: any) {
+  if (ws && pluginSocket && ws !== pluginSocket && msg.requestId) return;
+  if (bridgeRequests.receive(msg)) return;
   console.log('[WebSocket] Received:', msg.type);
 
   switch (msg.type) {
     case 'pluginConnected':
       {
         const newType = msg.pluginType || 'unknown';
+        pluginProtocols[newType] = Number(msg.protocolVersion) || 0;
         console.log(`[WebSocket] Premiere bridge type: ${newType}`);
         if (msg.bridgeVersion) {
           console.log('[WebSocket] Premiere bridge version:', msg.bridgeVersion);
@@ -395,101 +296,7 @@ async function handleMessage(msg: any, ws?: any) {
       callbacks.onSequenceInfo(msg);
       break;
 
-    case 'xmlImported':
-      if (pendingImportXml) {
-        pendingImportXml.resolve({ success: !!msg.success, error: msg.error });
-        pendingImportXml = null;
-      } else if (msg.success) {
-        callbacks.onResult({ success: true, message: 'XML imported successfully' });
-      } else {
-        callbacks.onResult({ success: false, error: msg.error });
-      }
-      break;
 
-    case 'silenceRemoved':
-      if (pendingRemoveSilence) {
-        pendingRemoveSilence.resolve({ success: !!msg.success, error: msg.error, message: msg.message });
-        pendingRemoveSilence = null;
-      } else if (msg.success) {
-        callbacks.onResult({ success: true, message: msg.message || 'Silence removed from sequence' });
-      } else {
-        callbacks.onResult({ success: false, error: msg.error || 'Failed to remove silence' });
-      }
-      break;
-
-    case 'audioExported':
-      if (pendingExportAudio) {
-        if (msg.success) {
-          pendingExportAudio.resolve({ success: true, audioBase64: msg.audioBase64, fileName: msg.fileName, fileSize: msg.fileSize, duration: msg.duration });
-        } else {
-          pendingExportAudio.resolve({ success: false, error: msg.error });
-        }
-        pendingExportAudio = null;
-      }
-      break;
-
-    case 'markersAdded':
-      {
-      const responseType = getPluginTypeForSocket(ws) || pluginSocketType || 'unknown';
-      if (msg.bridgeVersion) {
-        console.log('[WebSocket] Markers bridge version:', msg.bridgeVersion);
-      }
-      if (msg.debug) {
-        console.log('[WebSocket] Markers debug:', JSON.stringify(msg.debug, null, 2));
-      }
-      if (!msg.success) {
-        console.warn('[WebSocket] Markers failed:', msg.error || 'Unknown marker error');
-      }
-      if (pendingAddMarkers) {
-        pendingAddMarkers.resolve({
-          success: msg.success,
-          count: msg.count,
-          error: msg.error,
-          debug: msg.debug,
-          bridgeVersion: msg.bridgeVersion,
-          pluginType: responseType,
-          attemptedTypes: pendingAddMarkers.attemptedTypes
-        });
-        pendingAddMarkers = null;
-      }
-      break;
-      }
-
-    case 'markersCleared':
-      if (pendingClearMarkers) {
-        pendingClearMarkers.resolve({ success: msg.success, count: msg.count, error: msg.error });
-        pendingClearMarkers = null;
-      }
-      break;
-
-    case 'subtitlesExported':
-      console.log('[WebSocket] Subtitles debug:', msg.debug);
-      if (pendingExportSubtitles) {
-        pendingExportSubtitles.resolve({
-          success: msg.success,
-          subtitles: msg.subtitles,
-          srt: msg.srt,
-          count: msg.count,
-          sequenceName: msg.sequenceName,
-          source: msg.source,
-          error: msg.error,
-          debug: msg.debug
-        });
-        pendingExportSubtitles = null;
-      }
-      break;
-
-    case 'captionsImported':
-      if (pendingImportCaptions) {
-        pendingImportCaptions.resolve({
-          success: msg.success,
-          count: msg.count,
-          message: msg.message,
-          error: msg.error
-        });
-        pendingImportCaptions = null;
-      }
-      break;
   }
 }
 
@@ -497,6 +304,9 @@ export async function runAutoCut(config: any) {
   const { sources, options } = config;
 
   try {
+    resetAudioExtractionCancel();
+    validateTimelineTracks([...(options.videoTracks || []), ...sources], options.fps || 23.976);
+    if (!options.videoTracks?.length) throw new Error('Select camera tracks and refresh the Premiere bridge.');
     callbacks.onProgress(5, 'Starting analysis...');
 
     const allSegments: any[] = [];
@@ -573,10 +383,7 @@ export async function runAutoCut(config: any) {
     // Generate XML with J-cut support
     callbacks.onProgress(85, 'Generating sequence with J-cuts...');
 
-    const clips = options.clips || sources.map((s: any, i: number) => ({
-      name: `Camera ${i + 1}`,
-      path: s.path
-    }));
+    const clips = options.videoTracks;
 
     const sequenceName = options.sequenceName || 'Auto-Switch Sequence';
 
@@ -588,6 +395,8 @@ export async function runAutoCut(config: any) {
       fps: options.fps || 23.976,
       width: options.width || 1920,
       height: options.height || 1080,
+      duration: options.duration,
+      audioTracks: sources,
       jcutOffset: jcutOffset
     }, wideShots);
 
@@ -629,6 +438,10 @@ export async function runSilenceRemoval(config: any) {
   const { sources, options } = config;
 
   try {
+    resetAudioExtractionCancel();
+    const sequenceId = options.sequenceId;
+    if (!sequenceId || String(currentSequenceInfo?.id) !== String(sequenceId)) throw new Error('The active sequence changed. Refresh and analyze it again.');
+    validateTimelineTracks([...(options.videoTracks || []), ...sources], options.fps || 23.976);
     callbacks.onProgress(5, 'Starting silence analysis...');
 
     // Build one timeline-accurate WAV from every clip on the selected tracks.
@@ -691,7 +504,7 @@ export async function runSilenceRemoval(config: any) {
       combinedPath,
       options.thresholdDb || -40,
       options.minSilenceDuration || 0.5,
-      options.padding || 0.1
+      options.padding ?? 0.1
     );
 
     // Cleanup combined file
@@ -713,7 +526,7 @@ export async function runSilenceRemoval(config: any) {
 
       // CEP edits the active sequence with ExtendScript/QE. Wait for it to
       // finish before telling the user the edit is done.
-      const editResult = await removeSilenceInPremiere(analysis.silenceSegments);
+      const editResult = await removeSilenceInPremiere(analysis.silenceSegments, sequenceId);
       if (!editResult.success) {
         callbacks.onResult({ success: false, error: editResult.error || 'Premiere could not remove the silence' });
         return;
@@ -735,13 +548,11 @@ export async function runSilenceRemoval(config: any) {
       callbacks.onProgress(75, 'Generating XML...');
 
       // Generate XML for new sequence
-      const clips = options.clips || sources.map((s: any, i: number) => ({
-        name: s.trackName || `Track ${i + 1}`,
-        path: s.path
-      }));
+      const clips = options.videoTracks || [];
 
       const xml = generateSilenceRemovalXML(clips, analysis.speechSegments, {
         sequenceName: options.sequenceName || 'Silence Removed',
+        audioTracks: sources,
         fps: options.fps || 23.976,
         width: options.width || 1920,
         height: options.height || 1080

@@ -49,8 +49,23 @@ export function formatCaptions(
   let currentCaption: { words: TranscriptionChunk[]; text: string } = { words: [], text: '' };
   let captionIndex = 1;
 
-  for (let i = 0; i < result.chunks.length; i++) {
-    const chunk = result.chunks[i];
+  // Split oversized tokens without losing characters; distribute their timing.
+  const chunks = result.chunks.flatMap(chunk => {
+    const characters = Array.from(chunk.text.trim());
+    if (characters.length <= maxCharsTotal) return [chunk];
+    const parts: TranscriptionChunk[] = [];
+    for (let offset = 0; offset < characters.length; offset += maxCharsTotal) {
+      const end = Math.min(characters.length, offset + maxCharsTotal);
+      const duration = chunk.timestamp[1] - chunk.timestamp[0];
+      parts.push({ text: characters.slice(offset, end).join(''), timestamp: [
+        chunk.timestamp[0] + duration * offset / characters.length,
+        chunk.timestamp[0] + duration * end / characters.length
+      ] });
+    }
+    return parts;
+  });
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
     const wordText = chunk.text.trim();
 
     if (!wordText) continue;
@@ -59,11 +74,11 @@ export function formatCaptions(
     const newText = currentCaption.text ? currentCaption.text + ' ' + wordText : wordText;
     const newLength = newText.length;
 
-    const firstWordTime = currentCaption.words[0]?.timestamp[0] || chunk.timestamp[0];
+    const firstWordTime = currentCaption.words[0]?.timestamp[0] ?? chunk.timestamp[0];
     const newDuration = chunk.timestamp[1] - firstWordTime;
 
     // Conditions to start a new caption
-    const exceedsLength = newLength > maxCharsTotal;
+    const exceedsLength = newLength > maxCharsTotal || wrapText(newText, opts.maxCharsPerLine).length > opts.maxLines;
     const exceedsDuration = newDuration > opts.maxDurationSeconds;
     const isEndOfSentence = /[.!?]$/.test(currentCaption.text) && currentCaption.words.length > 0;
 
@@ -144,30 +159,23 @@ function finalizeCaption(
 /**
  * Format text with line breaks based on settings
  */
-function formatTextWithLineBreaks(text: string, settings: CaptionSettings): string {
-  if (settings.maxLines === 1 || text.length <= settings.maxCharsPerLine) {
-    return text;
-  }
-
-  // Split into two lines at a natural break point
-  const words = text.split(' ');
-  let line1 = '';
-  let line2 = '';
-
-  for (const word of words) {
-    if (line1.length + word.length + 1 <= settings.maxCharsPerLine) {
-      line1 = line1 ? line1 + ' ' + word : word;
-    } else {
-      line2 = line2 ? line2 + ' ' + word : word;
+function wrapText(text: string, limit: number): string[] {
+  const lines: string[] = [];
+  let remaining = Array.from(text.trim());
+  while (remaining.length > limit) {
+    let split = limit;
+    for (let index = limit; index > 0; index--) {
+      if (/\s/.test(remaining[index])) { split = index; break; }
     }
+    lines.push(remaining.slice(0, split).join(''));
+    remaining = Array.from(remaining.slice(split).join('').trimStart());
   }
+  if (remaining.length) lines.push(remaining.join(''));
+  return lines;
+}
 
-  // If line2 is too long, truncate
-  if (line2.length > settings.maxCharsPerLine) {
-    line2 = line2.substring(0, settings.maxCharsPerLine - 3) + '...';
-  }
-
-  return line2 ? line1 + '\n' + line2 : line1;
+function formatTextWithLineBreaks(text: string, settings: CaptionSettings): string {
+  return wrapText(text, settings.maxCharsPerLine).join('\n');
 }
 
 /**

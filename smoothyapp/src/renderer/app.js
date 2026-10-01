@@ -1,6 +1,7 @@
 /**
  * SmoothyEdit - Renderer Script
  */
+import { findCaptionMatches, replaceCaptionMatches } from './caption-text-tools.js';
 
 const state = {
   isConnected: false,
@@ -24,7 +25,15 @@ const state = {
   captionSource: 'sequence',
   captionFilePath: null,
   isTranscribing: false,
-  currentShorts: []
+  currentShorts: [],
+  shortsView: 'workspace',
+  shortsSource: 'sequence',
+  shortsMode: 'multiple',
+  shortsAudioPath: null,
+  shortsTranscriptName: 'Pasted transcript',
+  shortsYoutube: null,
+  shortsSourceLoading: false,
+  shortsResultName: ''
 };
 
 // DOM Elements
@@ -101,6 +110,7 @@ const websiteHelpText = document.getElementById('website-help-text');
 // Settings DOM Elements
 const settingsBtn = document.getElementById('settings-btn');
 const settingsModal = document.getElementById('settings-modal');
+const settingsBody = document.getElementById('settings-body');
 const settingsCloseBtn = document.getElementById('settings-close-btn');
 const connectionTokenInput = document.getElementById('connection-token');
 const saveTokenBtn = document.getElementById('save-token-btn');
@@ -129,11 +139,11 @@ const settingsUpdateStatus = document.getElementById('settings-update-status');
 const settingsInstallUpdateBtn = document.getElementById('settings-install-update-btn');
 const settingsUpdateNotes = document.getElementById('settings-update-notes');
 const settingsCurrentVersion = document.getElementById('settings-current-version');
-const appVersionLabel = document.getElementById('app-version-label');
+const sidebarVersion = document.getElementById('sidebar-version');
 const discordBtn = document.getElementById('discord-btn');
 const settingsDiscordBtn = document.getElementById('settings-discord-btn');
-const twitterBtn = document.getElementById('twitter-btn');
 const settingsTwitterBtn = document.getElementById('settings-twitter-btn');
+const settingsInstagramBtn = document.getElementById('settings-instagram-btn');
 
 // Logs DOM Elements
 const logsContainer = document.getElementById('logs-container');
@@ -141,10 +151,9 @@ const logsClearBtn = document.getElementById('logs-clear-btn');
 
 // Auth DOM Elements
 const userInfo = document.getElementById('user-info');
-const trialInfo = document.getElementById('trial-info');
+const studioCreditsInline = document.getElementById('studio-credits-inline');
 const userName = document.getElementById('user-name');
 const userPlan = document.getElementById('user-plan');
-const trialDays = document.getElementById('trial-days'); // may be null after free-pill redesign
 const loginBtn = document.getElementById('login-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const loginModal = document.getElementById('login-modal');
@@ -163,16 +172,15 @@ const pinBtn = document.getElementById('pin-btn');
 
 // Initialize
 async function init() {
+  setupSidebar();
   setupEventListeners();
   setupElectronListeners();
   setupStudioEvents();
+  setupReviewUI();
   setupPreferenceEvents();
 
   // Initialize auth state
   await initAuth();
-
-  // Studio credits sit next to the sidebar "Studio" label.
-  refreshStudioCredits();
 
   // Get initial NLE status
   const status = await window.electronAPI.getStatus();
@@ -191,8 +199,11 @@ async function init() {
     const version = await window.electronAPI.getAppVersion();
     if (version) {
       const label = `v${version}`;
-      if (appVersionLabel) appVersionLabel.textContent = label;
       if (settingsCurrentVersion) settingsCurrentVersion.textContent = label;
+      if (sidebarVersion) {
+        sidebarVersion.textContent = label;
+        sidebarVersion.title = `SmoothyEdit ${label}`;
+      }
       state.appVersion = version;
     }
   } catch {}
@@ -201,6 +212,36 @@ async function init() {
   loadCaptionModels();
   loadCaptionLanguages();
   loadCaptionEnginePreference();
+
+  // Assets (SVG / image -> PNG) tab
+  initAssets();
+}
+
+function setupSidebar() {
+  const container = document.querySelector('.app-container');
+  const toggle = document.getElementById('sidebar-toggle-btn');
+  const applyCollapsed = (collapsed) => {
+    container.classList.toggle('sidebar-collapsed', collapsed);
+    const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    toggle.setAttribute('aria-expanded', String(!collapsed));
+    toggle.setAttribute('aria-label', label);
+    toggle.title = label;
+  };
+  document.querySelectorAll('.sidebar-nav .nav-item, .studio-dashboard-btn').forEach(item => {
+    const label = item.querySelector('.nav-label').textContent.trim();
+    item.setAttribute('aria-label', label);
+    if (!item.title) item.title = label + (item.dataset.tab === 'bestshorts' ? ' (uses credits)' : '');
+    if (item.classList.contains('nav-item')) item.setAttribute('aria-current', item.classList.contains('active') ? 'page' : 'false');
+  });
+  let collapsed = false;
+  try { collapsed = localStorage.getItem('sidebarCollapsed') === 'true'; } catch {}
+  applyCollapsed(collapsed);
+  toggle.addEventListener('click', () => {
+    container.classList.add('sidebar-motion');
+    const collapsed = !container.classList.contains('sidebar-collapsed');
+    applyCollapsed(collapsed);
+    try { localStorage.setItem('sidebarCollapsed', String(collapsed)); } catch {}
+  });
 }
 
 // ========================================
@@ -217,6 +258,7 @@ async function initAuth() {
   } catch {}
   updateAuthUI();
   updateFeatureLocks();
+  refreshStudioCredits();
 }
 
 function updateAuthUI() {
@@ -225,20 +267,24 @@ function updateAuthUI() {
   if (authState && authState.user) {
     // User is logged in (optional — only needed for Studio AI)
     userInfo.classList.remove('hidden');
-    trialInfo.classList.add('hidden');
+    loginBtn.classList.add('hidden');
+    studioCreditsInline.classList.remove('hidden');
 
     // Set user display
     const displayName = authState.user.name || authState.user.email.split('@')[0];
     userName.textContent = displayName;
+    document.getElementById('sidebar-user-initial').textContent = Array.from(displayName)[0]?.toUpperCase() || '?';
+    userInfo.title = displayName;
     if (userPlan) {
       userPlan.textContent = authState.user.tier === 'pro' ? 'Studio' : 'Free';
     }
   } else {
-    // Not logged in — local tools free forever, show free pill + Connect Studio
+    // Studio has one sign-in control; local tools need no account.
     userInfo.classList.add('hidden');
-    trialInfo.classList.remove('hidden');
-    trialInfo.classList.remove('expired');
+    loginBtn.classList.remove('hidden');
+    studioCreditsInline.classList.add('hidden');
   }
+  syncShortsAccount();
 }
 
 async function updateFeatureLocks() {
@@ -247,20 +293,8 @@ async function updateFeatureLocks() {
     multicamLock.classList.add('hidden');
   }
 
-  // Check bestshorts feature (cloud AI — part of Studio)
-  const bestshortsAccess = await window.electronAPI.canUseFeature('bestshorts');
-  if (bestshortsLock) {
-    if (bestshortsAccess.allowed) {
-      bestshortsLock.classList.add('hidden');
-    } else {
-      bestshortsLock.classList.remove('hidden');
-      // Show/hide login button based on reason
-      const loginBtnInLock = bestshortsLock.querySelector('#bestshorts-login-btn');
-      if (loginBtnInLock) {
-        loginBtnInLock.style.display = bestshortsAccess.reason === 'login-required' ? 'inline-block' : 'none';
-      }
-    }
-  }
+  // Shorts sign-in is a normal page, with one account dialog when needed.
+  setShortsView(state.shortsView);
 }
 
 function openLoginModal() {
@@ -268,6 +302,7 @@ function openLoginModal() {
   loginError.classList.add('hidden');
   totpGroup.classList.add('hidden');
   loginForm.reset();
+  document.getElementById('login-email').focus();
 }
 
 function closeLoginModal() {
@@ -326,6 +361,18 @@ function setupEventListeners() {
     document.getElementById('update-bar').classList.add('hidden');
   });
 
+  // Update bar install button (was silently doing nothing before)
+  const updateBarBtn = document.getElementById('update-bar-btn');
+  if (updateBarBtn) {
+    updateBarBtn.addEventListener('click', () => {
+      if (state.updateState.status === 'stuck') {
+        window.electronAPI.openExternal('https://smoothyedit.com/features/smoothy-app');
+      } else {
+        window.electronAPI.installUpdate();
+      }
+    });
+  }
+
   // Tab navigation
   document.querySelectorAll('.nav-item:not(.disabled)').forEach(item => {
     item.addEventListener('click', (e) => {
@@ -336,6 +383,7 @@ function setupEventListeners() {
       // Update active nav item
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
       item.classList.add('active');
+      document.querySelectorAll('.nav-item').forEach(nav => nav.setAttribute('aria-current', nav === item ? 'page' : 'false'));
 
       // Show corresponding tab content
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -348,7 +396,7 @@ function setupEventListeners() {
       if (tab === 'bestshorts') {
         if (state.sequenceInfo) displayBestshortsSequenceInfo(state.sequenceInfo);
         refreshStudioCredits();
-        loadShortsHistory();
+        if (state.shortsView === 'history') loadShortsHistory();
       }
       if (tab === 'captions') {
         if (state.sequenceInfo) displayCaptionsSequenceInfo(state.sequenceInfo);
@@ -388,6 +436,11 @@ function setupEventListeners() {
   });
 
   silenceRemoveBtn.addEventListener('click', runSilenceRemoval);
+  document.getElementById('edit-in-place').addEventListener('change', event => {
+    document.getElementById('silence-action-note').textContent = event.target.checked
+      ? 'Ripple-deletes silence directly from your current sequence. Each cut is a separate undo step.'
+      : 'Creates a new sequence from source media. Existing effects and titles are not copied.';
+  });
 
   document.getElementById('silence-threshold').addEventListener('input', (e) => {
     document.getElementById('silence-threshold-value').textContent = `${e.target.value} dB`;
@@ -426,8 +479,11 @@ function setupEventListeners() {
 
   document.querySelectorAll('#caption-max-lines-group .toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('#caption-max-lines-group .toggle-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('#caption-max-lines-group .toggle-btn').forEach(b => {
+        b.classList.remove('active'); b.setAttribute('aria-pressed', 'false');
+      });
       btn.classList.add('active');
+      btn.setAttribute('aria-pressed', 'true');
     });
   });
 
@@ -444,9 +500,19 @@ function setupEventListeners() {
 
   // Settings Modal
   settingsBtn.addEventListener('click', openSettings);
+  document.getElementById('settings-account-btn').addEventListener('click', () => { closeSettings(); if (state.authState?.user) window.electronAPI.openExternal('https://smoothyedit.com/account'); else openLoginModal(); });
   settingsCloseBtn.addEventListener('click', closeSettings);
   settingsModal.addEventListener('click', (e) => {
     if (e.target === settingsModal) closeSettings();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !settingsModal.classList.contains('hidden')) closeSettings();
+    if (e.key === 'Tab' && !settingsModal.classList.contains('hidden') && document.getElementById('error-modal').classList.contains('hidden')) {
+      const focusable = [...settingsModal.querySelectorAll('button, input, select, summary, a[href]')].filter(element => !element.disabled && element.getClientRects().length);
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+    }
   });
 
   saveTokenBtn.addEventListener('click', saveToken);
@@ -481,12 +547,10 @@ function setupEventListeners() {
   if (settingsDiscordBtn) {
     settingsDiscordBtn.addEventListener('click', () => window.electronAPI.openExternal('https://discord.gg/KmJRqUZzDe'));
   }
-  if (twitterBtn) {
-    twitterBtn.addEventListener('click', () => window.electronAPI.openExternal('https://x.com/alibahrawy34'));
-  }
   if (settingsTwitterBtn) {
     settingsTwitterBtn.addEventListener('click', () => window.electronAPI.openExternal('https://x.com/alibahrawy34'));
   }
+  settingsInstagramBtn.addEventListener('click', () => window.electronAPI.openExternal('https://www.instagram.com/alibahrawy34/'));
 
   // Logs tab
   if (logsClearBtn) {
@@ -512,7 +576,6 @@ function setupEventListeners() {
   // Feature lock buttons
   const multicamUpgradeBtn = document.getElementById('multicam-upgrade-btn');
   const multicamLoginBtn = document.getElementById('multicam-login-btn');
-  const bestshortsUpgradeBtn = document.getElementById('bestshorts-upgrade-btn');
   const bestshortsLoginBtn = document.getElementById('bestshorts-login-btn');
 
   if (multicamUpgradeBtn) {
@@ -523,19 +586,14 @@ function setupEventListeners() {
   if (multicamLoginBtn) {
     multicamLoginBtn.addEventListener('click', openLoginModal);
   }
-  if (bestshortsUpgradeBtn) {
-    bestshortsUpgradeBtn.addEventListener('click', () => {
-      window.electronAPI.openExternal('https://smoothyedit.com/pricing');
-    });
-  }
-  if (bestshortsLoginBtn) {
-    bestshortsLoginBtn.addEventListener('click', openLoginModal);
-  }
+  if (bestshortsLoginBtn) bestshortsLoginBtn.addEventListener('click', openLoginModal);
 
   // Open the Studio dashboard in the browser
+  const studioDashboardBtn = document.getElementById('studio-dashboard-btn');
   const openStudioDashboardBtn = document.getElementById('open-studio-dashboard-btn');
   const settingsOpenStudioBtn = document.getElementById('settings-open-studio-btn');
   const openStudioDashboard = () => window.electronAPI.openExternal('https://smoothyedit.com/dashboard');
+  studioDashboardBtn.addEventListener('click', openStudioDashboard);
   if (openStudioDashboardBtn) {
     openStudioDashboardBtn.addEventListener('click', openStudioDashboard);
   }
@@ -577,31 +635,138 @@ function applyLogsVisibility(show) {
 
 // ─── Studio (cloud) — Best Shorts, credits, history ─────────────────────────
 let shortsHistoryItems = [];
+let shortsHistoryRequest = 0;
+let shortsHistoryLoading = false;
+let shortsHistoryError = '';
+let shortsFlags = {};
+let shortsAccountKey = '';
 
 function setupStudioEvents() {
-  const analyzeBtn = document.getElementById('analyze-shorts-btn');
-  const sendBtn = document.getElementById('send-shorts-btn');
-  const upgradeBtn = document.getElementById('studio-upgrade-btn');
-  const historyRefreshBtn = document.getElementById('shorts-history-refresh-btn');
-  const historySelect = document.getElementById('shorts-history-select');
-
-  if (analyzeBtn) analyzeBtn.addEventListener('click', runStudioShorts);
-  if (sendBtn) sendBtn.addEventListener('click', () => sendShortsToPremiere(state.currentShorts, sendBtn));
-  if (upgradeBtn) {
-    upgradeBtn.addEventListener('click', () => window.electronAPI.openExternal('https://smoothyedit.com/pricing'));
-  }
-  if (historyRefreshBtn) historyRefreshBtn.addEventListener('click', loadShortsHistory);
-  if (historySelect) {
-    historySelect.addEventListener('change', () => {
-      const item = shortsHistoryItems[Number(historySelect.value)];
-      if (!item) return;
-      try {
-        const parsed = JSON.parse(item.result);
-        renderShorts(parsed?.shorts || []);
-        const statusEl = document.getElementById('shorts-status');
-        if (statusEl) statusEl.textContent = `${parsed?.shorts?.length || 0} shorts from history.`;
-      } catch {}
+  try {
+    if (localStorage.getItem('shortsMode') === 'best') {
+      state.shortsMode = 'best';
+      document.querySelector('input[name="shorts-mode"][value="best"]').checked = true;
+    }
+  } catch {}
+  document.getElementById('analyze-shorts-btn').addEventListener('click', runStudioShorts);
+  document.getElementById('send-shorts-btn').addEventListener('click', (event) => sendShortsToPremiere(state.currentShorts, event.currentTarget));
+  document.getElementById('shorts-history-btn').addEventListener('click', () => {
+    setShortsView(state.shortsView === 'history' ? 'workspace' : 'history');
+    if (state.shortsView === 'history') {
+      loadShortsHistory();
+      document.getElementById('shorts-history-search').focus();
+    }
+  });
+  document.getElementById('shorts-history-refresh-btn').addEventListener('click', loadShortsHistory);
+  document.getElementById('shorts-history-search').addEventListener('input', renderShortsHistory);
+  document.querySelectorAll('[data-shorts-source]').forEach(button => button.addEventListener('click', () => {
+    if (state.isProcessing) return;
+    state.shortsSource = button.dataset.shortsSource;
+    document.querySelectorAll('[data-shorts-source]').forEach(item => {
+      const active = item.dataset.shortsSource === state.shortsSource;
+      item.classList.toggle('active', active);
+      item.setAttribute('aria-pressed', String(active));
+      document.getElementById(`shorts-source-${item.dataset.shortsSource}`).classList.toggle('hidden', !active);
     });
+    updateExportButton();
+  }));
+  document.getElementById('shorts-transcript-browse').addEventListener('click', () => document.getElementById('shorts-transcript-file').click());
+  document.getElementById('shorts-transcript-file').addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      if (!/\.(txt|srt|vtt)$/i.test(file.name)) throw new Error('Choose a TXT, SRT, or VTT transcript.');
+      if (file.size > 5 * 1024 * 1024) throw new Error('Choose a transcript smaller than 5 MB.');
+      const text = await file.text();
+      if (!text.trim()) throw new Error('This transcript is empty.');
+      if (text.length > 2_000_000) throw new Error('The transcript is too long (maximum 2,000,000 characters).');
+      document.getElementById('shorts-transcript-text').value = text;
+      state.shortsTranscriptName = file.name;
+      document.getElementById('shorts-transcript-name').textContent = file.name;
+      updateExportButton();
+    } catch (error) { showError(error.message || 'Could not read this transcript.'); }
+  });
+  document.getElementById('shorts-transcript-text').addEventListener('input', updateExportButton);
+  document.getElementById('shorts-audio-browse').addEventListener('click', async () => {
+    try {
+      const result = await window.electronAPI.selectShortsAudio();
+      if (result?.canceled || !result?.path) return;
+      state.shortsAudioPath = result.path;
+      document.getElementById('shorts-audio-name').textContent = result.path.split(/[\\/]/).pop();
+      updateExportButton();
+    } catch { showError('Could not choose an audio file.'); }
+  });
+  document.getElementById('shorts-youtube-load').addEventListener('click', loadShortsYoutube);
+  document.getElementById('shorts-youtube-url').addEventListener('input', () => {
+    state.shortsYoutube = null;
+    document.getElementById('shorts-youtube-name').textContent = "Load the video's transcript, then choose your Shorts mode.";
+    updateExportButton();
+  });
+  document.querySelectorAll('input[name="shorts-mode"]').forEach(input => input.addEventListener('change', () => {
+    state.shortsMode = input.value;
+    try { localStorage.setItem('shortsMode', input.value); } catch {}
+    updateExportButton();
+  }));
+}
+
+function syncShortsAccount() {
+  const user = state.authState?.user;
+  const key = user ? String(user.id || user.email) : '';
+  if (key === shortsAccountKey) return;
+  shortsAccountKey = key;
+  shortsHistoryRequest++;
+  shortsHistoryItems = [];
+  shortsHistoryLoading = false;
+  shortsHistoryError = '';
+  shortsFlags = {};
+  if (key) {
+    try { shortsFlags = JSON.parse(localStorage.getItem(`shorts-flags:${key}`) || '{}') || {}; } catch {}
+  }
+  state.shortsView = 'workspace';
+  state.shortsResultName = '';
+  renderShorts([]);
+  document.getElementById('shorts-status').textContent = 'Choose a source to get started.';
+  document.getElementById('shorts-history-search').value = '';
+  renderShortsHistory();
+}
+
+function setShortsView(view) {
+  state.shortsView = view;
+  const signedIn = !!state.authState?.user;
+  document.getElementById('shorts-workspace').classList.toggle('hidden', !signedIn || view === 'history');
+  document.getElementById('shorts-history-page').classList.toggle('hidden', !signedIn || view !== 'history');
+  document.getElementById('shorts-footer').classList.toggle('hidden', !signedIn || view === 'history');
+  bestshortsLock.classList.toggle('hidden', signedIn);
+  const button = document.getElementById('shorts-history-btn');
+  button.disabled = !signedIn;
+  button.textContent = view === 'history' ? '← Back to Shorts' : 'History';
+  bestshortsStatusText.textContent = view === 'history' ? 'Shorts history' : 'Best Shorts';
+  updateExportButton();
+}
+
+async function loadShortsYoutube() {
+  const button = document.getElementById('shorts-youtube-load');
+  const label = document.getElementById('shorts-youtube-name');
+  const url = document.getElementById('shorts-youtube-url').value.trim();
+  if (!url) { label.textContent = 'Enter a YouTube video URL first.'; return; }
+  state.shortsSourceLoading = true;
+  state.shortsYoutube = null;
+  label.textContent = 'Loading transcript…';
+  button.textContent = 'Loading…';
+  updateExportButton();
+  try {
+    const result = await window.electronAPI.getShortsYoutubeTranscript(url);
+    if (!result?.success) throw new Error(result?.error || 'Could not load this transcript.');
+    state.shortsYoutube = { subtitleText: result.transcript, fileName: result.fileName };
+    label.textContent = `Ready · ${result.fileName}`;
+    refreshStudioCredits();
+  } catch (error) {
+    label.textContent = error.message || 'Could not load this transcript.';
+  } finally {
+    state.shortsSourceLoading = false;
+    button.textContent = 'Load transcript';
+    updateExportButton();
   }
 }
 
@@ -629,6 +794,7 @@ function renderCredits(credits) {
     ? ` · resets in ${credits.daysRemaining} day${credits.daysRemaining === 1 ? '' : 's'}`
     : '';
   if (textEl) {
+    textEl.classList.remove('hidden');
     textEl.textContent = `${formatCredits(credits.credits)} credits`;
     textEl.title = `${formatCredits(credits.credits)} of ${formatCredits(credits.totalCredits)} Studio credits left${reset}`;
   }
@@ -644,9 +810,11 @@ async function refreshStudioCredits() {
   const result = await window.electronAPI.getStudioCredits();
   if (!result || !result.success) {
     if (textEl) {
-      textEl.textContent = result && result.requiresLogin ? 'sign in' : '—';
+      textEl.classList.toggle('hidden', !!(result && result.requiresLogin) || !state.authState?.user);
+      textEl.textContent = '—';
       textEl.title = (result && result.error) || '';
     }
+    if (result && result.requiresLogin) loginBtn.classList.remove('hidden');
     if (barEl) barEl.style.width = '0%';
     if (upgradeBtn) upgradeBtn.classList.toggle('hidden', !(result && result.requiresLogin));
     return;
@@ -655,126 +823,212 @@ async function refreshStudioCredits() {
 }
 
 async function loadShortsHistory() {
-  const select = document.getElementById('shorts-history-select');
-  const empty = document.getElementById('shorts-history-empty');
-  if (!select) return;
-
-  select.disabled = true;
-  select.innerHTML = '<option value="">Loading…</option>';
-  if (empty) empty.classList.add('hidden');
-
-  const result = await window.electronAPI.getShortsHistory(1);
-  if (!result || !result.success) {
-    select.innerHTML = `<option value="">${result && result.requiresLogin ? 'Sign in to Studio to see history' : 'Could not load history'}</option>`;
-    return;
+  if (!state.authState?.user) return;
+  const request = ++shortsHistoryRequest;
+  shortsHistoryLoading = true;
+  shortsHistoryError = '';
+  renderShortsHistory();
+  const items = [];
+  try {
+    let page = 1;
+    let totalPages = 1;
+    do {
+      const result = await window.electronAPI.getShortsHistory(page);
+      if (request !== shortsHistoryRequest) return;
+      if (!result?.success) throw new Error(result?.requiresLogin ? 'Sign in again to load your history.' : result?.error || 'Could not load history. Try Refresh.');
+      items.push(...(result.items || []));
+      shortsHistoryItems = [...new Map(items.map(item => [item.id, item])).values()];
+      totalPages = Number(result.totalPages) || 1;
+      page++;
+      renderShortsHistory();
+      if (!result.items?.length) break;
+    } while (page <= totalPages);
+  } catch (error) {
+    if (request !== shortsHistoryRequest) return;
+    shortsHistoryError = error.message || 'Could not load history.';
+  } finally {
+    if (request === shortsHistoryRequest) {
+      shortsHistoryLoading = false;
+      renderShortsHistory();
+    }
   }
+}
 
-  shortsHistoryItems = result.items || [];
-  if (shortsHistoryItems.length === 0) {
-    select.innerHTML = '<option value="">No saved shorts</option>';
-    if (empty) empty.classList.remove('hidden');
-    return;
-  }
+function readHistoryShorts(item) {
+  try {
+    const parsed = JSON.parse(item.result);
+    return Array.isArray(parsed?.shorts) ? parsed.shorts : [];
+  } catch { return []; }
+}
 
-  select.innerHTML = '<option value="">Select a saved run…</option>';
-  shortsHistoryItems.forEach((item, index) => {
-    let count = 0;
-    try { count = (JSON.parse(item.result)?.shorts || []).length; } catch {}
+function renderShortsHistory() {
+  const list = document.getElementById('shorts-history-list');
+  const status = document.getElementById('shorts-history-status');
+  const query = document.getElementById('shorts-history-search').value.trim().toLocaleLowerCase();
+  const items = shortsHistoryItems.filter(item => `${item.fileName || ''} ${item.result || ''}`.toLocaleLowerCase().includes(query));
+  document.getElementById('shorts-history-refresh-btn').disabled = shortsHistoryLoading;
+  status.textContent = shortsHistoryError || (shortsHistoryLoading ? `Loading history… ${shortsHistoryItems.length} saved runs` :
+    query ? `${items.length} matching run${items.length === 1 ? '' : 's'}` :
+    shortsHistoryItems.length ? `${shortsHistoryItems.length} saved run${shortsHistoryItems.length === 1 ? '' : 's'}` :
+    'Your saved Shorts will appear here after your first analysis.');
+  list.replaceChildren();
+  for (const item of items) {
+    const shorts = readHistoryShorts(item);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'short-history-item';
     const date = new Date(item.createdAt).toLocaleString();
-    const option = document.createElement('option');
-    option.value = String(index);
-    option.textContent = `${item.fileName || 'Shorts'} · ${date} (${count})`;
-    select.appendChild(option);
-  });
-  select.disabled = false;
+    button.innerHTML = `<span class="short-history-title">${escapeHtml(item.fileName || 'Shorts')}</span>
+      <span class="short-history-meta">${escapeHtml(date)} · ${shorts.length} short${shorts.length === 1 ? '' : 's'}</span>
+      <span class="short-history-preview">${escapeHtml(shorts.slice(0, 3).map(short => short.title || 'Untitled short').join(' · '))}</span>`;
+    button.addEventListener('click', () => {
+      if (state.isProcessing) return;
+      state.shortsHistoryRetry = null; document.getElementById('shorts-history-retry').classList.add('hidden');
+      if (!shorts.length) {
+        shortsHistoryError = 'This saved run has no readable Shorts results.';
+        renderShortsHistory();
+        return;
+      }
+      state.shortsResultName = item.fileName || 'Saved Shorts';
+      renderShorts(shorts);
+      document.getElementById('shorts-status').textContent = `${shorts.length} short${shorts.length === 1 ? '' : 's'} · from history`;
+      setShortsView('workspace');
+      document.getElementById('shorts-results-section').scrollIntoView({ block: 'start' });
+    });
+    list.appendChild(button);
+  }
+  if (query && !items.length && !shortsHistoryLoading && !shortsHistoryError) {
+    const empty = document.createElement('p');
+    empty.className = 'help-text';
+    empty.textContent = 'No saved runs match your search.';
+    list.appendChild(empty);
+  }
+}
+
+function shortFlagKey(short) {
+  return `${state.shortsResultName}|${short.startTime || ''}|${short.endTime || ''}|${short.title || ''}`;
+}
+
+function saveShortFlags() {
+  try { localStorage.setItem(`shorts-flags:${shortsAccountKey}`, JSON.stringify(shortsFlags)); } catch {}
+}
+
+async function copyShortField(button, text) {
+  try {
+    const result = await window.electronAPI.copyShortsText(String(text || ''));
+    if (!result?.success) throw new Error(result?.error || 'Could not copy this text.');
+    const hint = button.querySelector('.shorts-copy-hint');
+    hint.textContent = '✓ Copied';
+    button.classList.add('copied');
+    clearTimeout(button.copyTimer);
+    button.copyTimer = setTimeout(() => {
+      hint.textContent = button.dataset.copyLabel;
+      button.classList.remove('copied');
+    }, 1500);
+  } catch (error) { document.getElementById('shorts-status').textContent = error.message || 'Could not copy this text.'; }
 }
 
 function renderShorts(shorts) {
   const container = document.getElementById('shorts-results');
-  if (!container) return;
-
-  state.currentShorts = Array.isArray(shorts) ? shorts : [];
-  container.innerHTML = '';
-
-  const sendBtn = document.getElementById('send-shorts-btn');
-  if (sendBtn) {
-    sendBtn.disabled = state.currentShorts.length === 0;
-    sendBtn.textContent = state.currentShorts.length > 1
-      ? `Send all ${state.currentShorts.length} to Premiere`
-      : 'Send to Premiere';
-  }
-
+  state.currentShorts = Array.isArray(shorts) ? shorts.filter(short => short && typeof short === 'object') : [];
+  container.replaceChildren();
+  document.getElementById('shorts-results-source').textContent = state.shortsResultName || '';
+  if (!state.currentShorts.length) { updateExportButton(); return; }
+  const wrap = document.createElement('div');
+  wrap.className = 'shorts-table-wrap';
+  wrap.setAttribute('role', 'region');
+  wrap.setAttribute('aria-label', 'Shorts results');
+  wrap.tabIndex = 0;
+  wrap.innerHTML = `<table class="shorts-table"><thead><tr><th scope="col">#</th><th scope="col">Used</th><th scope="col">Not used</th><th scope="col">Memo</th><th scope="col">Time range</th><th scope="col">Title</th><th scope="col">Description</th></tr></thead><tbody></tbody></table>`;
+  const tbody = wrap.querySelector('tbody');
   state.currentShorts.forEach((short, index) => {
-    const el = document.createElement('div');
-    el.className = 'short-card';
-    const time = short.startTime
-      ? `${escapeHtml(short.startTime)}${short.endTime ? ` – ${escapeHtml(short.endTime)}` : ''}`
-      : '';
+    const row = document.createElement('tr');
+    const key = shortFlagKey(short);
+    const flags = shortsFlags[key] || {};
+    row.classList.toggle('short-used', !!flags.used);
+    row.classList.toggle('short-not-used', !!flags.notUsed);
+    const title = short.title || `Short ${index + 1}`;
     const desc = short.description || short.reason || '';
-    el.innerHTML = `
-      <div class="short-card-header">
-        <span class="short-card-title">${escapeHtml(short.title || `Short ${index + 1}`)}</span>
-        <span class="short-card-time">${time}</span>
-      </div>
-      ${desc ? `<div class="short-card-desc">${escapeHtml(desc)}</div>` : ''}
-    `;
-    container.appendChild(el);
+    row.innerHTML = `<td>${index + 1}</td>
+      ${[['used', 'used'], ['notUsed', 'not used'], ['memo', 'memo']].map(([field, label]) => `<td class="shorts-flag-cell"><input type="checkbox" data-flag="${field}" aria-label="Mark short ${index + 1} as ${label}" ${flags[field] ? 'checked' : ''}></td>`).join('')}
+      <td class="shorts-time-cell">${escapeHtml(short.startTime || '—')}<br>${escapeHtml(short.endTime || '')}</td>
+      <td class="shorts-title-cell"><button type="button" class="shorts-copy-field" data-copy-label="Copy title" aria-label="Copy title for short ${index + 1}"><span>${escapeHtml(title)}</span><small class="shorts-copy-hint">Copy title</small></button></td>
+      <td class="shorts-desc-cell"><button type="button" class="shorts-copy-field" data-copy-label="Copy description" aria-label="Copy description for short ${index + 1}" ${desc ? '' : 'disabled'}><span>${escapeHtml(desc || 'No description')}</span><small class="shorts-copy-hint">Copy description</small></button></td>`;
+    const copies = row.querySelectorAll('.shorts-copy-field');
+    copies[0].addEventListener('click', () => copyShortField(copies[0], title));
+    copies[1].addEventListener('click', () => copyShortField(copies[1], desc));
+    row.querySelectorAll('[data-flag]').forEach(input => input.addEventListener('change', () => {
+      const next = { ...(shortsFlags[key] || {}), [input.dataset.flag]: input.checked };
+      if (input.checked && input.dataset.flag === 'used') next.notUsed = false;
+      if (input.checked && input.dataset.flag === 'notUsed') next.used = false;
+      shortsFlags[key] = next;
+      row.querySelectorAll('[data-flag]').forEach(control => { control.checked = !!next[control.dataset.flag]; });
+      row.classList.toggle('short-used', !!next.used);
+      row.classList.toggle('short-not-used', !!next.notUsed);
+      saveShortFlags();
+    }));
+    tbody.appendChild(row);
   });
+  container.appendChild(wrap);
+  updateExportButton();
 }
 
-async function sendShortsToPremiere(shorts, btn) {
-  if (!Array.isArray(shorts) || shorts.length === 0) return;
-  const originalLabel = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
-  const result = await window.electronAPI.addShortsMarkers(shorts);
-  const ok = !!(result && result.success);
-  if (btn) {
-    btn.disabled = false;
-    btn.textContent = ok ? 'Sent to Premiere' : originalLabel;
-  }
-  if (!ok) {
-    showError((result && result.error) || 'Could not add markers to Premiere');
-  }
+async function sendShortsToPremiere(shorts, button) {
+  if (!shorts.length || !state.isConnected || !state.sequenceInfo?.hasSequence) return;
+  button.disabled = true;
+  button.textContent = 'Adding markers…';
+  try {
+    const result = await window.electronAPI.addShortsMarkers(shorts);
+    if (!result?.success) throw new Error(result?.error || 'Could not add markers to Premiere.');
+    document.getElementById('shorts-status').textContent = `${shorts.length} marker${shorts.length === 1 ? '' : 's'} added to Premiere.`;
+  } catch (error) { document.getElementById('shorts-status').textContent = error.message || 'Could not add markers.'; }
+  finally { updateExportButton(); }
 }
 
 async function runStudioShorts() {
-  if (state.isProcessing) return;
-
-  const analyzeBtn = document.getElementById('analyze-shorts-btn');
-  const statusEl = document.getElementById('shorts-status');
-
-  if (!state.sequenceInfo || !state.sequenceInfo.hasSequence) {
-    showError('Open a sequence first');
-    return;
+  if (state.isProcessing || state.shortsSourceLoading) return;
+  if (!state.authState?.user) { openLoginModal(); return; }
+  const config = { source: state.shortsSource, shortsMode: state.shortsMode };
+  if (config.source === 'sequence' && (!state.isConnected || !state.sequenceInfo?.hasSequence)) return;
+  if (config.source === 'audio') config.audioPath = state.shortsAudioPath;
+  if (config.source === 'transcript') {
+    config.subtitleText = document.getElementById('shorts-transcript-text').value.trim();
+    config.fileName = state.shortsTranscriptName;
   }
-
+  if (config.source === 'youtube') Object.assign(config, state.shortsYoutube || {});
+  const account = shortsAccountKey;
+  const statusEl = document.getElementById('shorts-status');
   state.isProcessing = true;
-  if (analyzeBtn) analyzeBtn.disabled = true;
-  renderShorts([]);
-  if (statusEl) statusEl.textContent = 'Starting…';
-
+  updateExportButton();
+  statusEl.textContent = 'Starting…';
+  state.shortsJobRunning = true;
+  const cancelButton = document.getElementById('shorts-cancel-btn');
+  cancelButton.classList.remove('hidden'); cancelButton.disabled = false; cancelButton.textContent = 'Cancel';
+  const started = Date.now();
+  const elapsed = setInterval(() => { document.getElementById('shorts-elapsed').textContent = `${Math.floor((Date.now() - started) / 1000)}s elapsed`; }, 1000);
   try {
-    const result = await window.electronAPI.analyzeShorts({});
-    if (!result || !result.success) {
-      const message = (result && result.error) || 'Best Shorts failed';
-      if (statusEl) statusEl.textContent = message;
-      if (!(result && result.requiresLogin)) showError(message);
+    const result = await window.electronAPI.analyzeShorts(config);
+    if (account !== shortsAccountKey) return;
+    if (!result?.success) {
+      statusEl.textContent = result?.error || 'Best Shorts failed. Try again.';
+      if (result?.requiresLogin) openLoginModal();
       return;
     }
-
-    if (statusEl) {
-      statusEl.textContent = `Found ${result.shorts.length} short${result.shorts.length === 1 ? '' : 's'}.`;
-    }
+    state.shortsResultName = result.fileName || config.fileName || state.sequenceInfo?.name || 'Shorts';
     renderShorts(result.shorts);
+    state.shortsHistoryRetry = result.historyRetry || null;
+    document.getElementById('shorts-history-retry').classList.toggle('hidden', !state.shortsHistoryRetry);
+    statusEl.textContent = result.warning || `Found ${state.currentShorts.length} short${state.currentShorts.length === 1 ? '' : 's'}. Click a title or description to copy it.`;
     if (result.credits) renderCredits(result.credits);
-    loadShortsHistory();
+    if (!result.warning) loadShortsHistory();
+    if (state.shortsView === 'workspace') document.getElementById('shorts-results-section').scrollIntoView({ block: 'start' });
   } catch (error) {
-    const message = error && error.message ? error.message : 'Best Shorts failed';
-    if (statusEl) statusEl.textContent = message;
-    showError(message);
+    if (account === shortsAccountKey) statusEl.textContent = error.message || 'Best Shorts failed. Try again.';
   } finally {
     state.isProcessing = false;
-    if (analyzeBtn) analyzeBtn.disabled = false;
+    state.shortsJobRunning = false; clearInterval(elapsed); cancelButton.classList.add('hidden');
+    reconcileSequenceActions();
+    updateExportButton();
   }
 }
 
@@ -794,6 +1048,7 @@ function setupElectronListeners() {
   window.electronAPI.onAutoCutResult((result) => {
     hideProgress();
     state.isProcessing = false;
+    reconcileSequenceActions();
 
     if (state.currentTab === 'silence') {
       // Silence removal result
@@ -944,6 +1199,65 @@ function getNLEPanelName() {
   return 'Premiere';
 }
 
+function updateConnectionGuide() {
+  document.querySelectorAll('[data-premiere-guide]').forEach(card => {
+    const localFile = card.closest('#tab-captions') && state.captionSource === 'file';
+    card.classList.toggle('hidden', !!(localFile || (state.isConnected && state.sequenceInfo?.hasSequence)));
+    const installed = state.bridgeInstalled !== false;
+    const steps = card.querySelectorAll('li');
+    [installed, state.isConnected, !!state.sequenceInfo?.hasSequence].forEach((complete, index) => steps[index].classList.toggle('complete', complete));
+    card.querySelector('button').textContent = !installed ? 'Install bridge' : !state.isConnected ? 'Connection settings' : 'Refresh sequence';
+    card.querySelector('p').textContent = !installed ? 'Install the bridge, then restart Premiere.' : !state.isConnected ? 'In Premiere, open Window → Extensions → SmoothyEdit.' : 'Open the sequence you want to edit, then refresh.';
+  });
+}
+function setupReviewUI() {
+  for (const name of ['multicam', 'silence', 'captions']) {
+    const card = document.createElement('section');
+    card.className = 'section premiere-guide';
+    card.dataset.premiereGuide = '';
+    card.innerHTML = '<h2>Connect Premiere</h2><ol><li>Install bridge</li><li>Open Premiere panel</li><li>Open sequence</li></ol><p class="help-text"></p><button type="button" class="btn btn-secondary btn-small"></button>';
+    card.querySelector('button').addEventListener('click', async () => {
+      if (state.bridgeInstalled === false) {
+        const result = await window.electronAPI.installBridge();
+        if (!result?.success) { showError(result?.error || 'Could not install the bridge.'); return; }
+        state.bridgeInstalled = true; updateConnectionGuide();
+      } else if (!state.isConnected) { await openSettings(); }
+      else window.electronAPI.refreshSequence();
+    });
+    const scroll = document.querySelector(`#tab-${name} > .content-scroll`);
+    scroll.prepend(card);
+  }
+  window.electronAPI.getBridgeStatus().then(result => { state.bridgeInstalled = !!result?.cep?.installed; updateConnectionGuide(); }).catch(() => {});
+  document.querySelectorAll('#caption-max-lines-group .toggle-btn').forEach(button => button.addEventListener('click', scheduleCaptionReformat));
+  ['caption-max-chars', 'caption-max-duration'].forEach(id => document.getElementById(id).addEventListener('input', scheduleCaptionReformat));
+  setupCaptionSearch();
+  document.getElementById('captions-reset-edits').addEventListener('click', () => {
+    if (!state.captionOriginal) return;
+    invalidateCaptionReformat(); discardCaptionReplacementUndo();
+    state.captionResult = structuredClone(state.captionOriginal);
+    state.captionRaw = state.captionResult.captions.map(caption => ({ ...caption }));
+    state.captionEdited = false;
+    applyCaptionTransforms();
+  });
+  document.getElementById('shorts-cancel-btn').addEventListener('click', async event => {
+    event.currentTarget.disabled = true; event.currentTarget.textContent = 'Cancelling…';
+    await window.electronAPI.cancelShorts();
+  });
+  document.getElementById('shorts-history-retry').addEventListener('click', async event => {
+    if (!state.shortsHistoryRetry) return;
+    const button = event.currentTarget; button.disabled = true;
+    try {
+      const result = await window.electronAPI.retryShortsHistory(state.shortsHistoryRetry);
+      if (!result?.success) throw new Error(result?.error || 'Could not save history.');
+      state.shortsHistoryRetry = null; button.classList.add('hidden');
+      document.getElementById('shorts-status').textContent = 'Saved to history.'; loadShortsHistory();
+    } catch (error) { document.getElementById('shorts-status').textContent = error.message; }
+    finally { button.disabled = false; }
+  });
+  document.getElementById('clear-all-markers-btn').addEventListener('click', () => clearAllMarkers('all'));
+  updateConnectionGuide();
+}
+
 function updateConnection(connected, nle) {
   state.isConnected = connected;
   if (nle) state.activeNLE = nle;
@@ -954,6 +1268,9 @@ function updateConnection(connected, nle) {
   if (connectionNleLabel) {
     connectionNleLabel.textContent = nleName;
   }
+  document.getElementById('connection-state-label').textContent = connected ? 'Connected' : 'Not connected';
+  connectionStatus.setAttribute('aria-label', `${nleName}: ${connected ? 'Connected' : 'Not connected'}`);
+  connectionStatus.title = `${nleName}: ${connected ? 'Connected' : 'Not connected'}`;
 
   if (connected) {
     setStatus(`Connected to ${nleName}`, 'idle');
@@ -963,6 +1280,7 @@ function updateConnection(connected, nle) {
     statusDot.classList.add('connected');
   } else {
     setStatus(`Waiting for ${nleName}...`, 'idle');
+    state.sequenceInfo = null;
     setSilenceStatus(`Waiting for ${nleName}...`, 'idle');
     setCaptionsStatus(`Waiting for ${nleName}...`, 'idle');
     statusDot.classList.remove('connected');
@@ -974,37 +1292,89 @@ function updateConnection(connected, nle) {
     audioTracksList.innerHTML = `<p class="empty-message">Connect to ${panelName} to see audio tracks</p>`;
     videoTracksList.innerHTML = `<p class="empty-message">Connect to ${panelName} to see video tracks</p>`;
     autoCutBtn.disabled = true;
-    footerStatus.textContent = `Open SmoothyEdit panel in ${panelName}`;
+    footerStatus.textContent = '';
 
     // Silence tab
     silenceSequenceName.textContent = 'No sequence loaded';
     silenceSequenceDetails.textContent = '';
     silenceAudioTracksList.innerHTML = `<p class="empty-message">Connect to ${panelName} to see audio tracks</p>`;
     silenceRemoveBtn.disabled = true;
-    silenceFooterStatus.textContent = `Open SmoothyEdit panel in ${panelName}`;
+    silenceFooterStatus.textContent = '';
 
     // Captions tab
     captionsSequenceName.textContent = 'No sequence loaded';
     captionsSequenceDetails.textContent = '';
     captionsAudioTracksList.innerHTML = `<p class="empty-message">Connect to ${panelName} to see audio tracks</p>`;
     generateCaptionsBtn.disabled = true;
-    captionsFooterStatus.textContent = `Open SmoothyEdit panel in ${panelName}`;
+    captionsFooterStatus.textContent = '';
 
     // Best Shorts tab
     bestshortsSequenceName.textContent = 'No sequence loaded';
     bestshortsSequenceDetails.textContent = '';
     updateExportButton();
   }
+  reconcileSequenceActions();
+  if (!connected && state.captionSource === 'file') setCaptionsStatus(state.captionResult?.captions?.length ? 'Captions ready · local file' : 'Local file · Premiere connection optional', 'idle');
+  updateConnectionGuide();
+  if (typeof assetsState !== 'undefined') updateAssetsUI();
+}
+
+// Track choices belong to their sequence and stable track index.
+const sequenceChoices = new Map();
+function preserveTrackChoices(container) {
+  const id = container.dataset.sequenceId;
+  if (!id) return;
+  const choices = sequenceChoices.get(id) || {};
+  container.querySelectorAll('input[data-track-index], select[data-track-index]').forEach(input => {
+    choices[container.id + ':' + input.className + ':' + input.dataset.trackIndex] = input.type === 'checkbox' ? input.checked : input.value;
+  });
+  sequenceChoices.set(id, choices);
+  try { localStorage.setItem('sequence-choices:' + id, JSON.stringify(choices)); } catch {}
+}
+function restoreTrackChoices(container, info) {
+  const id = String(info.id || info.sequenceId || info.name || info.sequenceName);
+  container.dataset.sequenceId = id;
+  let choices = sequenceChoices.get(id);
+  if (!choices) {
+    try { choices = JSON.parse(localStorage.getItem('sequence-choices:' + id) || '{}'); } catch { choices = {}; }
+    sequenceChoices.set(id, choices);
+  }
+  container.querySelectorAll('input[data-track-index], select[data-track-index]').forEach(input => {
+    const saved = choices[container.id + ':' + input.className + ':' + input.dataset.trackIndex];
+    if (saved === undefined) return;
+    if (input.type === 'checkbox') input.checked = saved;
+    else if (input.tagName !== 'SELECT' || [...input.options].some(option => option.value === saved)) input.value = saved;
+  });
+  if (!container.dataset.choicesListener) {
+    container.dataset.choicesListener = 'true';
+    container.addEventListener('change', () => { preserveTrackChoices(container); reconcileSequenceActions(); });
+    container.addEventListener('input', () => preserveTrackChoices(container));
+  }
+}
+function reconcileSequenceActions() {
+  const ready = state.isConnected && state.sequenceInfo?.hasSequence && !state.isProcessing;
+  autoCutBtn.disabled = !ready || !audioTracksList.querySelector('.audio-track-cb:checked') || !videoTracksList.querySelector('.video-track-cb:checked');
+  silenceRemoveBtn.disabled = !ready || !silenceAudioTracksList.querySelector('.silence-audio-track-cb:checked');
+  updateGenerateCaptionsButton();
+  importCaptionsBtn.disabled = !state.isConnected || !state.sequenceInfo?.hasSequence || !state.captionResult?.captions?.length || state.isProcessing;
+  updateAssetsUI();
 }
 
 function displaySequenceInfo(info) {
+  [audioTracksList, videoTracksList, silenceAudioTracksList, captionsAudioTracksList].forEach(preserveTrackChoices);
   if (!info || !info.hasSequence) {
+    state.sequenceInfo = null;
+    displayBestshortsSequenceInfo(info);
+    displaySilenceSequenceInfo(info);
+    displayCaptionsSequenceInfo(info);
+    reconcileSequenceActions();
     sequenceName.textContent = 'No sequence open';
     sequenceDetails.textContent = 'Open a sequence in Premiere';
     audioTracksList.innerHTML = '<p class="empty-message">Open a sequence first</p>';
     videoTracksList.innerHTML = '<p class="empty-message">Open a sequence first</p>';
     autoCutBtn.disabled = true;
     footerStatus.textContent = 'Open a sequence to begin';
+    updateConnectionGuide();
     return;
   }
 
@@ -1021,13 +1391,16 @@ function displaySequenceInfo(info) {
       trackEl.className = 'track-item';
       trackEl.innerHTML = `
         <div class="track-info">
-          <input type="checkbox" class="track-checkbox audio-track-cb" data-track-index="${track.index}" checked>
-          <span class="track-name">${track.name}</span>
-          <span class="track-clips">${clipNames}</span>
+          <input type="checkbox" class="track-checkbox audio-track-cb" aria-label="Include audio ${escapeHtml(track.name)}" data-track-index="${track.index}" checked>
+        <span class="track-name">${escapeHtml(track.name)}</span>
+        <span class="track-clips">${escapeHtml(clipNames)}</span>
         </div>
         <div class="track-mapping">
           <label>Speaker:</label>
-          <input type="text" class="speaker-name" data-track-index="${track.index}" value="Speaker ${index + 1}">
+          <input type="text" class="speaker-name" aria-label="Speaker for ${escapeHtml(track.name)}" data-track-index="${track.index}" value="Speaker ${index + 1}">
+          <label>Camera:</label><select class="speaker-camera" aria-label="Camera for ${escapeHtml(track.name)}" data-track-index="${track.index}">
+            ${(info.videoTracks || []).map((camera, position) => `<option value="${camera.index}" ${position === index ? 'selected' : ''}>${escapeHtml(camera.name)}</option>`).join('')}
+          </select>
         </div>
       `;
       audioTracksList.appendChild(trackEl);
@@ -1045,13 +1418,13 @@ function displaySequenceInfo(info) {
       trackEl.className = 'track-item';
       trackEl.innerHTML = `
         <div class="track-info">
-          <input type="checkbox" class="track-checkbox video-track-cb" data-track-index="${track.index}" checked>
-          <span class="track-name">${track.name}</span>
-          <span class="track-clips">${clipNames}</span>
+          <input type="checkbox" class="track-checkbox video-track-cb" aria-label="Include video ${escapeHtml(track.name)}" data-track-index="${track.index}" checked>
+        <span class="track-name">${escapeHtml(track.name)}</span>
+        <span class="track-clips">${escapeHtml(clipNames)}</span>
         </div>
         <div class="track-mapping">
           <label>Camera:</label>
-          <select class="camera-index" data-track-index="${track.index}">
+          <select class="camera-index" aria-label="Camera number for ${escapeHtml(track.name)}" data-track-index="${track.index}">
             ${generateCameraOptions(info.videoTracks.length, index)}
           </select>
         </div>
@@ -1066,18 +1439,22 @@ function displaySequenceInfo(info) {
     videoTracksList.innerHTML = '<p class="empty-message">No video tracks found</p>';
   }
 
+  restoreTrackChoices(audioTracksList, info);
+  restoreTrackChoices(videoTracksList, info);
   refreshWideCameraOptions();
 
   // Enable button if we have both
   const hasAudio = info.audioTracks && info.audioTracks.length > 0;
   const hasVideo = info.videoTracks && info.videoTracks.length > 0;
   autoCutBtn.disabled = !(hasAudio && hasVideo);
-  footerStatus.textContent = hasAudio && hasVideo ? 'Ready to process' : 'Need audio and video tracks';
+  footerStatus.textContent = hasAudio && hasVideo ? '' : 'Need audio and video tracks';
 
   // Also update other tabs
   displaySilenceSequenceInfo(info);
   displayBestshortsSequenceInfo(info);
   displayCaptionsSequenceInfo(info);
+  reconcileSequenceActions();
+  updateConnectionGuide();
 }
 
 function generateCameraOptions(count, defaultIndex) {
@@ -1102,7 +1479,7 @@ function refreshWideCameraOptions() {
     const track = state.sequenceInfo?.videoTracks?.find(t => t.index === trackIndex);
     const camera = parseInt(sel.value);
     if (!Number.isFinite(camera)) return;
-    html += `<option value="${camera}">Camera ${camera + 1}${track ? ` (${track.name})` : ''}</option>`;
+    html += `<option value="${camera}">Camera ${camera + 1}${track ? ` (${escapeHtml(track.name)})` : ''}</option>`;
   });
 
   wideSelect.innerHTML = html;
@@ -1125,6 +1502,8 @@ async function runAutoCut() {
     if (track && track.clips && track.clips.length > 0) {
       audioMappings.push({
         trackIndex,
+        name: track.name,
+        cameraTrack: Number(document.querySelector(`.speaker-camera[data-track-index="${trackIndex}"]`)?.value),
         speaker: speakerName.toLowerCase().replace(/\s+/g, '_'),
         path: track.clips[0].path,
         clips: track.clips,
@@ -1145,6 +1524,7 @@ async function runAutoCut() {
       videoMappings.push({
         trackIndex,
         camera: cameraIndex,
+        clips: track.clips,
         path: track.clips[0].path,
         trackName: track.name
       });
@@ -1167,20 +1547,31 @@ async function runAutoCut() {
   const cameraTracks = videoMappings
     .filter(v => Number.isFinite(v.camera))
     .sort((a, b) => a.camera - b.camera);
+  if (new Set(cameraTracks.map(track => track.camera)).size !== cameraTracks.length) {
+    showError('Choose a different camera number for each enabled video track.');
+    return;
+  }
   const cameraSlot = new Map();
   cameraTracks.forEach((v, slot) => cameraSlot.set(v.camera, slot));
+  const slotByTrack = new Map(cameraTracks.map((track, slot) => [track.trackIndex, slot]));
+  if (audioMappings.some(audio => !slotByTrack.has(audio.cameraTrack))) {
+    showError('Choose an enabled camera for each selected speaker.');
+    return;
+  }
 
   const clips = cameraTracks.map(v => ({
     name: v.trackName,
-    path: v.path
+    index: v.trackIndex,
+    clips: v.clips
   }));
 
   // Speakers map to camera slots in checkbox order (speaker 1 -> Camera 1).
   const sources = audioMappings.map((audio, index) => ({
+    name: audio.trackName,
     path: audio.path,
     clips: audio.clips,
     speaker: audio.speaker,
-    camera: cameraSlot.get(index) ?? index
+    camera: slotByTrack.get(audio.cameraTrack)
   }));
 
   const useWideShot = document.getElementById('use-wide-shot').checked;
@@ -1205,7 +1596,7 @@ async function runAutoCut() {
       // Wide shots are placed on V3 track (removable without affecting main V1/V2 cuts)
       useOverlapWideShots: useWideShot && wideIndex >= 0,
       jcutOffset: jcutOffset,
-      clips
+      videoTracks: clips
     }
   };
 
@@ -1218,6 +1609,7 @@ async function runAutoCut() {
 
 // Silence Removal Functions
 function displaySilenceSequenceInfo(info) {
+  preserveTrackChoices(silenceAudioTracksList);
   if (!info || !info.hasSequence) {
     silenceSequenceName.textContent = 'No sequence open';
     silenceSequenceDetails.textContent = 'Open a sequence in Premiere';
@@ -1239,9 +1631,9 @@ function displaySilenceSequenceInfo(info) {
       trackEl.className = 'track-item';
       trackEl.innerHTML = `
         <div class="track-info">
-          <input type="checkbox" class="track-checkbox silence-audio-track-cb" data-track-index="${track.index}" checked>
-          <span class="track-name">${track.name}</span>
-          <span class="track-clips">${clipNames}</span>
+          <input type="checkbox" class="track-checkbox silence-audio-track-cb" aria-label="Analyze ${escapeHtml(track.name)}" data-track-index="${track.index}" checked>
+        <span class="track-name">${escapeHtml(track.name)}</span>
+        <span class="track-clips">${escapeHtml(clipNames)}</span>
         </div>
       `;
       silenceAudioTracksList.appendChild(trackEl);
@@ -1250,9 +1642,10 @@ function displaySilenceSequenceInfo(info) {
     silenceAudioTracksList.innerHTML = '<p class="empty-message">No audio tracks found</p>';
   }
 
-  const hasAudio = info.audioTracks && info.audioTracks.length > 0;
+  restoreTrackChoices(silenceAudioTracksList, info);
+  const hasAudio = !!silenceAudioTracksList.querySelector('.silence-audio-track-cb:checked');
   silenceRemoveBtn.disabled = !hasAudio;
-  silenceFooterStatus.textContent = hasAudio ? 'Ready to analyze' : 'Need audio tracks';
+  silenceFooterStatus.textContent = hasAudio ? '' : 'Need audio tracks';
 
   // Hide stats section until we run analysis
   document.getElementById('silence-stats-section').style.display = 'none';
@@ -1270,6 +1663,7 @@ async function runSilenceRemoval() {
     if (track && track.clips && track.clips.length > 0) {
       audioSources.push({
         trackIndex,
+        name: track.name,
         path: track.clips[0].path,
         clips: track.clips,
         trackName: track.name
@@ -1289,7 +1683,8 @@ async function runSilenceRemoval() {
       if (track.clips && track.clips.length > 0) {
         videoClips.push({
           name: track.name,
-          path: track.clips[0].path
+          index: track.index,
+          clips: track.clips
         });
       }
     });
@@ -1315,8 +1710,9 @@ async function runSilenceRemoval() {
       thresholdDb: parseInt(document.getElementById('silence-threshold').value),
       minSilenceDuration: parseFloat(document.getElementById('min-silence-duration').value),
       padding: parseFloat(document.getElementById('padding-amount').value),
+      sequenceId: state.sequenceInfo.id,
       editInPlace: editInPlace,
-      clips: videoClips.length > 0 ? videoClips : audioSources.map(s => ({ name: s.trackName, path: s.path }))
+      videoTracks: videoClips
     }
   };
 
@@ -1347,7 +1743,13 @@ function setStatus(text, type) {
   statusText.textContent = text;
 }
 
+let progressClock = null;
 function showProgress(msg, options = {}) {
+  clearInterval(progressClock);
+  const started = Date.now();
+  const clock = document.getElementById('progress-elapsed');
+  clock.textContent = '0s elapsed';
+  progressClock = setInterval(() => { clock.textContent = `${Math.floor((Date.now() - started) / 1000)}s elapsed`; }, 1000);
   document.getElementById('progress-overlay').classList.remove('hidden');
   document.getElementById('progress-text').textContent = msg;
   document.getElementById('progress-fill').style.width = '0%';
@@ -1365,9 +1767,11 @@ function showProgress(msg, options = {}) {
 function setProgress(pct, msg) {
   if (msg) document.getElementById('progress-text').textContent = msg;
   document.getElementById('progress-fill').style.width = `${pct}%`;
+  document.getElementById('progress-fill').setAttribute('aria-valuenow', String(pct));
 }
 
 function hideProgress() {
+  clearInterval(progressClock); progressClock = null;
   document.getElementById('progress-overlay').classList.add('hidden');
   if (progressCancelBtn) progressCancelBtn.classList.add('hidden');
 }
@@ -1392,7 +1796,7 @@ function renderUpdateState() {
   const updateBar = document.getElementById('update-bar');
   const updateText = document.getElementById('update-bar-text');
   const updateBtn = document.getElementById('update-bar-btn');
-  const upgradeable = status === 'available' || status === 'downloading' || status === 'downloaded';
+  const upgradeable = status === 'available' || status === 'downloading' || status === 'downloaded' || status === 'stuck';
 
   // Reset shared controls to a known-good baseline on every event.
   checkUpdateBtn.disabled = false;
@@ -1436,8 +1840,19 @@ function renderUpdateState() {
       settingsUpdateStatus.textContent = `You're on the latest version (v${state.appVersion || '?'})`;
       break;
 
+    case 'stuck':
+      settingsUpdateStatus.textContent = `Update v${version} downloaded but didn't install — download it manually from smoothyedit.com`;
+      updateText.textContent = `Update v${version} didn't install — download manually`;
+      updateBtn.textContent = 'Open smoothyedit.com';
+      updateBar.classList.remove('hidden');
+      break;
+
     case 'error':
       settingsUpdateStatus.textContent = 'Update check failed — try again later';
+      break;
+
+    case 'dev-build':
+      settingsUpdateStatus.textContent = 'Update checks are available in installed builds';
       break;
 
     default:
@@ -1594,21 +2009,26 @@ function updateWebsiteConnection(connected) {
 
 function updateExportButton() {
   const hasSequence = !!(state.isConnected && state.sequenceInfo?.hasSequence);
-
-  // Clear markers only requires Premiere connection and sequence
-  clearMarkersBtn.disabled = !hasSequence;
-
-  // Find Best Shorts needs Premiere + an open sequence (analysis runs in-app).
+  const busy = state.isProcessing || state.shortsSourceLoading;
+  const signedIn = !!state.authState?.user;
+  let ready = hasSequence;
+  if (state.shortsSource === 'transcript') ready = !!document.getElementById('shorts-transcript-text').value.trim();
+  if (state.shortsSource === 'audio') ready = !!state.shortsAudioPath;
+  if (state.shortsSource === 'youtube') ready = !!state.shortsYoutube?.subtitleText;
+  clearMarkersBtn.disabled = !hasSequence || busy;
+  document.getElementById('clear-all-markers-btn').disabled = !hasSequence || busy;
   const analyzeBtn = document.getElementById('analyze-shorts-btn');
-  if (analyzeBtn) analyzeBtn.disabled = !hasSequence || state.isProcessing;
-
-  if (!state.isConnected) {
-    bestshortsFooterStatus.textContent = 'Connect to Premiere Pro first';
-  } else if (!state.sequenceInfo?.hasSequence) {
-    bestshortsFooterStatus.textContent = 'Open a sequence in Premiere';
-  } else {
-    bestshortsFooterStatus.textContent = 'Ready';
-  }
+  analyzeBtn.disabled = !signedIn || !ready || busy;
+  analyzeBtn.textContent = state.isProcessing ? 'Analyzing…' : state.shortsMode === 'best' ? 'Find Best Part' : 'Find Multiple Shorts';
+  const sendBtn = document.getElementById('send-shorts-btn');
+  sendBtn.disabled = !hasSequence || busy || !state.currentShorts.length;
+  sendBtn.textContent = state.currentShorts.length > 1 ? `Add ${state.currentShorts.length} markers in Premiere` : 'Add marker in Premiere';
+  document.querySelectorAll('#shorts-workspace [data-shorts-source], #shorts-workspace input, #shorts-workspace textarea, #shorts-workspace button:not(.shorts-copy-field)').forEach(control => { control.disabled = busy; });
+  document.getElementById('shorts-history-btn').disabled = !signedIn || state.isProcessing;
+  if (!signedIn) bestshortsFooterStatus.textContent = 'Sign in to use Studio';
+  else if (busy) bestshortsFooterStatus.textContent = state.shortsSourceLoading ? 'Loading YouTube transcript…' : 'Analyzing your source…';
+  else if (!ready) bestshortsFooterStatus.textContent = state.shortsSource === 'sequence' ? 'Connect Premiere and open a sequence' : '';
+  else bestshortsFooterStatus.textContent = '';
 }
 
 function displayBestshortsSequenceInfo(info) {
@@ -1629,14 +2049,16 @@ function setBestshortsStatus(text, type) {
   bestshortsStatusText.textContent = text;
 }
 
-async function clearAllMarkers() {
+async function clearAllMarkers(scope = 'smoothy') {
+  if (typeof scope !== 'string') scope = 'smoothy';
+  if (scope === 'all' && !window.confirm(`Delete all ${state.sequenceInfo?.markerCount ?? ''} markers from ${state.sequenceInfo?.name || 'this sequence'}, including your own markers?`)) return;
   if (!state.isConnected || !state.sequenceInfo?.hasSequence) return;
 
   clearMarkersBtn.disabled = true;
   setBestshortsStatus('Clearing markers...', 'processing');
 
   try {
-    const result = await window.electronAPI.clearMarkers();
+    const result = await window.electronAPI.clearMarkers(scope, state.sequenceInfo.id);
 
     if (result.success) {
       setBestshortsStatus(`Cleared ${result.count} markers`, 'success');
@@ -1663,6 +2085,7 @@ function setCaptionsStatus(text, type) {
 }
 
 function displayCaptionsSequenceInfo(info) {
+  preserveTrackChoices(captionsAudioTracksList);
   if (!info || !info.hasSequence) {
     captionsSequenceName.textContent = 'No sequence open';
     captionsSequenceDetails.textContent = 'Open a sequence in Premiere';
@@ -1686,9 +2109,9 @@ function displayCaptionsSequenceInfo(info) {
       trackEl.className = 'track-item';
       trackEl.innerHTML = `
         <div class="track-info">
-          <input type="checkbox" class="track-checkbox captions-audio-track-cb" data-track-index="${track.index}" checked>
-          <span class="track-name">${track.name}</span>
-          <span class="track-clips">${clipNames}</span>
+          <input type="checkbox" class="track-checkbox captions-audio-track-cb" aria-label="Transcribe ${escapeHtml(track.name)}" data-track-index="${track.index}" checked>
+        <span class="track-name">${escapeHtml(track.name)}</span>
+        <span class="track-clips">${escapeHtml(clipNames)}</span>
         </div>
       `;
       captionsAudioTracksList.appendChild(trackEl);
@@ -1697,6 +2120,7 @@ function displayCaptionsSequenceInfo(info) {
     captionsAudioTracksList.innerHTML = '<p class="empty-message">No audio tracks found</p>';
   }
 
+  restoreTrackChoices(captionsAudioTracksList, info);
   updateGenerateCaptionsButton();
 }
 
@@ -1705,7 +2129,7 @@ function displayCaptionsSequenceInfo(info) {
  * sequence with at least one audio track.
  */
 function updateGenerateCaptionsButton() {
-  if (state.isTranscribing) {
+  if (state.isProcessing || state.isTranscribing) {
     generateCaptionsBtn.disabled = true;
     return;
   }
@@ -1713,14 +2137,14 @@ function updateGenerateCaptionsButton() {
   if (state.captionSource === 'file') {
     const hasFile = !!state.captionFilePath;
     generateCaptionsBtn.disabled = !hasFile;
-    captionsFooterStatus.textContent = hasFile ? 'Ready to generate captions' : 'Choose an audio or video file';
+    captionsFooterStatus.textContent = '';
     return;
   }
 
-  const hasAudio = state.sequenceInfo?.audioTracks && state.sequenceInfo.audioTracks.length > 0;
+  const hasAudio = state.isConnected && state.sequenceInfo?.hasSequence && !!captionsAudioTracksList.querySelector('.captions-audio-track-cb:checked');
   generateCaptionsBtn.disabled = !hasAudio;
   if (hasAudio) {
-    captionsFooterStatus.textContent = 'Ready to generate captions';
+    captionsFooterStatus.textContent = '';
   }
 }
 
@@ -1863,14 +2287,21 @@ async function onCaptionEngineChange() {
  * generating without losing the original text.
  */
 function toggleCaptionTransform(kind) {
+  invalidateCaptionReformat(); discardCaptionReplacementUndo();
   state.captionTransforms[kind] = !state.captionTransforms[kind];
   syncCaptionTransformButtons();
   applyCaptionTransforms();
 }
 
 function syncCaptionTransformButtons() {
-  if (captionsCapitalizeBtn) captionsCapitalizeBtn.classList.toggle('active', state.captionTransforms.capitalize);
-  if (captionsRemovePunctBtn) captionsRemovePunctBtn.classList.toggle('active', state.captionTransforms.removePunctuation);
+  if (captionsCapitalizeBtn) {
+    captionsCapitalizeBtn.classList.toggle('active', state.captionTransforms.capitalize);
+    captionsCapitalizeBtn.setAttribute('aria-pressed', String(state.captionTransforms.capitalize));
+  }
+  if (captionsRemovePunctBtn) {
+    captionsRemovePunctBtn.classList.toggle('active', state.captionTransforms.removePunctuation);
+    captionsRemovePunctBtn.setAttribute('aria-pressed', String(state.captionTransforms.removePunctuation));
+  }
 }
 
 /**
@@ -1885,12 +2316,12 @@ function applyCaptionTransforms() {
     let out = text;
     if (removePunctuation) {
       out = out
-        .replace(/[.,!?;:"'`´’‘“”\-–—…()\[\]{}]/g, '')
+        .replace(/[\p{P}]/gu, '')
         .replace(/\s{2,}/g, ' ')
         .trim();
     }
     if (capitalize) {
-      out = out.replace(/(^|\n)([a-z])/g, (_, prefix, ch) => prefix + ch.toUpperCase());
+      out = out.replace(/(^|\n)(\s*\p{L})/gu, (_, prefix, ch) => prefix + ch.toLocaleUpperCase());
     }
     return out;
   };
@@ -1932,6 +2363,7 @@ function setCaptionSource(source) {
   if (captionsTracksSection) captionsTracksSection.classList.toggle('hidden', isFile);
 
   updateGenerateCaptionsButton();
+  updateConnectionGuide();
 }
 
 async function chooseCaptionFile() {
@@ -2015,6 +2447,9 @@ async function runGenerateCaptions() {
 
     if (result.success) {
       state.captionResult = result;
+      invalidateCaptionReformat(); discardCaptionReplacementUndo();
+      state.captionOriginal = structuredClone(result);
+      state.captionEdited = false;
       // Keep the raw transcription so the text-style toggles stay reversible.
       state.captionRaw = result.captions.map((cap) => ({ ...cap }));
 
@@ -2034,6 +2469,7 @@ async function runGenerateCaptions() {
       // Apply the active text-style toggles, then show the preview.
       applyCaptionTransforms();
       displayCaptionsPreview(state.captionResult.captions);
+      captionsPreviewSection.scrollIntoView({ block: 'start' });
     } else {
       setCaptionsStatus('Generation failed', 'error');
       showError(result.error || 'Caption generation failed');
@@ -2049,27 +2485,198 @@ async function runGenerateCaptions() {
   }
 }
 
+let captionReformatTimer = null;
+let captionReformatRequest = 0;
+function currentCaptionSettings() {
+  return { maxCharsPerLine: Number(document.getElementById('caption-max-chars').value),
+    maxLines: Number(document.querySelector('#caption-max-lines-group .toggle-btn.active').dataset.value),
+    maxDurationSeconds: Number(document.getElementById('caption-max-duration').value) };
+}
+function invalidateCaptionReformat() {
+  ++captionReformatRequest;
+  clearTimeout(captionReformatTimer);
+}
+function scheduleCaptionReformat() {
+  invalidateCaptionReformat(); discardCaptionReplacementUndo();
+  captionReformatTimer = setTimeout(reformatExistingCaptions, 250);
+}
+async function reformatExistingCaptions() {
+  if (!state.captionResult || state.isProcessing) return;
+  const request = ++captionReformatRequest;
+  const chunks = state.captionEdited ? state.captionRaw.flatMap(caption => {
+    const words = caption.text.trim().split(/\s+/).filter(Boolean);
+    return words.map((text, index) => ({ text, timestamp: [caption.startTime + (caption.endTime - caption.startTime) * index / words.length,
+      caption.startTime + (caption.endTime - caption.startTime) * (index + 1) / words.length] }));
+  }) : state.captionOriginal?.chunks;
+  if (!chunks) return;
+  try {
+    const result = await window.electronAPI.reformatCaptions(chunks, currentCaptionSettings());
+    if (request !== captionReformatRequest) return;
+    if (!result?.success) throw new Error(result?.error || 'Could not update caption formatting.');
+    state.captionRaw = result.captions.map(caption => ({ ...caption }));
+    applyCaptionTransforms();
+    document.getElementById('caption-reformat-note').textContent = 'Caption formatting updated. Your text edits are kept.';
+  } catch (error) { if (request === captionReformatRequest) document.getElementById('caption-reformat-note').textContent = error.message; }
+}
+function captionWarning(caption) {
+  const duration = caption.endTime - caption.startTime;
+  const speed = Array.from(caption.text.replace(/\s/g, '')).length / Math.max(duration, 0.01);
+  const limit = currentCaptionSettings().maxCharsPerLine;
+  const messages = [];
+  if (speed > 20) messages.push(`${Math.round(speed)} characters/s — may be hard to read`);
+  if (caption.text.split('\n').some(line => Array.from(line).length > limit)) messages.push('Line exceeds your character limit');
+  return messages.join(' · ');
+}
+function updateCaptionExports() {
+  state.captionResult.srt = buildSRT(state.captionResult.captions);
+  state.captionResult.vtt = buildVTT(state.captionResult.captions);
+}
+
+const captionSearch = { matches: [], index: -1, undo: null };
+function setupCaptionSearch() {
+  const find = document.getElementById('caption-find');
+  find.addEventListener('input', () => {
+    document.getElementById('caption-replace-status').textContent = '';
+    refreshCaptionSearch(true); revealCaptionMatch(false);
+  });
+  ['caption-find-case', 'caption-find-whole'].forEach(id => document.getElementById(id).addEventListener('change', () => {
+    document.getElementById('caption-replace-status').textContent = '';
+    refreshCaptionSearch(true); revealCaptionMatch(false);
+  }));
+  find.addEventListener('keydown', event => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault(); moveCaptionMatch(event.shiftKey ? -1 : 1);
+  });
+  document.getElementById('caption-find-previous').addEventListener('click', () => moveCaptionMatch(-1));
+  document.getElementById('caption-find-next').addEventListener('click', () => moveCaptionMatch(1));
+  document.getElementById('caption-replace-one').addEventListener('click', () => replaceCaptionText(false));
+  document.getElementById('caption-replace-all').addEventListener('click', () => replaceCaptionText(true));
+  document.getElementById('caption-undo-replace').addEventListener('click', undoCaptionReplacement);
+}
+function refreshCaptionSearch(reset = false) {
+  captionSearch.matches = findCaptionMatches(state.captionResult?.captions || [], document.getElementById('caption-find').value, {
+    matchCase: document.getElementById('caption-find-case').checked,
+    wholeWords: document.getElementById('caption-find-whole').checked
+  });
+  captionSearch.index = captionSearch.matches.length ? (reset ? 0 : Math.max(0, Math.min(captionSearch.index, captionSearch.matches.length - 1))) : -1;
+  renderCaptionSearch();
+}
+function renderCaptionSearch() {
+  const { matches, index } = captionSearch;
+  const current = matches[index];
+  const matchedRows = new Set(matches.map(match => match.captionIndex));
+  [...captionsPreview.children].forEach((row, captionIndex) => {
+    row.classList.toggle('caption-search-match', matchedRows.has(captionIndex));
+    row.classList.toggle('caption-search-current', captionIndex === current?.captionIndex);
+  });
+  for (const id of ['caption-find-previous', 'caption-find-next', 'caption-replace-one', 'caption-replace-all']) {
+    document.getElementById(id).disabled = !matches.length;
+  }
+  const status = document.getElementById('caption-search-status');
+  status.textContent = !document.getElementById('caption-find').value ? 'Search your generated captions.'
+    : current ? `${index + 1} of ${matches.length} ${matches.length === 1 ? 'match' : 'matches'} · Caption ${current.captionIndex + 1}` : 'No matches';
+}
+function revealCaptionMatch(focus) {
+  const match = captionSearch.matches[captionSearch.index];
+  if (!match) return;
+  const row = captionsPreview.children[match.captionIndex];
+  const editor = row.querySelector('textarea');
+  // Scroll the subtitle list first; keyboard navigation also reveals the editor.
+  const top = row.getBoundingClientRect().top - captionsPreview.getBoundingClientRect().top + captionsPreview.scrollTop;
+  if (top < captionsPreview.scrollTop || top + row.offsetHeight > captionsPreview.scrollTop + captionsPreview.clientHeight) {
+    captionsPreview.scrollTop = Math.max(0, top - 8);
+  }
+  if (focus) {
+    const workspace = captionsPreviewSection.closest('.content-scroll').getBoundingClientRect();
+    const bounds = editor.getBoundingClientRect();
+    if (bounds.top < workspace.top || bounds.bottom > workspace.bottom) editor.scrollIntoView({ block: 'nearest' });
+    editor.focus({ preventScroll: true });
+    editor.setSelectionRange(match.start, match.end);
+  }
+}
+function moveCaptionMatch(direction) {
+  refreshCaptionSearch();
+  if (!captionSearch.matches.length) return;
+  captionSearch.index = (captionSearch.index + direction + captionSearch.matches.length) % captionSearch.matches.length;
+  renderCaptionSearch(); revealCaptionMatch(true);
+}
+function discardCaptionReplacementUndo() {
+  captionSearch.undo = null;
+  document.getElementById('caption-undo-replace').classList.add('hidden');
+  document.getElementById('caption-replace-status').textContent = '';
+}
+function replaceCaptionText(all) {
+  refreshCaptionSearch();
+  if (!captionSearch.matches.length) return;
+  const matches = all ? captionSearch.matches : [captionSearch.matches[captionSearch.index]];
+  const replacement = document.getElementById('caption-replace').value;
+  const captions = replaceCaptionMatches(state.captionResult.captions, matches, replacement);
+  const changed = captions.some((caption, index) => caption.text !== state.captionResult.captions[index].text);
+  if (!changed) { document.getElementById('caption-replace-status').textContent = 'The replacement is the same as the matching text.'; return; }
+  invalidateCaptionReformat();
+  captionSearch.undo = { captions: structuredClone(state.captionResult.captions), raw: structuredClone(state.captionRaw), edited: state.captionEdited };
+  state.captionResult.captions = captions;
+  const affected = new Set(matches.map(match => match.captionIndex));
+  affected.forEach(index => { state.captionRaw[index].text = captions[index].text; });
+  state.captionEdited = true;
+  updateCaptionExports(); displayCaptionsPreview(captions);
+  document.getElementById('caption-undo-replace').classList.remove('hidden');
+  document.getElementById('caption-replace-status').textContent = `Replaced ${matches.length} ${matches.length === 1 ? 'match' : 'matches'} in ${affected.size} ${affected.size === 1 ? 'caption' : 'captions'}.`;
+  revealCaptionMatch(false);
+}
+function undoCaptionReplacement() {
+  if (!captionSearch.undo) return;
+  invalidateCaptionReformat();
+  state.captionResult.captions = captionSearch.undo.captions;
+  state.captionRaw = captionSearch.undo.raw;
+  state.captionEdited = captionSearch.undo.edited;
+  discardCaptionReplacementUndo();
+  updateCaptionExports(); displayCaptionsPreview(state.captionResult.captions);
+  document.getElementById('caption-replace-status').textContent = 'Replacement undone.';
+}
 function displayCaptionsPreview(captions) {
   captionsPreviewSection.style.display = 'block';
   captionsCount.textContent = `${captions.length} captions`;
   captionsPreview.innerHTML = '';
-
-  captions.forEach(cap => {
-    const el = document.createElement('div');
-    el.className = 'caption-item';
-    el.innerHTML = `
-      <div class="caption-time">${formatSRTTime(cap.startTime)} --> ${formatSRTTime(cap.endTime)}</div>
-      <div class="caption-text">${escapeHtml(cap.text)}</div>
-    `;
-    captionsPreview.appendChild(el);
+  captions.forEach((caption, index) => {
+    const row = document.createElement('div'); row.className = 'caption-item';
+    row.innerHTML = `<div class="caption-row-heading">Caption ${index + 1}</div><div class="caption-time-inputs"><label>Start (s)<input type="number" step="0.01" min="0" value="${caption.startTime}" aria-label="Caption ${index + 1} start"></label><label>End (s)<input type="number" step="0.01" min="0" value="${caption.endTime}" aria-label="Caption ${index + 1} end"></label></div><textarea class="caption-text-editor" aria-label="Caption ${index + 1} text" rows="2">${escapeHtml(caption.text)}</textarea><p class="caption-warning help-text"></p>`;
+    const warning = row.querySelector('.caption-warning'); warning.textContent = captionWarning(caption);
+    row.querySelector('textarea').addEventListener('input', event => {
+      invalidateCaptionReformat(); discardCaptionReplacementUndo(); state.captionEdited = true;
+      caption.text = event.target.value; state.captionRaw[index].text = event.target.value;
+      updateCaptionExports(); warning.textContent = captionWarning(caption); refreshCaptionSearch();
+    });
+    row.querySelectorAll('input').forEach((input, field) => {
+      const commitTiming = (resetInvalid) => {
+        const value = Number(input.value), key = field === 0 ? 'startTime' : 'endTime';
+        const candidate = { ...caption, [key]: value };
+        const valid = input.value !== '' && Number.isFinite(value) && value >= 0 && candidate.startTime < candidate.endTime &&
+          (!captions[index - 1] || candidate.startTime >= captions[index - 1].endTime) && (!captions[index + 1] || candidate.endTime <= captions[index + 1].startTime);
+        if (!valid) {
+          if (resetInvalid) input.value = caption[key];
+          warning.textContent = 'Use increasing, non-overlapping caption timings.'; return;
+        }
+        if (value !== caption[key]) {
+          invalidateCaptionReformat(); discardCaptionReplacementUndo(); state.captionEdited = true;
+          caption[key] = value; state.captionRaw[index][key] = value; updateCaptionExports();
+        }
+        warning.textContent = captionWarning(caption);
+      };
+      input.addEventListener('input', () => commitTiming(false));
+      input.addEventListener('change', () => commitTiming(true));
+    });
+    captionsPreview.appendChild(row);
   });
+  refreshCaptionSearch();
 }
 
 function formatSRTTime(seconds) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const ms = Math.round((seconds % 1) * 1000);
+  const total = Math.max(0, Math.round(seconds * 1000));
+  const h = Math.floor(total / 3600000);
+  const m = Math.floor(total / 60000) % 60;
+  const s = Math.floor(total / 1000) % 60;
+  const ms = total % 1000;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')},${String(ms).padStart(3, '0')}`;
 }
 
@@ -2114,7 +2721,7 @@ async function importCaptionsToPremiere() {
     setCaptionsStatus('Import failed', 'error');
     showError(error.message || 'Failed to import captions');
   } finally {
-    importCaptionsBtn.disabled = false;
+    reconcileSequenceActions();
   }
 }
 
@@ -2122,8 +2729,14 @@ async function importCaptionsToPremiere() {
 // Settings Functions
 // ========================================
 
+let settingsReturnFocus = null;
 async function openSettings() {
+  if (settingsModal.classList.contains('hidden')) settingsReturnFocus = document.activeElement;
+  document.querySelector('.app-container').inert = true;
   settingsModal.classList.remove('hidden');
+  settingsBody.scrollTop = 0;
+  settingsCloseBtn.focus({ preventScroll: true });
+  document.getElementById('settings-account-btn').textContent = state.authState?.user ? 'Open account' : 'Sign in';
 
   // Load saved token
   const token = await window.electronAPI.getConnectionToken();
@@ -2145,6 +2758,8 @@ async function openSettings() {
 
 function closeSettings() {
   settingsModal.classList.add('hidden');
+  document.querySelector('.app-container').inert = false;
+  settingsReturnFocus?.focus();
 }
 
 async function saveToken() {
@@ -2295,9 +2910,8 @@ function updateNLESelectorUI() {
 // ========================================
 
 function manualCheckForUpdates() {
-  checkUpdateBtn.disabled = true;
-  checkUpdateBtn.textContent = 'Checking…';
-  settingsUpdateStatus.textContent = 'Checking for updates…';
+  state.updateState = { status: 'checking', version: null, percent: 0 };
+  renderUpdateState();
   window.electronAPI.checkForUpdates();
 
   // Re-enable after 15s in case no response comes back
@@ -2305,7 +2919,7 @@ function manualCheckForUpdates() {
     if (state.updateState.status === 'checking' || checkUpdateBtn.textContent === 'Checking…') {
       state.updateState = { status: 'idle', version: null, percent: 0 };
       renderUpdateState();
-      settingsUpdateStatus.textContent = 'No updates found';
+      settingsUpdateStatus.textContent = 'No response from the update service — try again later';
     }
   }, 15000);
 }
@@ -2342,13 +2956,10 @@ async function initAlwaysOnTop() {
 }
 
 function updatePinButton(isOnTop) {
-  if (isOnTop) {
-    pinBtn.classList.add('active');
-    pinBtn.title = 'Unpin Window';
-  } else {
-    pinBtn.classList.remove('active');
-    pinBtn.title = 'Stay on Top';
-  }
+  pinBtn.classList.toggle('active', isOnTop);
+  pinBtn.setAttribute('aria-pressed', String(isOnTop));
+  pinBtn.setAttribute('aria-label', isOnTop ? 'Turn off stay on top' : 'Stay on top');
+  pinBtn.title = isOnTop ? 'Stop keeping SmoothyEdit above other windows' : 'Keep SmoothyEdit above other windows';
 }
 
 async function toggleAlwaysOnTop() {
@@ -2495,8 +3106,12 @@ function setupCompressorListeners() {
     dropZone.classList.remove('drag-over');
 
     const file = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file && file.path) {
-      await selectCompressorSource(file.path);
+    if (file) {
+      try {
+        const filePath = window.electronAPI.getDroppedFilePath(file);
+        if (!filePath) throw new Error('This dropped item has no local file path. Use Browse to select it.');
+        await selectCompressorSource(filePath);
+      } catch (error) { showCompressorError(error.message || 'Could not read the dropped file.'); }
     }
   });
 
@@ -2631,6 +3246,7 @@ async function changeOutputFolder() {
 
 function updateCompressorUI() {
   const dropSection = document.getElementById('compressor-drop-section');
+  const emptyGuide = document.getElementById('compressor-empty-guide');
   const folderSection = document.getElementById('compressor-folder-section');
   const filesSection = document.getElementById('compressor-files-section');
   const hardwareSection = document.getElementById('compressor-hardware-section');
@@ -2640,6 +3256,7 @@ function updateCompressorUI() {
 
   if (compressorState.currentSourcePath) {
     dropSection.classList.add('hidden');
+    emptyGuide.classList.add('hidden');
     folderSection.classList.remove('hidden');
     filesSection.classList.remove('hidden');
     hardwareSection.classList.remove('hidden');
@@ -2684,7 +3301,7 @@ function updateCompressorUI() {
       `).join('');
 
       startBtn.disabled = compressorState.isCompressing;
-      footerStatus.textContent = `Ready to compress ${compressorState.videoFiles.length} video file${compressorState.videoFiles.length === 1 ? '' : 's'} to HEVC MP4`;
+      footerStatus.textContent = '';
     }
 
     // Update output path
@@ -2692,12 +3309,13 @@ function updateCompressorUI() {
 
   } else {
     dropSection.classList.remove('hidden');
+    emptyGuide.classList.remove('hidden');
     folderSection.classList.add('hidden');
     filesSection.classList.add('hidden');
     hardwareSection.classList.add('hidden');
     settingsSection.classList.add('hidden');
     startBtn.disabled = true;
-    footerStatus.textContent = 'Select a video or folder to begin';
+    footerStatus.textContent = '';
   }
 }
 
@@ -2979,6 +3597,620 @@ function showCompressorError(message) {
 
   // Also show in error modal
   showError(message);
+}
+
+// ========================================
+// Assets (SVG / image -> PNG) Functions
+// ========================================
+
+const ASSET_RASTER_MAX = 8192;
+const ASSET_DEFAULT_SVG_WIDTH = 1000;
+
+const assetsState = {
+  items: [],
+  activeIndex: 0,
+  previewUrl: null,
+  outputFolder: null,
+  widthTouched: false,
+  busy: false
+};
+
+const assetsStatusBar = document.getElementById('assets-status-bar');
+const assetsStatusText = document.getElementById('assets-status-text');
+const assetsDropZone = document.getElementById('assets-drop-zone');
+const assetsBrowseBtn = document.getElementById('assets-browse-btn');
+const assetsPasteBtn = document.getElementById('assets-paste-btn');
+const assetsPreviewSection = document.getElementById('assets-preview-section');
+const assetsEmptyGuide = document.getElementById('assets-empty-guide');
+const assetsPreviewImg = document.getElementById('assets-preview-img');
+const assetsFileName = document.getElementById('assets-file-name');
+const assetsFileInfo = document.getElementById('assets-file-info');
+const assetsClearBtn = document.getElementById('assets-clear-btn');
+const assetsOptimizeSection = document.getElementById('assets-optimize-section');
+const assetsOptimizeToggle = document.getElementById('assets-optimize-toggle');
+const assetsSvgPrecision = document.getElementById('assets-svg-precision');
+const assetsSvgPrecisionValue = document.getElementById('assets-svg-precision-value');
+const assetsOptimizeResult = document.getElementById('assets-optimize-result');
+const assetsOutputSection = document.getElementById('assets-output-section');
+const assetsWidthInput = document.getElementById('assets-width');
+const assetsWidthValue = document.getElementById('assets-width-value');
+const assetsBackground = document.getElementById('assets-background');
+const assetsBackgroundColor = document.getElementById('assets-background-color');
+const assetsDuration = document.getElementById('assets-duration');
+const assetsDurationValue = document.getElementById('assets-duration-value');
+const assetsOutputPath = document.getElementById('assets-output-path');
+const assetsOutputChangeBtn = document.getElementById('assets-output-change-btn');
+const assetsConvertBtn = document.getElementById('assets-convert-btn');
+const assetsSaveAsBtn = document.getElementById('assets-saveas-btn');
+const assetsSendBtn = document.getElementById('assets-send-btn');
+const assetsFooterStatus = document.getElementById('assets-footer-status');
+
+async function initAssets() {
+  if (!assetsDropZone) return;
+  setupAssetsListeners();
+  await refreshAssetsOutputFolder();
+}
+
+function setupAssetsListeners() {
+  assetsDropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    assetsDropZone.classList.add('drag-over');
+  });
+  assetsDropZone.addEventListener('dragleave', () => {
+    assetsDropZone.classList.remove('drag-over');
+  });
+  assetsDropZone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    assetsDropZone.classList.remove('drag-over');
+    const files = e.dataTransfer && e.dataTransfer.files ? Array.from(e.dataTransfer.files) : [];
+    if (files.length) await handleAssetFiles(files);
+  });
+  assetsDropZone.addEventListener('click', openAssetFilePicker);
+  assetsBrowseBtn.addEventListener('click', openAssetFilePicker);
+  assetsPasteBtn.addEventListener('click', () => pasteAssetsFromClipboard(null));
+  assetsClearBtn.addEventListener('click', clearAssets);
+
+  document.addEventListener('paste', (e) => {
+    if (state.currentTab !== 'assets') return;
+    pasteAssetsFromClipboard(e.clipboardData);
+  });
+
+  assetsOptimizeToggle.addEventListener('change', () => updateAssetsOptimizeResult());
+  assetsSvgPrecision.addEventListener('input', () => {
+    assetsSvgPrecisionValue.textContent = assetsSvgPrecision.value;
+    updateAssetsOptimizeResult();
+  });
+
+  assetsWidthInput.addEventListener('input', () => {
+    assetsState.widthTouched = true;
+    updateAssetsWidthLabel();
+  });
+
+  assetsBackground.addEventListener('change', () => {
+    assetsBackgroundColor.classList.toggle('hidden', assetsBackground.value !== 'custom');
+  });
+
+  assetsDuration.addEventListener('input', () => {
+    assetsDurationValue.textContent = `${parseFloat(assetsDuration.value).toFixed(1)}s`;
+  });
+
+  assetsOutputChangeBtn.addEventListener('click', changeAssetsOutputFolder);
+  assetsConvertBtn.addEventListener('click', () => convertAssets(false));
+  assetsSaveAsBtn.addEventListener('click', () => convertAssets(true));
+  assetsSendBtn.addEventListener('click', sendAssetsToPremiere);
+}
+
+function openAssetFilePicker() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.svg,image/*';
+  input.multiple = true;
+  input.addEventListener('change', () => {
+    const files = input.files ? Array.from(input.files) : [];
+    if (files.length) handleAssetFiles(files);
+  });
+  input.click();
+}
+
+function setAssetsStatus(text, type = 'idle') {
+  if (!assetsStatusBar) return;
+  assetsStatusBar.className = `status-bar status-${type}`;
+  assetsStatusText.textContent = text;
+}
+
+async function refreshAssetsOutputFolder() {
+  try {
+    const folder = await window.electronAPI.assetsGetOutputFolder();
+    assetsState.outputFolder = folder || null;
+    if (assetsOutputPath) assetsOutputPath.textContent = folder || 'No folder set';
+  } catch (e) {
+    console.error('Failed to load assets output folder:', e);
+  }
+}
+
+async function changeAssetsOutputFolder() {
+  try {
+    const result = await window.electronAPI.assetsSelectOutputFolder(assetsState.outputFolder);
+    if (result && !result.canceled && result.path) {
+      assetsState.outputFolder = result.path;
+      assetsOutputPath.textContent = result.path;
+    }
+  } catch (e) {
+    showError('Failed to choose an output folder');
+  }
+}
+
+async function handleAssetFiles(files) {
+  const loaded = [];
+  const failures = [];
+  for (const file of files) {
+    try {
+      loaded.push(await loadAssetFile(file));
+    } catch (e) {
+      failures.push(`${file?.name || 'File'}: ${e.message || 'Could not read'}`);
+      console.error('Could not read asset:', file && file.name, e);
+    }
+  }
+
+  if (!loaded.length) {
+    document.getElementById('assets-file-errors').textContent = failures.join(' · ');
+    setAssetsStatus('Could not read the dropped file(s).', 'error');
+    return;
+  }
+
+  assetsState.items = loaded;
+  assetsState.failures = failures;
+  document.getElementById('assets-file-errors').textContent = failures.join(' · ');
+  renderAssetsFileList();
+  assetsState.activeIndex = 0;
+  assetsState.widthTouched = false;
+  assetsWidthInput.value = '';
+  renderAssetsPreview();
+  updateAssetsUI();
+
+  if (loaded.length > 1) {
+    setAssetsStatus(`Loaded ${loaded.length} files — ready to convert`, 'idle');
+  } else {
+    setAssetsStatus(`Loaded ${loaded[0].name}`, 'idle');
+  }
+}
+
+function clearAssets() {
+  if (assetsState.previewUrl) {
+    URL.revokeObjectURL(assetsState.previewUrl);
+    assetsState.previewUrl = null;
+  }
+  assetsState.items = [];
+  assetsState.failures = []; document.getElementById('assets-file-errors').textContent = ''; renderAssetsFileList();
+  assetsState.activeIndex = 0;
+  assetsPreviewImg.removeAttribute('src');
+  assetsPreviewSection.classList.add('hidden');
+  assetsOptimizeSection.classList.add('hidden');
+  assetsOutputSection.classList.add('hidden');
+  updateAssetsUI();
+  setAssetsStatus('Assets', 'idle');
+}
+
+async function loadAssetFile(file) {
+  const name = file.name || 'asset';
+  const type = (file.type || '').toLowerCase();
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const isSvg = type.indexOf('svg') !== -1 || ext === 'svg';
+
+  if (isSvg) {
+    const svgText = await file.text();
+    const dims = parseSvgDimensions(svgText);
+    return {
+      kind: 'svg',
+      name,
+      file,
+      svgText,
+      width: dims.width,
+      height: dims.height,
+      sizeBytes: file.size || new Blob([svgText]).size
+    };
+  }
+
+  let width = null;
+  let height = null;
+  try {
+    const bitmap = await createImageBitmap(file);
+    width = bitmap.width;
+    height = bitmap.height;
+    if (bitmap.close) bitmap.close();
+  } catch (e) {
+    // Some formats can't be decoded here; the preview/raster step will surface it.
+  }
+
+  return { kind: 'raster', name, file, width, height, sizeBytes: file.size };
+}
+
+function parseSvgDimensions(svgText) {
+  try {
+    const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+    const root = doc.documentElement;
+    if (!root || root.nodeName.toLowerCase() !== 'svg') return { width: null, height: null };
+
+    const parseLen = (value) => {
+      if (!value) return null;
+      const match = String(value).trim().match(/^([0-9]*\.?[0-9]+)/);
+      if (!match) return null;
+      const n = parseFloat(match[1]);
+      return isFinite(n) && n > 0 ? n : null;
+    };
+
+    let width = parseLen(root.getAttribute('width'));
+    let height = parseLen(root.getAttribute('height'));
+
+    if (!width || !height) {
+      const viewBox = root.getAttribute('viewBox');
+      if (viewBox) {
+        const parts = viewBox.trim().split(/[\s,]+/).map(Number);
+        if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+          if (!width) width = parts[2];
+          if (!height) height = parts[3];
+        }
+      }
+    }
+
+    return { width: width || null, height: height || null };
+  } catch (e) {
+    return { width: null, height: null };
+  }
+}
+
+function renderAssetsPreview() {
+  const item = assetsState.items[assetsState.activeIndex];
+  if (!item) return;
+
+  if (assetsState.previewUrl) {
+    URL.revokeObjectURL(assetsState.previewUrl);
+    assetsState.previewUrl = null;
+  }
+
+  const url = URL.createObjectURL(getAssetSourceBlob(item, { optimize: false }));
+  assetsState.previewUrl = url;
+  assetsPreviewImg.src = url;
+
+  const dims = item.width && item.height ? `${item.width}×${item.height}` : 'size unknown';
+  const count = assetsState.items.length > 1
+    ? ` · ${assetsState.activeIndex + 1} of ${assetsState.items.length}`
+    : '';
+  assetsFileName.textContent = item.name || 'asset';
+  assetsFileInfo.textContent = `${item.kind.toUpperCase()} · ${dims} · ${formatBytes(item.sizeBytes || 0)}${count}`;
+
+  assetsPreviewSection.classList.remove('hidden');
+  assetsOptimizeSection.classList.toggle('hidden', item.kind !== 'svg');
+  assetsOutputSection.classList.remove('hidden');
+
+  if (!assetsState.widthTouched) {
+    assetsWidthInput.value = item.kind === 'svg' ? ASSET_DEFAULT_SVG_WIDTH : (item.width || '');
+  }
+  updateAssetsWidthLabel();
+  updateAssetsOptimizeResult();
+}
+
+function updateAssetsWidthLabel() {
+  const value = parseInt(assetsWidthInput.value, 10);
+  assetsWidthValue.textContent = isFinite(value) && value > 0 ? `${value}px` : 'auto';
+}
+
+function getAssetSourceBlob(item, options) {
+  if (item.kind === 'svg') {
+    const svg = options && options.optimize
+      ? optimizeSvgText(item.svgText, { precision: parseInt(assetsSvgPrecision.value, 10) })
+      : item.svgText;
+    return new Blob([svg], { type: 'image/svg+xml' });
+  }
+  return item.file;
+}
+
+function updateAssetsOptimizeResult() {
+  const item = assetsState.items[assetsState.activeIndex];
+  if (!assetsOptimizeResult) return;
+  if (!item || item.kind !== 'svg') {
+    assetsOptimizeResult.textContent = '';
+    return;
+  }
+
+  if (!assetsOptimizeToggle.checked) {
+    assetsOptimizeResult.textContent = `Original SVG: ${formatBytes(item.sizeBytes || 0)} (optimization off)`;
+    return;
+  }
+
+  try {
+    const optimized = optimizeSvgText(item.svgText, { precision: parseInt(assetsSvgPrecision.value, 10) });
+    const before = item.sizeBytes || new Blob([item.svgText]).size;
+    const after = new Blob([optimized]).size;
+    const saved = before > 0 ? Math.max(0, Math.round((1 - after / before) * 100)) : 0;
+    assetsOptimizeResult.textContent = `${formatBytes(before)} → ${formatBytes(after)} (${saved}% smaller)`;
+  } catch (e) {
+    assetsOptimizeResult.textContent = '';
+  }
+}
+
+function optimizeSvgText(svgText, options) {
+  let out = String(svgText || '');
+  out = out.replace(/<\?xml[\s\S]*?\?>/gi, '');
+  out = out.replace(/<!DOCTYPE[\s\S]*?>/gi, '');
+  out = out.replace(/<!--[\s\S]*?-->/g, '');
+  out = out.replace(/<metadata[\s\S]*?<\/metadata>/gi, '');
+  out = out.replace(/<sodipodi:namedview[\s\S]*?\/>/gi, '');
+  out = out.replace(/\s(?:sodipodi|inkscape|sketch|xmlns:sodipodi|xmlns:inkscape|xmlns:sketch|xmlns:dc|xmlns:cc|xmlns:rdf):[a-zA-Z-]+="[^"]*"/g, '');
+  out = out.replace(/\sdata-name="[^"]*"/g, '');
+  out = out.replace(/>\s+</g, '><');
+
+  const precision = options && typeof options.precision === 'number' ? options.precision : 2;
+  if (precision < 4) {
+    out = roundSvgNumbers(out, Math.max(0, precision));
+  }
+
+  return out.trim();
+}
+
+function roundSvgNumbers(str, precision) {
+  const factor = Math.pow(10, precision);
+  return str.replace(/-?\d+\.\d+/g, (match) => {
+    const n = parseFloat(match);
+    if (!isFinite(n)) return match;
+    const rounded = Math.round(n * factor) / factor;
+    return String(rounded);
+  });
+}
+
+function readAssetOptions() {
+  const widthRaw = parseInt(assetsWidthInput.value, 10);
+  return {
+    optimize: assetsOptimizeToggle.checked,
+    precision: parseInt(assetsSvgPrecision.value, 10),
+    width: assetsState.widthTouched && isFinite(widthRaw) && widthRaw > 0 ? widthRaw : null,
+    background: assetsBackground.value,
+    backgroundColor: assetsBackgroundColor.value
+  };
+}
+
+function resolveBackgroundColor(options) {
+  switch (options.background) {
+    case 'white': return '#ffffff';
+    case 'black': return '#000000';
+    case 'custom': return options.backgroundColor || '#ffffff';
+    default: return null;
+  }
+}
+
+function loadImageElement(blob) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not decode this image'));
+    };
+    img.src = url;
+  });
+}
+
+function clampInt(value, min, max) {
+  const n = Math.round(value);
+  if (!isFinite(n)) return min;
+  return Math.max(min, Math.min(max, n));
+}
+
+async function renderAssetToPng(item, options) {
+  const blob = getAssetSourceBlob(item, options);
+  const img = await loadImageElement(blob);
+
+  let intrinsicW = item.width || img.naturalWidth || null;
+  let intrinsicH = item.height || img.naturalHeight || null;
+
+  // SVGs without width/height report a default 300x150 from the decoder; fall
+  // back to a sensible width and infer the height from the viewBox ratio.
+  if (item.kind === 'svg' && !item.width && !item.height) {
+    intrinsicW = ASSET_DEFAULT_SVG_WIDTH;
+    intrinsicH = img.naturalWidth && img.naturalHeight
+      ? Math.round(ASSET_DEFAULT_SVG_WIDTH * (img.naturalHeight / img.naturalWidth))
+      : ASSET_DEFAULT_SVG_WIDTH;
+  }
+
+  const ratio = intrinsicW && intrinsicH ? intrinsicH / intrinsicW : 1;
+  const defaultW = item.kind === 'svg' ? ASSET_DEFAULT_SVG_WIDTH : (intrinsicW || ASSET_DEFAULT_SVG_WIDTH);
+  let targetW = options.width ? clampInt(options.width, 16, ASSET_RASTER_MAX) : defaultW;
+  let targetH = targetW * ratio;
+  const scale = Math.min(1, ASSET_RASTER_MAX / targetW, ASSET_RASTER_MAX / targetH);
+  targetW = Math.max(1, Math.round(targetW * scale));
+  targetH = Math.max(1, Math.round(targetH * scale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  const bg = resolveBackgroundColor(options);
+  if (bg) {
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, targetW, targetH);
+  }
+  ctx.drawImage(img, 0, 0, targetW, targetH);
+
+  const bytes = await new Promise((resolve, reject) => {
+    canvas.toBlob((out) => {
+      if (!out) {
+        reject(new Error('PNG encoding failed'));
+        return;
+      }
+      out.arrayBuffer().then((ab) => resolve(new Uint8Array(ab))).catch(reject);
+    }, 'image/png');
+  });
+
+  const baseName = (item.name || 'asset').replace(/\.[^.]+$/, '') || 'asset';
+  return { bytes, width: targetW, height: targetH, fileName: `${baseName}.png` };
+}
+
+async function convertAssets(saveAs) {
+  if (assetsState.busy || !assetsState.items.length) return;
+  assetsState.busy = true;
+  updateAssetsUI();
+  const failures = [];
+  let saved = 0;
+  try {
+    const options = readAssetOptions();
+    const batch = saveAs ? [assetsState.items[assetsState.activeIndex]] : assetsState.items;
+    for (const item of batch) {
+      try {
+        setAssetsStatus(`Converting ${item.name}…`, 'working');
+        const rendered = await renderAssetToPng(item, options);
+        const result = await window.electronAPI.assetsSavePng({ fileName: rendered.fileName, bytes: rendered.bytes, saveAs: !!saveAs });
+        if (result?.canceled) { setAssetsStatus('Save canceled', 'idle'); return; }
+        if (!result?.success) throw new Error(result?.error || 'Could not save the PNG');
+        delete item.error; saved++;
+      } catch (error) { item.error = error.message; failures.push(`${item.name}: ${error.message}`); }
+    }
+    document.getElementById('assets-file-errors').textContent = [...(assetsState.failures || []), ...failures].join(' · ');
+    setAssetsStatus(`${saved} PNG${saved === 1 ? '' : 's'} saved${failures.length ? ` · ${failures.length} failed (see file list)` : ''}`, failures.length ? 'error' : 'success');
+  } finally {
+    assetsState.busy = false;
+    updateAssetsUI();
+  }
+}
+
+async function sendAssetsToPremiere() {
+  if (assetsState.busy || !assetsState.items.length) return;
+
+  assetsState.busy = true;
+  updateAssetsUI();
+
+  try {
+    const item = assetsState.items[assetsState.activeIndex];
+    setAssetsStatus(`Preparing ${item.name} for Premiere…`, 'working');
+    const rendered = await renderAssetToPng(item, readAssetOptions());
+
+    setAssetsStatus('Sending to Premiere…', 'working');
+    const result = await window.electronAPI.assetsSendToPremiere({
+      fileName: rendered.fileName,
+      bytes: rendered.bytes,
+      durationSeconds: parseFloat(assetsDuration.value) || 5
+    });
+
+    if (!result || !result.success) {
+      throw new Error((result && result.error) || 'Premiere did not accept the image. Is the SmoothyEdit panel open?');
+    }
+
+    setAssetsStatus(`Sent to Premiere: ${rendered.fileName}`, 'success');
+  } catch (e) {
+    console.error('Send asset to Premiere failed:', e);
+    setAssetsStatus(`Send failed: ${e.message}`, 'error');
+    showError(`Could not send the image to Premiere: ${e.message}`);
+  } finally {
+    assetsState.busy = false;
+    updateAssetsUI();
+  }
+}
+
+function renderAssetsFileList() {
+  const list = document.getElementById('assets-file-list'); list.innerHTML = '';
+  assetsState.items.forEach((item, index) => {
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'asset-file-option';
+    button.textContent = item.name + (item.error ? ' — failed' : ''); button.title = item.error || item.name; button.setAttribute('aria-pressed', String(index === assetsState.activeIndex));
+    button.disabled = assetsState.busy;
+    button.addEventListener('click', () => { assetsState.activeIndex = index; assetsState.widthTouched = false; assetsWidthInput.value = ''; renderAssetsPreview(); updateAssetsUI(); });
+    list.appendChild(button);
+  });
+}
+function updateAssetsUI() {
+  renderAssetsFileList();
+  const enabled = assetsState.items.length > 0 && !assetsState.busy;
+  assetsEmptyGuide.classList.toggle('hidden', assetsState.items.length > 0);
+  [assetsConvertBtn, assetsSaveAsBtn, assetsSendBtn].forEach((btn) => {
+    if (btn) btn.disabled = !enabled || (btn === assetsSendBtn && !(state.isConnected && state.sequenceInfo?.hasSequence));
+  });
+
+  if (assetsFooterStatus) {
+    if (!assetsState.items.length) {
+      assetsFooterStatus.textContent = '';
+    } else if (assetsState.items.length > 1) {
+      assetsFooterStatus.textContent = `${assetsState.items.length} images loaded`;
+    } else {
+      assetsFooterStatus.textContent = '';
+    }
+  }
+
+  if (assetsState.busy) {
+    setAssetsStatus('Working…', 'working');
+  } else if (!assetsState.items.length) {
+    setAssetsStatus('Assets', 'idle');
+  }
+}
+
+async function pasteAssetsFromClipboard(clipboardData) {
+  try {
+    const files = [];
+
+    if (clipboardData) {
+      let svgText = '';
+      try { svgText = clipboardData.getData('image/svg+xml') || ''; } catch (e) {}
+      if (!svgText) {
+        let html = '';
+        try { html = clipboardData.getData('text/html') || ''; } catch (e) {}
+        if (/<svg[\s>]/i.test(html)) {
+          const match = html.match(/<svg[\s\S]*?<\/svg>/i);
+          if (match) svgText = match[0];
+        }
+      }
+      if (svgText) {
+        files.push(new File([svgText], 'clipboard.svg', { type: 'image/svg+xml' }));
+      }
+
+      if (clipboardData.files && clipboardData.files.length) {
+        files.push(...Array.from(clipboardData.files));
+      } else if (!files.length && clipboardData.items) {
+        for (const item of Array.from(clipboardData.items)) {
+          if (item.kind === 'file') {
+            const f = item.getAsFile();
+            if (f) files.push(f);
+          }
+        }
+      }
+    }
+
+    if (files.length) {
+      await handleAssetFiles(files);
+      return;
+    }
+
+    // Fallback: read the clipboard from the main process (incl. remote image URLs).
+    setAssetsStatus('Reading clipboard…', 'working');
+    const clip = await window.electronAPI.assetsReadClipboard();
+
+    if (!clip || !clip.hasImage) {
+      setAssetsStatus('No image found on the clipboard.', 'idle');
+      return;
+    }
+
+    let file = null;
+    if (clip.svgText) {
+      file = new File([clip.svgText], clip.name || 'clipboard.svg', { type: 'image/svg+xml' });
+    } else if (clip.base64) {
+      const binary = atob(clip.base64);
+      const arr = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+      file = new File([arr], clip.name || 'clipboard.png', { type: clip.mime || 'image/png' });
+    }
+
+    if (!file) {
+      setAssetsStatus('No image found on the clipboard.', 'idle');
+      return;
+    }
+    await handleAssetFiles([file]);
+  } catch (e) {
+    console.error('Paste failed:', e);
+    setAssetsStatus(`Paste failed: ${e.message}`, 'error');
+  }
 }
 
 // Initialize compressor when DOM is ready

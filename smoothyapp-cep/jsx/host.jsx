@@ -48,7 +48,7 @@ if (typeof JSON === 'undefined') {
   };
 }
 
-var SMOOTHY_CEP_HOST_VERSION = "20260930-caption-host-v20";
+var SMOOTHY_CEP_HOST_VERSION = "20261001-review-host-v22";
 
 function getSmoothyCepHostVersion() {
   return SMOOTHY_CEP_HOST_VERSION;
@@ -221,6 +221,9 @@ function getSequenceVideoTracks() {
 /**
  * Get complete sequence info including both audio and video tracks
  */
+function smoothyMediaFrameRate(projectItem) {
+  try { return Number(projectItem.getFootageInterpretation().frameRate) || null; } catch (error) { return null; }
+}
 function getSequenceInfo() {
   try {
     var seq = app.project.activeSequence;
@@ -238,6 +241,7 @@ function getSequenceInfo() {
       fps: settings.videoFrameRate ? (1 / settings.videoFrameRate.seconds) : 30,
       width: settings.videoFrameWidth,
       height: settings.videoFrameHeight,
+      markerCount: seq.markers.numMarkers,
       audioTracks: [],
       videoTracks: []
     };
@@ -260,7 +264,9 @@ function getSequenceInfo() {
             start: aClip.start.seconds,
             end: aClip.end.seconds,
             inPoint: aClip.inPoint.seconds,
-            outPoint: aClip.outPoint.seconds
+            outPoint: aClip.outPoint.seconds,
+            reversed: aClip.isSpeedReversed(),
+            disabled: aClip.disabled
           });
         }
       }
@@ -285,8 +291,13 @@ function getSequenceInfo() {
           vTrackInfo.clips.push({
             name: vClip.name,
             path: vClip.projectItem.getMediaPath(),
+            mediaFps: smoothyMediaFrameRate(vClip.projectItem),
             start: vClip.start.seconds,
-            end: vClip.end.seconds
+            end: vClip.end.seconds,
+            inPoint: vClip.inPoint.seconds,
+            outPoint: vClip.outPoint.seconds,
+            reversed: vClip.isSpeedReversed(),
+            disabled: vClip.disabled
           });
         }
       }
@@ -337,6 +348,112 @@ function importFCPXML(xmlPath) {
 }
 
 /**
+ * Import a PNG/image into the project and place it at the playhead on the
+ * topmost video track. Used by the desktop app's Assets tab (SVG -> PNG).
+ */
+function importImageToTimeline(imagePath, durationSeconds) {
+  try {
+    var project = app.project;
+    if (!project) {
+      return JSON.stringify({ success: false, error: "No project is open" });
+    }
+
+    var seq = project.activeSequence;
+    if (!seq) {
+      return JSON.stringify({ success: false, error: "No active sequence" });
+    }
+
+    if (!imagePath) {
+      return JSON.stringify({ success: false, error: "No image path provided" });
+    }
+
+    var imageFile = new File(imagePath);
+    if (!imageFile.exists) {
+      return JSON.stringify({ success: false, error: "Image file not found: " + imagePath });
+    }
+
+    var duration = parseFloat(durationSeconds);
+    if (!isFinite(duration) || duration <= 0) duration = 5;
+
+    // Import into the project root bin so the media is reusable.
+    var importSuccess = project.importFiles([imagePath], true, project.rootItem, false);
+    if (!importSuccess) {
+      return JSON.stringify({ success: false, error: "Premiere could not import the image" });
+    }
+
+    // Locate the freshly imported project item.
+    var fileName = imageFile.name;
+    var fileNameNoExt = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+    var imageItem = null;
+    for (var i = project.rootItem.children.numItems - 1; i >= 0; i--) {
+      var child = project.rootItem.children[i];
+      var childNoExt = child.name.substring(0, child.name.lastIndexOf('.')) || child.name;
+      if (child.name === fileName || childNoExt === fileNameNoExt) {
+        imageItem = child;
+        break;
+      }
+    }
+
+    if (!imageItem) {
+      return JSON.stringify({
+        success: true,
+        message: "Image imported into the project. Drag '" + fileName + "' onto your sequence."
+      });
+    }
+
+    // Set source in/out so the still has an explicit duration (media type 1 = video).
+    try {
+      var inTime = new Time();
+      inTime.seconds = 0;
+      var outTime = new Time();
+      outTime.seconds = duration;
+      imageItem.setInPoint(inTime.ticks, 1);
+      imageItem.setOutPoint(outTime.ticks, 1);
+    } catch (trimErr) {
+      // Non-fatal: Premiere's default still duration will be used.
+    }
+
+    if (seq.videoTracks.numTracks < 1) {
+      return JSON.stringify({
+        success: true,
+        message: "Image imported into the project. Add a video track to place it on the timeline."
+      });
+    }
+
+    var targetTrack = seq.videoTracks[seq.videoTracks.numTracks - 1];
+    var playhead = seq.getPlayerPosition();
+    var insertTicks = playhead ? playhead.ticks : "0";
+
+    var placed = false;
+    try {
+      targetTrack.overwriteClip(imageItem, insertTicks);
+      placed = true;
+    } catch (overwriteErr) {
+      try {
+        targetTrack.insertClip(imageItem, insertTicks);
+        placed = true;
+      } catch (insertErr) {
+        // Fall through to the manual-drag message.
+      }
+    }
+
+    if (!placed) {
+      return JSON.stringify({
+        success: true,
+        message: "Image imported into the project. Drag '" + fileName + "' onto your sequence to place it."
+      });
+    }
+
+    return JSON.stringify({
+      success: true,
+      message: "Image placed at the playhead on V" + seq.videoTracks.numTracks + "."
+    });
+  } catch (e) {
+    return JSON.stringify({ success: false, error: "importImageToTimeline: " + e.message });
+  }
+}
+
+/**
  * Open file browser (fallback)
  */
 function browseForMediaFile() {
@@ -364,7 +481,11 @@ function removeSilenceWithQE(silenceSegmentsJSON) {
       return JSON.stringify({ success: false, error: "No active sequence" });
     }
 
-    var segments = JSON.parse(silenceSegmentsJSON);
+    var payload = JSON.parse(silenceSegmentsJSON);
+    if (!payload.sequenceId || String(seq.sequenceID) !== String(payload.sequenceId)) {
+      return JSON.stringify({ success: false, error: "The active sequence changed. Return to the analyzed sequence and run Silence Removal again." });
+    }
+    var segments = payload.segments;
     if (!segments || segments.length === 0) {
       return JSON.stringify({ success: false, error: "No silence segments provided" });
     }
@@ -673,6 +794,7 @@ function addMarkersFromWebsite(markersJSON) {
         var startMarker = seqMarkers.createMarker(startTime);
         if (startMarker) {
           safeSetMarkerName(startMarker, "START: " + shortName);
+          startMarker.comments = "[SmoothyEdit] Short start";
           safeSetMarkerColor(startMarker, colorIndex);
           addedCount++;
         }
@@ -681,6 +803,7 @@ function addMarkersFromWebsite(markersJSON) {
         var endMarker = seqMarkers.createMarker(endTime);
         if (endMarker) {
           safeSetMarkerName(endMarker, "END: " + shortName);
+          endMarker.comments = "[SmoothyEdit] Short end";
           safeSetMarkerColor(endMarker, colorIndex);
           addedCount++;
         }
@@ -718,37 +841,22 @@ function addMarkersFromWebsite(markersJSON) {
 /**
  * Clear all markers from the active sequence
  */
-function clearAllMarkers() {
+function clearAllMarkers(scope, sequenceId) {
   try {
     var seq = app.project.activeSequence;
-    if (!seq) {
-      return JSON.stringify({ success: false, error: "No active sequence" });
+    if (!seq) return JSON.stringify({ success: false, error: "No active sequence" });
+    if (!sequenceId || String(seq.sequenceID) !== String(sequenceId)) {
+      return JSON.stringify({ success: false, error: "The active sequence changed. Refresh before clearing markers." });
     }
-
-    var markers = seq.markers;
-    var count = markers.numMarkers;
-
-    if (count === 0) {
-      return JSON.stringify({ success: true, count: 0, message: "No markers to clear" });
+    var targets = [];
+    var marker = seq.markers.getFirstMarker();
+    while (marker) {
+      if (scope === "all" || String(marker.comments || "").indexOf("[SmoothyEdit]") === 0) targets.push(marker);
+      marker = seq.markers.getNextMarker(marker);
     }
-
-    // Remove markers from end to start to avoid index shifting issues
-    for (var i = count - 1; i >= 0; i--) {
-      var marker = markers[i];
-      if (marker) {
-        markers.deleteMarker(marker);
-      }
-    }
-
-    return JSON.stringify({
-      success: true,
-      count: count,
-      message: "Cleared " + count + " markers"
-    });
-
-  } catch (e) {
-    return JSON.stringify({ success: false, error: e.message });
-  }
+    for (var index = targets.length - 1; index >= 0; index--) seq.markers.deleteMarker(targets[index]);
+    return JSON.stringify({ success: true, count: targets.length, message: "Cleared " + targets.length + " markers" });
+  } catch (error) { return JSON.stringify({ success: false, error: error.message }); }
 }
 
 /**
@@ -1424,7 +1532,11 @@ function addSilenceMarkers(silenceSegmentsJSON) {
       return JSON.stringify({ success: false, error: "No active sequence" });
     }
 
-    var segments = JSON.parse(silenceSegmentsJSON);
+    var payload = JSON.parse(silenceSegmentsJSON);
+    if (!payload.sequenceId || String(seq.sequenceID) !== String(payload.sequenceId)) {
+      return JSON.stringify({ success: false, error: "The active sequence changed. Return to the analyzed sequence and run Silence Removal again." });
+    }
+    var segments = payload.segments;
     if (!segments || segments.length === 0) {
       return JSON.stringify({ success: false, error: "No silence segments provided" });
     }

@@ -2,7 +2,7 @@
  * Preload script - Exposes safe IPC methods to renderer
  */
 
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // Get current status
@@ -26,13 +26,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Best Shorts
   exportAudioToWebsite: () => ipcRenderer.invoke('export-audio-to-website'),
-  clearMarkers: () => ipcRenderer.invoke('clear-markers'),
+  clearMarkers: (scope = 'smoothy', sequenceId?: string) => ipcRenderer.invoke('clear-markers', { scope, sequenceId }),
   exportSubtitles: () => ipcRenderer.invoke('export-subtitles'),
 
   // Studio (cloud)
   getStudioCredits: () => ipcRenderer.invoke('get-studio-credits'),
   getShortsHistory: (page = 1) => ipcRenderer.invoke('get-shorts-history', page),
-  analyzeShorts: (config?: { trackIndices?: number[] }) => ipcRenderer.invoke('analyze-shorts', config),
+  analyzeShorts: (config?: import('../main/shorts-service').ShortsAnalysisConfig) => ipcRenderer.invoke('analyze-shorts', config),
+  cancelShorts: () => ipcRenderer.invoke('cancel-analyze-shorts'),
+  retryShortsHistory: (payload: { text: string; fileName: string }) => ipcRenderer.invoke('retry-shorts-history', payload),
+  reformatCaptions: (chunks: any[], settings: any) => ipcRenderer.invoke('reformat-captions', { chunks, settings }),
+  selectShortsAudio: () => ipcRenderer.invoke('select-caption-audio'),
+  getShortsYoutubeTranscript: (url: string) => ipcRenderer.invoke('get-shorts-youtube-transcript', url),
+  copyShortsText: (text: string) => ipcRenderer.invoke('copy-shorts-text', text),
   addShortsMarkers: (shorts: any[]) => ipcRenderer.invoke('add-shorts-markers', shorts),
 
   // Captions
@@ -96,10 +102,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setCepPath: (customPath?: string) => ipcRenderer.invoke('set-cep-path', customPath),
   browseCepPath: () => ipcRenderer.invoke('browse-cep-path'),
 
+  // Assets (SVG / image -> PNG)
+  assetsGetOutputFolder: () => ipcRenderer.invoke('assets-get-output-folder'),
+  assetsSelectOutputFolder: (defaultPath?: string) => ipcRenderer.invoke('assets-select-output-folder', defaultPath),
+  assetsSavePng: (options: { fileName: string; bytes: Uint8Array; saveAs?: boolean }) =>
+    ipcRenderer.invoke('assets-save-png', options),
+  assetsSendToPremiere: (options: { fileName: string; bytes: Uint8Array; durationSeconds?: number }) =>
+    ipcRenderer.invoke('assets-send-to-premiere', options),
+  assetsReadClipboard: () => ipcRenderer.invoke('assets-read-clipboard'),
+
   // Video Compressor
   compressorCheckFFmpeg: () => ipcRenderer.invoke('compressor-check-ffmpeg'),
   compressorDetectHardware: () => ipcRenderer.invoke('compressor-detect-hardware'),
   compressorScanDirectory: (dirPath: string) => ipcRenderer.invoke('compressor-scan-directory', dirPath),
+  getDroppedFilePath: (file: File) => webUtils.getPathForFile(file),
   compressorScanSource: (sourcePath: string) => ipcRenderer.invoke('compressor-scan-source', sourcePath),
   compressorStart: (files: any[], settings: any) => ipcRenderer.invoke('compressor-start', files, settings),
   compressorStop: () => ipcRenderer.invoke('compressor-stop'),

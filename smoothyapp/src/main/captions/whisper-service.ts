@@ -1,3 +1,4 @@
+import { checkCancellation } from './download-file';
 /**
  * Whisper Service - Runs transcription via the whisper.cpp CLI.
  *
@@ -89,14 +90,17 @@ export function getEnginePreference(): 'auto' | 'cuda' | 'cpu' {
  */
 export async function loadModel(
   modelId: string,
-  onProgress?: ProgressCallback
+  onProgress?: ProgressCallback,
+  signal?: AbortSignal
 ): Promise<void> {
+  checkCancellation(signal);
   const modelPath = await ensureModelDownloaded(modelId, (p) => {
     if (onProgress) {
       onProgress({ status: 'downloading', progress: p.progress, file: p.file });
     }
-  });
+  }, signal);
 
+  checkCancellation(signal);
   const order = getVariantOrder();
   const errors: string[] = [];
 
@@ -123,7 +127,8 @@ export async function loadModel(
               : 'Downloading transcription engine (one-time setup)'
           });
         }
-      });
+      }, signal);
+      checkCancellation(signal);
       activeBinary = exe;
       activeBackend = variant;
       currentModelId = modelId;
@@ -131,6 +136,7 @@ export async function loadModel(
       if (onProgress) onProgress({ status: 'ready', progress: 100 });
       return;
     } catch (err) {
+      checkCancellation(signal);
       const message = err instanceof Error ? err.message : String(err);
       errors.push(`${variant}: ${message}`);
       console.warn(`[Whisper] Could not prepare ${variant} binary:`, message);
@@ -253,8 +259,10 @@ export async function transcribe(
   audioPath: string,
   onProgress?: ProgressCallback,
   modelId?: string,
-  language?: string
+  language?: string,
+  signal?: AbortSignal
 ): Promise<TranscriptionResult> {
+  checkCancellation(signal);
   if (!activeBinary) {
     throw new Error('No transcription engine loaded. Call loadModel() first.');
   }
@@ -291,12 +299,17 @@ export async function transcribe(
 
     console.log(`[Whisper] Running CLI (${backend}, ${threads} threads): ${path.basename(binary)}`);
 
+    checkCancellation(signal);
     return new Promise<string>((resolve, reject) => {
       const child = spawn(binary, args, { windowsHide: true });
+      const abort = () => { try { child.kill('SIGTERM'); } catch {} };
+      signal?.addEventListener('abort', abort, { once: true });
+      if (signal?.aborted) abort();
       let stderr = '';
       let lastReported = -1;
 
       const cleanup = () => {
+        signal?.removeEventListener('abort', abort);
         activeTranscribe = null;
         for (const ext of ['.txt', '.srt', '.vtt', '.json']) {
           try { const p = outBase + ext; if (fs.existsSync(p)) fs.rmSync(p, { force: true }); } catch {}
@@ -336,7 +349,12 @@ export async function transcribe(
       });
 
       child.on('close', (code) => {
-        const cancelled = activeTranscribe === null && code !== 0;
+        const cancelled = signal?.aborted || (activeTranscribe === null && code !== 0);
+        if (cancelled) {
+          cleanup();
+          reject(new Error('TRANSCRIPTION_CANCELLED'));
+          return;
+        }
         if (code === 0 && fs.existsSync(jsonPath)) {
           // Read the output BEFORE cleanup deletes it.
           let raw = '';
@@ -368,11 +386,13 @@ export async function transcribe(
   try {
     result = await runOnce(activeBinary as string, activeBackend, onProgress);
   } catch (err) {
+    checkCancellation(signal);
     if (err instanceof Error && err.message === 'TRANSCRIPTION_CANCELLED') throw err;
-    if (activeBackend === 'cuda') {
+    if (activeBackend !== 'cpu') {
       console.warn('[Whisper] GPU engine failed — retrying on CPU:', err instanceof Error ? err.message : err);
       if (onProgress) onProgress({ status: 'GPU engine failed — retrying on CPU…' });
-      const cpuExe = await ensureBinary('cpu');
+      const cpuExe = await ensureBinary('cpu', undefined, signal);
+      checkCancellation(signal);
       activeBinary = cpuExe;
       activeBackend = 'cpu';
       result = await runOnce(cpuExe, 'cpu', onProgress);
@@ -381,6 +401,7 @@ export async function transcribe(
     }
   }
 
+  checkCancellation(signal);
   let parsed: CliJson;
   try {
     parsed = JSON.parse(result) as CliJson;

@@ -270,17 +270,15 @@ export function getSessionToken(): string | null {
 }
 
 /**
- * Headers for authenticated requests to the Smoothy web API. Sends the verified
- * Bearer token when available, and always includes `x-member-id` so legacy
- * server paths (rate limiting) keep identifying the user.
+ * Headers for authenticated requests to the Smoothy web API. Only the signed
+ * session token is sent — the raw user id is a spoofable credential and the
+ * server no longer trusts it. A missing token means the user must sign in
+ * again (older builds stored only the user id).
  */
 export function getAuthHeaders(): Record<string, string> {
-  const userId = getStoredUserId();
   const sessionToken = getSessionToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (userId) headers['x-member-id'] = userId;
   if (sessionToken) headers['Authorization'] = `Bearer ${sessionToken}`;
-  else if (userId) headers['Authorization'] = `Bearer ${userId}`;
   return headers;
 }
 

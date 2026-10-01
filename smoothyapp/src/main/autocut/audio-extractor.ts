@@ -40,13 +40,16 @@ function getTempDir(): string {
 
 function runFFmpeg(args: string[]): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
+    if (cancelRequested) {
+      reject(new Error('AUDIO_EXTRACTION_CANCELLED'));
+      return;
+    }
     const ffmpeg = spawn(getFFmpegPath(), args);
     let stdout = '';
     let stderr = '';
     let cancelled = false;
 
     activeFFmpeg = ffmpeg;
-    cancelRequested = false;
 
     ffmpeg.stdout.on('data', (data) => { stdout += data.toString(); });
     ffmpeg.stderr.on('data', (data) => { stderr += data.toString(); });
@@ -102,7 +105,8 @@ export async function extractAudioTrack(
   ];
 
   console.log(`Extracting track ${trackIndex} from ${path.basename(inputPath)}...`);
-  await runFFmpeg(args);
+  try { await runFFmpeg(args); }
+  catch (error) { cleanupTempFile(outputPath); throw error; }
 
   if (!fs.existsSync(outputPath)) {
     throw new Error(`Failed to create output file: ${outputPath}`);
@@ -159,7 +163,7 @@ export async function stitchTimelineAudio(
     }
     if (!(duration > 0.05)) continue;
 
-    const key = `${clip.path}|${sourceStart.toFixed(3)}|${duration.toFixed(3)}`;
+    const key = `${clip.path}|${sourceStart.toFixed(3)}|${duration.toFixed(3)}|${timelineStart.toFixed(3)}`;
     if (seen.has(key)) continue;
     seen.add(key);
 
@@ -212,7 +216,8 @@ export async function stitchTimelineAudio(
   );
 
   console.log(`[AudioExtractor] Stitching ${usable.length} clip(s) into timeline audio...`);
-  await runFFmpeg(args);
+  try { await runFFmpeg(args); }
+  catch (error) { cleanupTempFile(outputPath); throw error; }
 
   if (!fs.existsSync(outputPath)) {
     throw new Error(`Failed to create stitched audio: ${outputPath}`);
