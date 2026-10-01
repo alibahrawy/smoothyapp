@@ -4,7 +4,7 @@
 
 [Download for Mac](https://smoothyedit.com/api/download/mac) · [Download for Windows](https://smoothyedit.com/api/download/win) · [See the latest release](https://github.com/alibahrawy/smoothyapp/releases/latest) · [Visit the website](https://smoothyedit.com/features/smoothy-app)
 
-> **Current downloads:** macOS **1.5.0** for Apple Silicon is signed and notarized. Windows currently downloads **1.4.0** for x64. Both are available from the latest release.
+> **Current downloads:** macOS **1.5.0** for Apple Silicon is signed and notarized. Windows currently downloads **1.5.0** for x64. Both are available from the latest release.
 
 ## A look inside
 

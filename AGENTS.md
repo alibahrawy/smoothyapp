@@ -12,9 +12,12 @@ The 2026-09-29 publication freeze is lifted for the coordinated **1.5.0** releas
 Verify the final signed/notarized artifacts before publishing. The unreleased
 version was renamed from 1.4.1 to 1.5.0 at the user's request on 2026-10-01.
 
-An earlier unsigned dev build exists locally at
-`smoothyapp/dist/mac-arm64/SmoothyEdit.app` — it has NOT been published, so
-installed 1.4.0 users get no update.
+**v1.5.0 is now published.** The Apple Silicon Mac app at
+`smoothyapp/dist/mac-arm64/SmoothyEdit.app` is signed with Developer ID and
+notarized; its DMG, ZIP update payload, blockmaps and manifest are live. A
+Windows x64 1.5.0 installer and `latest.yml` were also added from the owner
+account during the coordinated release. The website security changes are
+deployed. Existing clients should update, restart Premiere, and sign in again.
 
 Breaking changes that must ship together with the web deploy:
 - Local Premiere bridge now binds `127.0.0.1` and requires a per-install token
