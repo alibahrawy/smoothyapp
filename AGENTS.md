@@ -19,6 +19,17 @@ Windows x64 1.5.0 installer and `latest.yml` were also added from the owner
 account during the coordinated release. The website security changes are
 deployed. Existing clients should update, restart Premiere, and sign in again.
 
+### Next release: Assets telemetry
+
+Source now records successful PNG exports and Premiere sends with anonymous
+action names. The website admin counters are deployed; published 1.5.0 does
+not report Assets activity. Include this change in the next planned release,
+with a version bump and fresh Mac and Windows builds. The Mac artifacts must
+be signed and notarized.
+37 desktop regression tests pass, including success, cancel/failure, telemetry
+opt-out and payload privacy checks. No new installer has been published for
+this follow-up.
+
 Breaking changes that must ship together with the web deploy:
 - Local Premiere bridge now binds `127.0.0.1` and requires a per-install token
   injected into the CEP panel (`smoothy-config.json`); `smoothyapp-cep/js/bridge.js`

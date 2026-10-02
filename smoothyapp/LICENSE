@@ -25,6 +25,7 @@ Scope: this MIT license covers the SmoothyEdit desktop app and Premiere bridge
 (smoothyapp/ and smoothyapp-cep/).
 The web Studio + billing backend remain proprietary.
 
-Privacy: local tools (multicam, silence, captions, compressor) never upload
-media. Optional anonymous telemetry (install ID, app version, OS, NLE type)
-is opt-out in Settings and used only for private install counts.
+Privacy: local tools (multicam, silence, captions, compressor, Assets) never
+upload media. Optional anonymous telemetry (random install ID, app version,
+OS and tool actions) can be disabled with SMOOTHY_TELEMETRY=0 and is used only
+for private usage statistics. Media contents, filenames and paths are not sent.

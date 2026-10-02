@@ -1698,10 +1698,12 @@ ipcMain.handle('assets-save-png', async (_, options: { fileName: string; bytes: 
       }
       fs.mkdirSync(path.dirname(result.filePath), { recursive: true });
       fs.writeFileSync(result.filePath, Buffer.from(bytes));
+      trackTool('assets_export');
       return { success: true, path: result.filePath };
     }
 
     const filePath = writePngFile(getAssetsOutputFolder(), fileName, bytes);
+    trackTool('assets_export');
     return { success: true, path: filePath };
   } catch (error) {
     console.error('[Assets] Save PNG failed:', error);
@@ -1725,6 +1727,7 @@ ipcMain.handle('assets-send-to-premiere', async (_, options: { fileName: string;
     if (!result.success) {
       return { success: false, error: result.error || 'Premiere could not import the image' };
     }
+    trackTool('assets_premiere');
     return { success: true, path: filePath };
   } catch (error) {
     console.error('[Assets] Send to Premiere failed:', error);
