@@ -27,7 +27,9 @@ import {
   clearMarkersFromSequence,
   exportSubtitles,
   sendCaptionsToNLE,
-  importImageToNLE
+  importImageToNLE,
+  importStockFootageToNLE,
+  importAudioLibraryToNLE
 } from './nle-router';
 import {
   getConnectionStatus as getPremiereConnectionStatus,
@@ -91,6 +93,8 @@ import videoCompressor, { CompressionSettings, VideoFile } from './compressor/vi
 import * as webApi from './web-api';
 import type { StudioShort } from './web-api';
 import { runShortsAnalysis, type ShortsAnalysisConfig } from './shorts-service';
+import { registerStockFootage } from './stock-footage-ipc';
+import { registerAudioLibrary } from './audio-library-ipc';
 
 function swallowStdIOMaybeEpipe() {
   const handle = (err: any) => {
@@ -110,6 +114,7 @@ let mainWindow: BrowserWindow | null = null;
 const isMac = process.platform === 'darwin';
 const isWindows = process.platform === 'win32';
 const store = new Store();
+registerStockFootage({ store, window: () => mainWindow, connected: getConnectionStatus, importToPremiere: importStockFootageToNLE });
 let compressorEventsBound = false;
 
 // Cached GitHub release notes for the pending update (null = not fetched yet).
@@ -456,10 +461,14 @@ function createWindow() {
 
   mainWindow = new BrowserWindow(windowOptions);
 
-  // Send platform info to renderer
-  mainWindow.webContents.on('did-finish-load', () => {
-    mainWindow?.webContents.send('platform-info', { isMac, isWindows });
+  // Keep compact library columns in sync with the native window state.
+  const sendPlatformInfo = () => mainWindow?.webContents.send('platform-info', {
+    isMac, isWindows, isExpanded: mainWindow.isFullScreen() || mainWindow.isMaximized()
   });
+  mainWindow.webContents.on('did-finish-load', sendPlatformInfo);
+  for (const event of ['enter-full-screen', 'leave-full-screen', 'maximize', 'unmaximize'] as const) {
+    mainWindow.on(event, sendPlatformInfo);
+  }
 
   // Load renderer
   if (process.env.NODE_ENV === 'development') {
@@ -482,7 +491,10 @@ if (isWindows) {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Register the media protocol before loading the renderer. A window loaded
+  // earlier keeps a URL loader without this scheme and every preview fails.
+  await registerAudioLibrary({ store, window: () => mainWindow, connected: getConnectionStatus, importToPremiere: importAudioLibraryToNLE }).catch(error => console.error('[Audio Library]', error));
   console.log('[App] Starting SmoothyEdit...');
 
   // Remove the default menu bar on Windows (File, Edit, View, etc.)

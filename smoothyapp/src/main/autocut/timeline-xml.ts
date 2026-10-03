@@ -70,8 +70,9 @@ export function createTimelineXml(videoTracks: TimelineTrack[], audioTracks: Tim
     }
   }
   let itemId = 0;
-  function renderTrack(track: TimelineTrack, ranges: EditRange[], kind: 'video' | 'audio') {
-    let items = '';
+  interface TrackItem { start: number; end: number; xml: string }
+  function trackItems(track: TimelineTrack, ranges: EditRange[], kind: 'video' | 'audio'): TrackItem[] {
+    const items: TrackItem[] = [];
     for (const range of ranges) for (const clip of track.clips) {
       const clipStart = frame(clip.start);
       const start = Math.max(clipStart, frame(range.start));
@@ -81,12 +82,24 @@ export function createTimelineXml(videoTracks: TimelineTrack[], audioTracks: Tim
       const sourceIn = Math.round(clip.inPoint * file.fps) + Math.round((start - clipStart) / fps * file.fps);
       const sourceOut = sourceIn + Math.round((end - start) / fps * file.fps);
       const destination = frame(range.destination) + start - frame(range.start);
-      items += `<clipitem id="${kind}-${++itemId}"><name>${escapeXml(clip.name)}</name>
+      const rendered = `<clipitem id="${kind}-${++itemId}"><name>${escapeXml(clip.name)}</name>
         <duration>${file.end}</duration>${rateFor(file.fps)}<start>${destination}</start><end>${destination + end - start}</end>
         <in>${sourceIn}</in><out>${sourceOut}</out><file id="${file.id}"/>
         <sourcetrack><mediatype>${kind}</mediatype><trackindex>1</trackindex></sourcetrack></clipitem>`;
+      items.push({ start: destination, end: destination + end - start, xml: rendered });
     }
-    return `<track>${items}<enabled>TRUE</enabled><locked>FALSE</locked></track>`;
+    return items;
+  }
+  function renderItems(items: TrackItem[]) {
+    // A track must run forwards through time even when it combines cameras.
+    const ordered = items.sort((a, b) => a.start - b.start || a.end - b.end);
+    return `<track>${ordered.map(item => item.xml).join('')}<enabled>TRUE</enabled><locked>FALSE</locked></track>`;
+  }
+  function renderTrack(track: TimelineTrack, ranges: EditRange[], kind: 'video' | 'audio') {
+    return renderItems(trackItems(track, ranges, kind));
+  }
+  function renderCombinedTrack(entries: { track: TimelineTrack; ranges: EditRange[] }[], kind: 'video' | 'audio') {
+    return renderItems(entries.flatMap(entry => trackItems(entry.track, entry.ranges, kind)));
   }
   function render(name: string, durationFrames: number, video: string[], audio: string[]) {
     const definitions = [...files.values()].map(file => `<clip id="master-${file.id}"><name>${escapeXml(file.clip.name)}</name>
@@ -103,5 +116,5 @@ export function createTimelineXml(videoTracks: TimelineTrack[], audioTracks: Tim
 <audio><format><samplecharacteristics><depth>16</depth><samplerate>48000</samplerate></samplecharacteristics></format>${audio.join('')}</audio></media>
 </sequence></children></project></xmeml>`;
   }
-  return { frame, renderTrack, render };
+  return { frame, renderTrack, renderCombinedTrack, render };
 }

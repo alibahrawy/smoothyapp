@@ -111,6 +111,33 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('assets-send-to-premiere', options),
   assetsReadClipboard: () => ipcRenderer.invoke('assets-read-clipboard'),
 
+  // Local audio collection and no-key Wikimedia Commons stock footage
+  audioLibraryState: () => ipcRenderer.invoke('audio-library-state'),
+  audioCommunityState: () => ipcRenderer.invoke('audio-community-state'),
+  audioFavoriteSharing: (enabled: boolean) => ipcRenderer.invoke('audio-favorite-sharing', enabled),
+  audioFavoriteSet: (options: { id: string; active: boolean }) => ipcRenderer.invoke('audio-favorite-set', options),
+  onAudioCommunityChanged: (callback: (data: any) => void) => ipcRenderer.on('audio-community-changed', (_, data) => callback(data)),
+  audioArchiveSearch: (options: any) => ipcRenderer.invoke('audio-archive-search', options),
+  audioArchiveDownload: (options: any) => ipcRenderer.invoke('audio-archive-download', options),
+  audioArchiveCancel: () => ipcRenderer.invoke('audio-archive-cancel'),
+  onAudioArchiveProgress: (callback: (data: any) => void) => ipcRenderer.on('audio-archive-progress', (_, data) => callback(data)),
+  audioLibraryOpen: () => ipcRenderer.invoke('audio-library-open'),
+  audioLibraryStop: () => ipcRenderer.invoke('audio-library-stop'),
+  audioLibrarySelectFolder: () => ipcRenderer.invoke('audio-library-select-folder'),
+  audioLibraryPick: () => ipcRenderer.invoke('audio-library-pick'),
+  audioLibraryKeep: (options: any) => ipcRenderer.invoke('audio-library-keep', options),
+  audioLibraryUpdate: (options: any) => ipcRenderer.invoke('audio-library-update', options),
+  audioLibraryDismiss: (id: string) => ipcRenderer.invoke('audio-library-dismiss', id),
+  audioLibraryImport: (id: string) => ipcRenderer.invoke('audio-library-import', id),
+  audioLibraryShowFolder: () => ipcRenderer.invoke('audio-library-show-folder'),
+  onAudioLibraryChanged: (callback: (data: any) => void) => ipcRenderer.on('audio-library-changed', (_, data) => callback(data)),
+  stockGetSettings: () => ipcRenderer.invoke('stock-get-settings'),
+  stockSelectFolder: () => ipcRenderer.invoke('stock-select-folder'),
+  stockSearch: (input: import('../main/stock-footage').StockSearch) => ipcRenderer.invoke('stock-search', input),
+  stockDownload: (options: { videoId: number | string; fileId: number; premiere?: boolean }) => ipcRenderer.invoke('stock-download', options),
+  stockCancelDownload: () => ipcRenderer.invoke('stock-cancel-download'),
+  onStockDownloadProgress: (callback: (data: any) => void) => ipcRenderer.on('stock-download-progress', (_, data) => callback(data)),
+
   // Video Compressor
   compressorCheckFFmpeg: () => ipcRenderer.invoke('compressor-check-ffmpeg'),
   compressorDetectHardware: () => ipcRenderer.invoke('compressor-detect-hardware'),
@@ -168,7 +195,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onThemeSync: (callback: (data: { theme: string }) => void) => {
     ipcRenderer.on('theme-sync', (_, data) => callback(data));
   },
-  onPlatformInfo: (callback: (data: { isMac: boolean; isWindows: boolean }) => void) => {
+  onPlatformInfo: (callback: (data: { isMac: boolean; isWindows: boolean; isExpanded: boolean }) => void) => {
     ipcRenderer.on('platform-info', (_, data) => callback(data));
   },
   onCaptionModelProgress: (callback: (data: any) => void) => {

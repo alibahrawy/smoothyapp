@@ -245,7 +245,8 @@ function mergeCloseSegments(segments: SpeechSegment[], maxGap: number): SpeechSe
 
 export async function runVad(
   sources: AudioSource[],
-  aggressiveness: number = 3
+  aggressiveness: number = 3,
+  failOnError: boolean = false
 ): Promise<SpeechSegment[]> {
   console.log('Running VAD analysis (Adaptive energy-based)...');
   console.log(`  Tracks: ${sources.length}`);
@@ -264,6 +265,7 @@ export async function runVad(
       allSegments.push(...segments);
     } catch (err) {
       console.error(`    Error processing ${source.speaker}:`, err);
+      if (failOnError) throw new Error(`Could not analyse ${source.speaker}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 

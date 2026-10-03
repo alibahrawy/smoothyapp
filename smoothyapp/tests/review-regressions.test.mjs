@@ -30,6 +30,20 @@ test('multicam preserves source trims, later files, camera gaps and selected mic
   assert.match(xml, /microphone\.wav/);
   assert.equal(items(xml.split('<audio><format>')[1]).some(item => item.name !== 'microphone'), false);
 });
+test('combined XML camera tracks remain chronological through repeated speaker switches', () => {
+  const cameras = [0, 1, 2].map(index => ({ name: `Camera ${index + 1}`, clips: [clip(`camera-${index}`, 0, 12, 30)] }));
+  const shots = [0, 1, 0, 1, 2, 0].map((camera, index) => ({ start: index * 2, end: (index + 1) * 2, camera }));
+  const xml = generateMulticamSequenceXML(cameras, shots, { fps: 25, duration: 12 }, [{ start: 5, end: 7, camera: 2 }]);
+  const tracks = [...xml.split('<video><format>')[1].split('</video>')[0].matchAll(/<track>([\s\S]*?)<\/track>/g)].map(match => match[1]);
+  assert.equal(tracks.length, 3);
+  for (const track of tracks) {
+    let end = 0;
+    for (const item of items(track)) { assert.ok(Number(item.start) >= end, 'Camera clips must not jump backwards or overlap'); end = Number(item.end); }
+    assert.match(track, /<enabled>TRUE<\/enabled><locked>FALSE<\/locked>/);
+  }
+  assert.deepEqual(items(tracks[1]).map(item => item.name), shots.map(shot => `camera-${shot.camera}`));
+  assert.equal(items(tracks[1]).at(-1).end, '300');
+});
 test('J-cut changes visual switches while keeping microphone sync', () => {
   const shots = [{ start: 0, end: 5, camera: 0 }, { start: 5, end: 10, camera: 1 }];
   const plain = generateMulticamSequenceXML(cameras, shots, { fps: 25, duration: 10, audioTracks: microphones });

@@ -68,6 +68,16 @@
           <span class="nav-label">Assets</span>
         </a>
 
+        <a href="#" class="nav-item" data-tab="stock">
+          <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m10 8 6 4-6 4zM3 7h4M3 12h4M3 17h4M17 7h4M17 17h4"/></svg></span>
+          <span class="nav-label">Stock Footage</span>
+        </a>
+
+        <a href="#" class="nav-item" data-tab="audio">
+          <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13M9 9l12-2"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+          <span class="nav-label">Audio Library</span>
+        </a>
+
         <!-- Studio: paid cloud tools live here, never on the free tabs -->
         <div class="sidebar-divider" role="separator" aria-label="Studio tools"></div>
         <div class="nav-group-label">
@@ -147,6 +157,13 @@
                   <path d="M20.317 4.369a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.865-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.056 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.009c.12.099.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.891.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.331c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.211 0 2.176 1.094 2.157 2.418 0 1.334-.955 2.419-2.157 2.419zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.418 2.157-2.418 1.211 0 2.176 1.094 2.157 2.418 0 1.334-.946 2.419-2.157 2.419z"/>
                 </svg>
               </button>
+              <button class="settings-btn" id="instagram-btn" type="button" aria-label="Follow on Instagram" title="Follow on Instagram">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="5"/>
+                  <circle cx="12" cy="12" r="4"/>
+                  <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
+                </svg>
+              </button>
               <button class="settings-btn" id="settings-btn" title="Settings" aria-label="Settings">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="3"></circle>
@@ -161,6 +178,118 @@
 
     <!-- Main content area -->
     <main class="main-content">
+      <div class="tab-content" id="tab-audio">
+        <div class="status-bar status-idle">Audio Library</div>
+        <div class="audio-library-tabs" role="tablist" aria-label="Audio Library views">
+          <button type="button" role="tab" id="audio-view-all" data-audio-view="all" aria-controls="audio-archive-panel" aria-selected="true">Music</button>
+          <button type="button" role="tab" id="audio-view-favorites" data-audio-view="favorites" aria-controls="audio-archive-panel" aria-selected="false" tabindex="-1">Favorites</button>
+          <button type="button" role="tab" id="audio-view-staff" data-audio-view="staff" aria-controls="audio-archive-panel" aria-selected="false" tabindex="-1">Staff picks</button>
+          <button type="button" role="tab" id="audio-view-saved" data-audio-view="saved" aria-controls="audio-saved-panel" aria-selected="false" tabindex="-1">Saved MP3s</button>
+        </div>
+        <div class="content-scroll audio-content-scroll">
+          <section id="audio-archive-panel" role="tabpanel" aria-labelledby="audio-view-all">
+            <form id="audio-archive-form" class="audio-filter-bar">
+              <span class="audio-filter-icon" aria-hidden="true">☷</span><input type="search" id="audio-archive-query" maxlength="200" aria-label="Search music by title or artist" placeholder="Search or filter library">
+              <label class="audio-compact-filter">Genre<select id="audio-archive-genre"><option value="all">All genres</option></select></label>
+              <label class="audio-compact-filter">Mood<select id="audio-archive-mood"><option value="">All moods</option></select></label>
+              <button class="stock-text-button" type="submit" id="audio-archive-search">Search</button>
+            </form>
+            <div class="audio-list-info"><span id="audio-archive-count" role="status" aria-live="polite">Loading tracks…</span><button class="stock-text-button" type="button" id="audio-open">YouTube Studio ↗</button></div>
+            <div class="audio-table-scroll"><table class="audio-table"><thead><tr><th aria-label="Play"></th><th aria-label="Favorite"></th><th>Track title</th><th>Genre</th><th>Mood</th><th class="audio-artist-cell">Artist</th><th>Duration</th><th class="audio-license-cell">License type</th></tr></thead><tbody id="audio-archive-results"></tbody></table></div>
+            <p class="help-text audio-empty-view hidden" id="audio-archive-empty"></p>
+            <button type="button" class="stock-text-button hidden audio-more" id="audio-archive-more">Load more tracks</button>
+          </section>
+          <section id="audio-saved-panel" class="hidden" role="tabpanel" aria-labelledby="audio-view-saved">
+            <div class="audio-filter-bar"><span class="audio-filter-icon" aria-hidden="true">☷</span><input type="search" id="audio-query" aria-label="Search saved tracks" placeholder="Search saved tracks"><label class="audio-compact-filter">License<select id="audio-filter"><option value="">All licenses</option><option value="youtube-standard">YouTube</option><option value="cc-by">CC BY</option><option value="unverified">Not supplied</option></select></label><button class="stock-text-button" type="button" id="audio-pick">Add MP3s</button></div>
+            <div class="audio-table-scroll"><table class="audio-table"><thead><tr><th aria-label="Play"></th><th aria-label="Favorite"></th><th>Track title</th><th>Genre</th><th>Mood</th><th class="audio-artist-cell">Artist</th><th>Duration</th><th class="audio-license-cell">License type</th></tr></thead><tbody id="audio-results"></tbody></table></div>
+            <p class="help-text audio-empty-view" id="audio-empty"></p>
+            <details class="audio-browser audio-saved-tools">
+              <summary>Downloads &amp; library folder</summary>
+              <p class="help-text">MP3s downloaded from YouTube Studio can also be kept here. Google sign-in stays in your browser.</p>
+              <button class="stock-text-button hidden" type="button" id="audio-stop">Stop download session</button>
+              <p class="help-text" id="audio-watch-status" role="status"></p>
+              <div class="stock-folder"><span>Browser downloads: <span id="audio-watch-folder"></span></span><button class="stock-text-button" type="button" id="audio-folder">Change folder</button></div>
+              <div class="stock-folder"><span>Saved library: <span id="audio-library-folder"></span></span><button class="stock-text-button" type="button" id="audio-show-folder">Show folder</button></div>
+            </details>
+          </section>
+          <section class="section hidden" id="audio-pending"><h2>New downloads</h2><p class="help-text">Review downloaded MP3s before keeping them.</p><div id="audio-pending-list"></div></section>
+          <section class="section hidden" id="audio-editor">
+            <div class="section-header-row"><h2 id="audio-editor-title">Track details</h2><button class="stock-text-button" type="button" id="audio-close">Close</button></div>
+            <form id="audio-details-form">
+              <div class="audio-fields"><label class="stock-field" for="audio-title">Track title<input id="audio-title" maxlength="300" required></label><label class="stock-field" for="audio-artist">Artist<input id="audio-artist" maxlength="300"></label><label class="stock-field" for="audio-genre">Genre<input id="audio-genre" maxlength="100"></label><label class="stock-field" for="audio-mood">Mood<input id="audio-mood" maxlength="100"></label></div>
+              <label class="stock-field" for="audio-license">License from the track’s details<select id="audio-license"><option value="unverified">Check license / other audio</option><option value="youtube-standard">YouTube · Attribution not required</option><option value="cc-by">Creative Commons · Attribution required</option></select></label>
+              <label class="stock-field" for="audio-credit">Attribution / license notes<textarea id="audio-credit" rows="3" maxlength="10000" placeholder="Paste the attribution copied from YouTube Studio"></textarea></label>
+              <p class="help-text">License details are saved as entered. Follow the track’s terms for your intended use.</p>
+              <div class="audio-actions"><button class="btn btn-secondary" type="submit" id="audio-save">Keep in my library</button><button class="btn btn-primary hidden" type="button" id="audio-send">Send to Premiere</button><button class="stock-text-button" type="button" id="audio-copy-credit">Copy attribution</button></div>
+            </form>
+          </section>
+          <p class="audio-library-note">Unofficial audio archive. Check each track’s license before publishing.</p>
+          <p class="audio-library-note" id="audio-community-note">Favorites help us choose Staff picks. No sign-in needed.</p>
+        </div>
+        <div class="audio-player-dock" aria-label="Audio player">
+          <audio id="audio-dock-player" preload="none"></audio>
+          <div class="audio-dock-main">
+            <div class="audio-dock-controls"><button type="button" id="audio-dock-previous" aria-label="Previous track"></button><button type="button" id="audio-dock-play" aria-label="Play"></button><button type="button" id="audio-dock-next" aria-label="Next track"></button></div>
+            <div class="audio-dock-track"><strong id="audio-dock-title">Choose a track to preview</strong><span id="audio-dock-artist"></span><span id="audio-dock-status" role="status" aria-live="polite"></span></div>
+            <div class="audio-dock-timeline"><span id="audio-dock-elapsed">0:00</span><input type="range" id="audio-dock-seek" min="0" max="0" value="0" step="0.1" aria-label="Playback position"><span id="audio-dock-duration">—</span></div>
+            <label class="audio-dock-volume" title="Volume"><span aria-hidden="true">♪</span><input type="range" id="audio-dock-volume" min="0" max="1" step="0.05" value="1" aria-label="Volume"></label>
+            <button type="button" id="audio-dock-star" class="audio-star" aria-label="Favorite track" aria-pressed="false">☆</button>
+          </div>
+          <div class="audio-dock-footer"><p id="audio-archive-status" class="help-text" role="status" aria-live="polite"></p><span id="audio-dock-license" class="hidden"></span><button type="button" class="stock-text-button" id="audio-info-open" aria-haspopup="dialog">Licenses &amp; credits</button><button type="button" class="stock-text-button hidden" id="audio-dock-details">Track details</button><button type="button" class="stock-text-button hidden" id="audio-dock-save">↓ Save MP3</button><button type="button" class="stock-text-button" id="audio-dock-send">Send to Premiere</button><button type="button" class="stock-text-button hidden" id="audio-archive-cancel">Cancel download</button></div>
+          <p id="audio-status" class="help-text" role="status" aria-live="polite"></p>
+        </div>
+        <dialog id="audio-info-dialog" class="audio-info-dialog" aria-labelledby="audio-info-heading">
+          <div class="audio-info-header"><h2 id="audio-info-heading">Licenses &amp; credits</h2><button type="button" id="audio-info-close" class="audio-info-close" aria-label="Close licenses and credits" autofocus>×</button></div>
+          <section class="audio-info-track" aria-label="Current track">
+            <p class="audio-info-eyebrow">CURRENT TRACK</p><h3 id="audio-info-title">Choose a track to see its details</h3><p id="audio-info-artist" class="audio-info-muted"></p>
+            <dl class="audio-info-metadata"><div><dt>Source</dt><dd id="audio-info-source">—</dd></div><div><dt>License</dt><dd id="audio-info-license">—</dd></div></dl>
+            <p id="audio-info-license-note" class="audio-info-muted">Check the original source for the current license and required credit.</p>
+            <div id="audio-info-attribution" class="hidden"><p class="audio-info-eyebrow">SAVED ATTRIBUTION</p><p id="audio-info-credit" class="audio-info-credit"></p><button type="button" id="audio-info-copy" class="stock-text-button">Copy attribution</button></div>
+            <button type="button" id="audio-info-studio" class="stock-text-button">Check in YouTube Studio ↗</button>
+          </section>
+          <section class="audio-info-section"><h3>About this library</h3><p>This is an unofficial audio archive. SmoothyEdit is not affiliated with or endorsed by YouTube. License information may be incomplete or outdated. Check the track’s original license and include any required attribution before publishing your work.</p><div class="audio-info-links"><a href="https://github.com/ThibaultJanBeyer/YouTube-Free-Audio-Library-API" data-audio-external>Archive source ↗</a><a href="https://support.google.com/youtube/answer/3376882" data-audio-external>YouTube’s guidance ↗</a><a href="mailto:support@smoothyedit.com" data-audio-external>Contact us ↗</a></div></section>
+          <section class="audio-info-section audio-info-sharing"><label class="audio-sharing-label" for="audio-share-favorites"><span><strong>Share favorites to improve Staff picks</strong><small>Your stars help us discover the best tracks.</small></span><input id="audio-share-favorites" class="audio-sharing-toggle" type="checkbox" role="switch" checked disabled aria-describedby="audio-sharing-description audio-sharing-status"></label><p id="audio-sharing-description">We send track IDs, star/unstar state and update times with a random installation ID to prevent duplicate votes. The favorites payload contains no account details or audio files.</p><p id="audio-sharing-status" class="audio-info-muted"></p><a href="https://smoothyedit.com/privacy" data-audio-external>Privacy details ↗</a></section>
+          <p id="audio-info-status" class="audio-info-status" role="status" aria-live="polite"></p>
+        </dialog>
+      </div>
+      <!-- Stock footage sources -->
+      <div class="tab-content" id="tab-stock">
+        <div class="status-bar status-idle" id="stock-source-status">Stock Footage · All sources</div>
+        <div class="content-scroll">
+          <div class="stock-heading">
+            <div><h1>Find your next shot</h1><p class="help-text">Search free stock videos for your edit.</p></div>
+            <a href="https://commons.wikimedia.org" class="stock-powered hidden" id="stock-powered" data-stock-external><span>Source</span><strong id="stock-source-name">Wikimedia Commons ↗</strong></a>
+          </div>
+          <p class="help-text" id="stock-source-note">Search Commons, Internet Archive, and NASA together. Check each clip’s usage terms. Quality and orientation filters require known dimensions.</p>
+          <form class="stock-search-form" id="stock-search-form">
+            <label class="stock-field stock-query" for="stock-query">Search videos<input type="search" id="stock-query" placeholder="Ocean, city at night, people working…" maxlength="200" required></label>
+            <div class="stock-search-controls">
+              <label class="stock-field" for="stock-provider">Source<select id="stock-provider"><option value="all">All sources</option><option value="pixabay" hidden>Pixabay</option><option value="commons">Wikimedia Commons</option><option value="archive">Internet Archive</option><option value="nasa">NASA · Earth &amp; space</option></select></label>
+              <label class="stock-field" for="stock-orientation">Orientation<select id="stock-orientation"><option value="">Any orientation</option><option value="landscape">Landscape</option><option value="portrait">Portrait</option><option value="square">Square</option></select></label>
+              <label class="stock-field" for="stock-size">Minimum quality<select id="stock-size"><option value="">Any quality</option><option value="small">HD</option><option value="medium">Full HD</option><option value="large">4K</option></select></label>
+              <button type="submit" class="btn btn-primary" id="stock-search-btn">Search</button>
+            </div>
+          </form>
+          <section class="section stock-preview hidden" id="stock-preview" aria-label="Selected video">
+            <div class="section-header-row"><h2 id="stock-preview-title">Selected video</h2><button type="button" class="stock-text-button" id="stock-close-preview" aria-label="Close video preview">Close</button></div>
+            <video id="stock-preview-video" controls muted playsinline preload="none"></video>
+            <p class="help-text"><a id="stock-preview-credit" class="link" href="https://commons.wikimedia.org" data-stock-external></a></p>
+            <p class="help-text" id="stock-preview-usage"></p>
+            <p class="help-text"><a id="stock-preview-license" class="link" href="https://creativecommons.org" data-stock-external>View usage terms ↗</a></p>
+            <div class="stock-preview-controls">
+              <label class="stock-field" for="stock-resolution">Download version<select id="stock-resolution"></select></label>
+              <div class="stock-preview-actions"><button type="button" class="btn btn-secondary" id="stock-download-btn">Download MP4</button><button type="button" class="btn btn-primary" id="stock-premiere-btn" disabled>Send to Premiere</button></div>
+            </div>
+            <p class="help-text" id="stock-premiere-note">Connect Premiere to import the video into your Project panel.</p>
+          </section>
+          <p class="help-text stock-search-status" id="stock-search-status" role="status" aria-live="polite">Search for a subject, place, or mood.</p>
+          <div class="stock-results" id="stock-results" aria-label="Stock footage search results"></div>
+          <button type="button" class="btn btn-secondary hidden stock-more" id="stock-load-more">Load more videos</button>
+          <div class="stock-folder"><span>Save to <span id="stock-folder-path"></span></span><button type="button" class="stock-text-button" id="stock-change-folder">Change folder</button></div>
+        </div>
+        <div class="stock-footer"><p id="stock-action-status" role="status" aria-live="polite">Download an MP4 or send it to Premiere’s Project panel.</p><button type="button" class="btn btn-secondary btn-small hidden" id="stock-cancel-btn">Cancel download</button></div>
+      </div>
+
       <!-- Multicam Tab Content -->
       <div class="tab-content active" id="tab-multicam">
         <!-- Status bar -->
@@ -170,6 +299,15 @@
 
         <!-- Scrollable content -->
         <div class="content-scroll">
+          <aside id="multicam-update-notice" class="multicam-review-notice hidden" role="note" aria-labelledby="multicam-update-title">
+            <div class="multicam-notice-heading"><strong id="multicam-update-title">Multicam update</strong><button id="multicam-update-dismiss" type="button" class="multicam-notice-close" aria-label="Dismiss Multicam notice">×</button></div>
+            <p>Multicam wasn’t working correctly in the previous update. It should now work correctly in 1.5.1 — I hope. If it doesn’t, message me on <a href="https://discord.gg/KmJRqUZzDe" data-multicam-support>Discord</a> or my socials: <a href="https://x.com/alibahrawy34" data-multicam-support>X</a> / <a href="https://www.instagram.com/alibahrawy34/" data-multicam-support>Instagram</a>. Sorry for that.</p>
+            <p>Multicam now supports source clips and nested sequences. Start from your original timeline. Review both speakers and audio sync before using the result.</p>
+          </aside>
+          <aside id="multicam-result-notice" class="multicam-review-notice hidden" aria-live="polite">
+            <strong>Review this result</strong>
+            <ul id="multicam-review-warnings"></ul>
+          </aside>
           <!-- Sequence Info -->
           <section class="section">
             <div class="section-header-row">
@@ -193,7 +331,8 @@
           <!-- Video Track to Camera Mapping -->
           <section class="section">
             <h2>Video Tracks</h2>
-            <p class="help-text">Enable the cameras to use. Each enabled track needs its own camera number.</p>
+            <p class="help-text">Select camera tracks to switch. Other tracks stay unchanged. Each camera needs its own number.</p>
+            <p class="help-text">The topmost camera track gets the winning camera at every cut and the bottom camera track keeps the other angle underneath. No clips are disabled.</p>
 
             <div id="video-tracks-list" class="tracks-list">
               <p class="empty-message">Connect to Premiere to see video tracks</p>
@@ -209,7 +348,7 @@
                 <select id="wide-camera-select">
                   <option value="-1">None</option>
                 </select>
-                <p class="help-text">Wide shots (5s) placed on V3 - remove track to revert</p>
+                <p class="help-text">Switches to the wide camera for 5 seconds when speakers overlap.</p>
               </div>
             </div>
           </section>
@@ -248,7 +387,7 @@
 
         <!-- Action footer -->
         <footer class="content-footer">
-          <p id="multicam-action-note" class="footer-action-note">Creates a new sequence from source media. Existing effects and titles are not copied.</p>
+          <p id="multicam-action-note" class="footer-action-note">Cuts a duplicate with your nests, effects and continuous audio.</p>
           <p id="footer-status" class="footer-status"></p>
           <button id="autocut-btn" class="btn btn-primary btn-large" aria-describedby="multicam-action-note" disabled>
             <span class="btn-icon">
@@ -1165,6 +1304,8 @@
           <button id="settings-discord-btn" class="btn btn-secondary">Join our Discord</button>
           <button id="settings-twitter-btn" class="btn btn-secondary">Follow on X</button>
           <button id="settings-instagram-btn" class="btn btn-secondary">Instagram</button>
+          <button id="settings-linkedin-btn" class="btn btn-secondary" type="button">LinkedIn</button>
+          <button id="settings-website-btn" class="btn btn-secondary" type="button">Personal website</button>
         </div>
       </div>
 

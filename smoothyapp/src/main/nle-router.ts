@@ -22,7 +22,9 @@ import {
   clearMarkersFromSequence as wsClearMarkersFromSequence,
   exportSubtitles as wsExportSubtitles,
   sendCaptionsToPremiere,
-  sendImageToPremiere
+  sendImageToPremiere,
+  sendStockFootageToPremiere,
+  sendAudioLibraryToPremiere
 } from './websocket-server';
 
 let activeNLE: 'premiere' | null = null;
@@ -89,4 +91,12 @@ export function sendCaptionsToNLE(srtPath: string) {
 
 export function importImageToNLE(imagePath: string, durationSeconds = 5) {
   return sendImageToPremiere(imagePath, durationSeconds);
+}
+
+export function importStockFootageToNLE(filePath: string) {
+  return sendStockFootageToPremiere(filePath);
+}
+
+export function importAudioLibraryToNLE(filePath: string) {
+  return sendAudioLibraryToPremiere(filePath);
 }

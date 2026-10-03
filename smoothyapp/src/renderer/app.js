@@ -2,6 +2,8 @@
  * SmoothyEdit - Renderer Script
  */
 import { findCaptionMatches, replaceCaptionMatches } from './caption-text-tools.js';
+import { initStockFootage } from './stock-footage.js';
+import { initAudioLibrary } from './audio-library.js';
 
 const state = {
   isConnected: false,
@@ -141,9 +143,12 @@ const settingsUpdateNotes = document.getElementById('settings-update-notes');
 const settingsCurrentVersion = document.getElementById('settings-current-version');
 const sidebarVersion = document.getElementById('sidebar-version');
 const discordBtn = document.getElementById('discord-btn');
+const instagramBtn = document.getElementById('instagram-btn');
 const settingsDiscordBtn = document.getElementById('settings-discord-btn');
 const settingsTwitterBtn = document.getElementById('settings-twitter-btn');
 const settingsInstagramBtn = document.getElementById('settings-instagram-btn');
+const settingsLinkedinBtn = document.getElementById('settings-linkedin-btn');
+const settingsWebsiteBtn = document.getElementById('settings-website-btn');
 
 // Logs DOM Elements
 const logsContainer = document.getElementById('logs-container');
@@ -178,6 +183,7 @@ async function init() {
   setupStudioEvents();
   setupReviewUI();
   setupPreferenceEvents();
+  setupMulticamUpdateNotice();
 
   // Initialize auth state
   await initAuth();
@@ -215,6 +221,24 @@ async function init() {
 
   // Assets (SVG / image -> PNG) tab
   initAssets();
+  initStockFootage({ isConnected: () => state.isConnected });
+  initAudioLibrary({ isConnected: () => state.isConnected });
+}
+
+function setupMulticamUpdateNotice() {
+  const notice = document.getElementById('multicam-update-notice');
+  const dismissedKey = 'smoothyedit:multicam-beta:1.5.1:dismissed';
+  let dismissed = false;
+  try { dismissed = localStorage.getItem(dismissedKey) === 'true'; } catch {}
+  notice.classList.toggle('hidden', dismissed);
+  document.getElementById('multicam-update-dismiss').addEventListener('click', () => {
+    try { localStorage.setItem(dismissedKey, 'true'); } catch {}
+    notice.classList.add('hidden');
+    document.getElementById('refresh-btn').focus();
+  });
+  notice.querySelectorAll('[data-multicam-support]').forEach(link => {
+    link.addEventListener('click', event => { event.preventDefault(); window.electronAPI.openExternal(link.href); });
+  });
 }
 
 function setupSidebar() {
@@ -551,6 +575,9 @@ function setupEventListeners() {
     settingsTwitterBtn.addEventListener('click', () => window.electronAPI.openExternal('https://x.com/alibahrawy34'));
   }
   settingsInstagramBtn.addEventListener('click', () => window.electronAPI.openExternal('https://www.instagram.com/alibahrawy34/'));
+  instagramBtn.addEventListener('click', () => window.electronAPI.openExternal('https://www.instagram.com/alibahrawy34/'));
+  settingsLinkedinBtn.addEventListener('click', () => window.electronAPI.openExternal('https://www.linkedin.com/in/alibahrawy/'));
+  settingsWebsiteBtn.addEventListener('click', () => window.electronAPI.openExternal('https://www.alibahrawy.com/'));
 
   // Logs tab
   if (logsClearBtn) {
@@ -1069,8 +1096,15 @@ function setupElectronListeners() {
     } else {
       // Auto-Switch result
       if (result.success) {
-        setStatus(`Done! ${result.stats?.shots || 0} cuts created`, 'success');
-        footerStatus.textContent = 'Auto-Switch complete - check Premiere for new sequence';
+        setStatus(`${result.stats?.shots || 0} camera cuts created — review in Premiere`, 'success');
+        const warnings = document.getElementById('multicam-review-warnings');
+        warnings.replaceChildren();
+        for (const message of result.warnings || []) {
+          const item = document.createElement('li'); item.textContent = message; warnings.appendChild(item);
+        }
+        document.getElementById('multicam-result-notice').classList.toggle('hidden', !warnings.children.length);
+        if (warnings.children.length) document.querySelector('#tab-multicam .content-scroll').scrollTop = 0;
+        footerStatus.textContent = warnings.children.length ? 'Review the warnings above, both cameras and audio sync.' : 'Review both cameras and audio sync in the new sequence.';
       } else {
         setStatus('Error', 'error');
         showError(result.error || 'Auto-Switch failed');
@@ -1167,6 +1201,7 @@ function setupElectronListeners() {
   // Platform info listener - applies platform-specific styles
   window.electronAPI.onPlatformInfo((data) => {
     state.platform = data.isWindows ? 'windows' : (data.isMac ? 'macos' : 'unknown');
+    document.body.classList.toggle('window-expanded', Boolean(data.isExpanded));
     applyPlatformStyles(data);
   });
 
@@ -1565,8 +1600,9 @@ async function runAutoCut() {
     clips: v.clips
   }));
 
-  // Speakers map to camera slots in checkbox order (speaker 1 -> Camera 1).
-  const sources = audioMappings.map((audio, index) => ({
+  // Each microphone follows its explicitly selected video track.
+  const sources = audioMappings.map(audio => ({
+    index: audio.trackIndex,
     name: audio.trackName,
     path: audio.path,
     clips: audio.clips,
@@ -1582,6 +1618,8 @@ async function runAutoCut() {
   const config = {
     sources,
     options: {
+      sequenceId: state.sequenceInfo.id,
+      timelineRevision: state.sequenceInfo.timelineRevision,
       sequenceName: state.sequenceInfo.name + ' - Auto-Switch',
       fps: state.sequenceInfo.fps,
       width: state.sequenceInfo.width,
@@ -1593,7 +1631,7 @@ async function runAutoCut() {
       // Enable overlap-based wide shots when wide camera is selected
       // Wide shot triggers when both speakers talk at the same time (overlap > 0.5s)
       // Shows for 5 seconds, extends if another overlap occurs within that window
-      // Wide shots are placed on V3 track (removable without affecting main V1/V2 cuts)
+      // Wide decisions switch to the selected existing camera track.
       useOverlapWideShots: useWideShot && wideIndex >= 0,
       jcutOffset: jcutOffset,
       videoTracks: clips

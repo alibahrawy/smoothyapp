@@ -10,10 +10,10 @@
 
   CEP version 11 supports Premiere Pro 2022+
 -->
-<ExtensionManifest Version="11.0" ExtensionBundleId="com.smoothyedit.autocut" ExtensionBundleName="SmoothyEdit" ExtensionBundleVersion="1.5.3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<ExtensionManifest Version="11.0" ExtensionBundleId="com.smoothyedit.autocut" ExtensionBundleName="SmoothyEdit" ExtensionBundleVersion="1.5.13" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
   <ExtensionList>
-    <Extension Id="com.smoothyedit.autocut.panel" Version="1.5.3"/>
+    <Extension Id="com.smoothyedit.autocut.panel" Version="1.5.13"/>
   </ExtensionList>
 
   <ExecutionEnvironment>

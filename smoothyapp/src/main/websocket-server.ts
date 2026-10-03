@@ -6,7 +6,7 @@
 
 import { runVad } from './autocut/vad-runner';
 import { generateShotDecisions } from './autocut/decision-engine';
-import { generateMulticamSequenceXML } from './autocut/xml-generator';
+import { runPremiereMulticam } from './autocut/premiere-multicam';
 import { extractAudioTrack, stitchTimelineAudio, cleanupTempFile, resetAudioExtractionCancel } from './autocut/audio-extractor';
 import type { TimelineAudioClip } from './autocut/audio-extractor';
 import { combineAudioTracks, analyzeSilence, cleanupTempFile as cleanupSilenceTemp, alignSegmentsToFrames } from './autocut/silence-detector';
@@ -141,6 +141,9 @@ export function importXMLToPremiere(xmlPath: string): Promise<any> {
 }
 export function sendImageToPremiere(imagePath: string, durationSeconds = 5): Promise<any> {
   return bridgeRequests.request('importImage', 'imageImported', { imagePath, atPlayhead: true, durationSeconds }, 60000);
+}
+export function sendStockFootageToPremiere(filePath: string): Promise<any> {
+  return bridgeRequests.request('importStockFootage', 'stockFootageImported', { filePath }, 60000);
 }
 export function exportAudio(): Promise<any> {
   return bridgeRequests.request('exportAudio', 'audioExported', {}, 60000);
@@ -300,138 +303,28 @@ async function handleMessage(msg: any, ws?: any) {
   }
 }
 
+let multicamRunning = false;
 export async function runAutoCut(config: any) {
-  const { sources, options } = config;
-
+  if (multicamRunning) return;
+  multicamRunning = true;
   try {
+    if ((Number(currentSequenceInfo?.multicamTimelineVersion) || 0) < 7) throw new Error('Restart Premiere and reopen the SmoothyEdit panel to load the updated Multicam bridge, then refresh the sequence.');
+    // The host resolves the captured sequence ID and verifies its revision.
+    // Live sequence-info updates may now describe a different visible tab.
     resetAudioExtractionCancel();
-    validateTimelineTracks([...(options.videoTracks || []), ...sources], options.fps || 23.976);
-    if (!options.videoTracks?.length) throw new Error('Select camera tracks and refresh the Premiere bridge.');
-    callbacks.onProgress(5, 'Starting analysis...');
-
-    const allSegments: any[] = [];
-    const speakerToCameraMap: Record<string, number> = {};
-
-    // Process each audio source
-    console.log('[AutoSwitch] Sources received:', JSON.stringify(sources.map((s: any) => ({ speaker: s.speaker, camera: s.camera }))));
-    for (let i = 0; i < sources.length; i++) {
-      const source = sources[i];
-      const speaker = source.speaker || `speaker_${i + 1}`;
-      speakerToCameraMap[speaker] = source.camera;
-      console.log(`[AutoSwitch] Mapping ${speaker} -> camera ${source.camera}`);
-
-      callbacks.onProgress(10 + (i / sources.length) * 30, `Extracting audio: ${speaker}`);
-
-      // Build a timeline-accurate WAV for this track. Using only the first
-      // clip from the start of the media file put a synced multicam interview
-      // on the wrong clock (and ignored every clip after the first).
-      let tempWav: string;
-      try {
-        const timelineClips = sourceTimelineClips(source);
-        if (timelineClips.length > 0) {
-          const stitched = await stitchTimelineAudio(timelineClips, `multicam_${i}_${Date.now()}`);
-          tempWav = stitched.path;
-          console.log(`[AutoSwitch] ${speaker}: timeline audio ${stitched.durationSeconds.toFixed(1)}s from ${stitched.clipCount} clip(s)`);
-        } else {
-          tempWav = await extractAudioTrack(source.path, speaker, 0);
-        }
-      } catch (err) {
-        console.warn(`Failed to extract audio from ${source.path}:`, err);
-        continue;
-      }
-
-      callbacks.onProgress(40 + (i / sources.length) * 20, `Analyzing speech: ${speaker}`);
-
-      // Run VAD
-      try {
-        const segments = await runVad([{ path: tempWav, speaker }]);
-        allSegments.push(...segments);
-        console.log(`[AutoSwitch] ${speaker}: ${segments.length} speech segments`);
-      } catch (err) {
-        console.warn(`VAD failed for ${speaker}:`, err);
-      }
-
-      cleanupTempFile(tempWav);
-    }
-
-    if (allSegments.length === 0) {
-      callbacks.onResult({ success: false, error: 'No speech detected' });
-      return;
-    }
-
-    callbacks.onProgress(70, 'Generating shot decisions...');
-
-    // Generate shots
-    // UI sliders: minCutDuration (0.5-2.0, default 0.8) and holdTime (0.5-3.0, default 1.0)
-    // Wide shot options: useOverlapWideShots triggers wide camera on speaker overlaps
-    const result = generateShotDecisions(allSegments, speakerToCameraMap, {
-      totalDuration: options.duration || 3600,
-      minShotDuration: options.minCutDuration || 0.8,
-      holdTimeBeforeSwitch: options.holdTime || 1.0,
-      wideCameraIndex: options.wideCameraIndex ?? -1,
-      // Overlap-based wide shots (new feature)
-      useOverlapWideShots: options.useOverlapWideShots || false,
-      minOverlapDuration: 0.5,    // Minimum overlap to trigger wide shot
-      wideShowDuration: 5.0       // Show wide for 5 seconds
+    const result = await runPremiereMulticam(config, {
+      request: (type, response, payload, timeout) => bridgeRequests.request(type, response, payload, timeout),
+      normalizeAudio: (file, speaker) => extractAudioTrack(file, speaker, 0),
+      detectSpeech: (file, speaker) => runVad([{ path: file, speaker }], 3, true),
+      decideShots: generateShotDecisions,
+      cleanup: cleanupTempFile,
+      progress: callbacks.onProgress
     });
-
-    const { mainShots, wideShots } = result;
-    console.log(`[AutoSwitch] Generated ${mainShots.length} main shots, ${wideShots.length} wide shots`);
-
-    const jcutOffset = options.jcutOffset || 0;
-
-    // Generate XML with J-cut support
-    callbacks.onProgress(85, 'Generating sequence with J-cuts...');
-
-    const clips = options.videoTracks;
-
-    const sequenceName = options.sequenceName || 'Auto-Switch Sequence';
-
-    console.log(`[AutoSwitch] Generating XML with ${mainShots.length} main cuts, ${wideShots.length} wide cuts, J-cut offset: ${jcutOffset}s`);
-
-    // Pass wideShots to XML generator - they'll be placed on V3
-    const xml = generateMulticamSequenceXML(clips, mainShots, {
-      sequenceName: sequenceName,
-      fps: options.fps || 23.976,
-      width: options.width || 1920,
-      height: options.height || 1080,
-      duration: options.duration,
-      audioTracks: sources,
-      jcutOffset: jcutOffset
-    }, wideShots);
-
-    // Save XML
-    const xmlPath = path.join(os.tmpdir(), `SmoothyEdit_${Date.now()}.xml`);
-    fs.writeFileSync(xmlPath, xml, 'utf-8');
-    console.log(`[AutoSwitch] XML saved: ${xmlPath}`);
-
-    callbacks.onProgress(95, 'Importing into Premiere...');
-
-    // Wait for Premiere to actually confirm the import before reporting success.
-    const importResult = await importXMLToPremiere(xmlPath);
-    if (!importResult.success) {
-      callbacks.onResult({ success: false, error: importResult.error || 'Premiere could not import the sequence' });
-      return;
-    }
-
-    callbacks.onProgress(100, `Done! Created ${mainShots.length} cuts${wideShots.length > 0 ? ` + ${wideShots.length} wide shots` : ''}`);
-    callbacks.onResult({
-      success: true,
-      stats: {
-        segments: allSegments.length,
-        shots: mainShots.length,
-        wideShots: wideShots.length
-      },
-      xmlPath
-    });
-
+    callbacks.onResult(result);
   } catch (error) {
-    console.error('[AutoSwitch] Error:', error);
-    callbacks.onResult({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
-  }
+    console.error('[Multicam] Error:', error);
+    callbacks.onResult({ success: false, error: error instanceof Error ? error.message : 'Multicam failed' });
+  } finally { multicamRunning = false; }
 }
 
 export async function runSilenceRemoval(config: any) {
@@ -592,4 +485,8 @@ export async function runSilenceRemoval(config: any) {
       error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
+}
+
+export function sendAudioLibraryToPremiere(filePath: string): Promise<any> {
+  return bridgeRequests.request('importAudioLibrary', 'audioLibraryImported', { filePath }, 60000);
 }

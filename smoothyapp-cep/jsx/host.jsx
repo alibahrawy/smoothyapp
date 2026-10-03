@@ -48,10 +48,348 @@ if (typeof JSON === 'undefined') {
   };
 }
 
-var SMOOTHY_CEP_HOST_VERSION = "20261001-review-host-v22";
+var SMOOTHY_CEP_HOST_VERSION = "20261004-multicam-reverse-track-v32";
 
 function getSmoothyCepHostVersion() {
   return SMOOTHY_CEP_HOST_VERSION;
+}
+
+// Preserve jobs when bridge.js reloads host.jsx before each request.
+var SMOOTHY_MULTICAM_JOBS = typeof SMOOTHY_MULTICAM_JOBS === "undefined" ? {} : SMOOTHY_MULTICAM_JOBS;
+
+function smoothyFindSequence(id) {
+  if (!app.project || !app.project.sequences) return null;
+  for (var i = 0; i < app.project.sequences.numSequences; i++) {
+    var seq = app.project.sequences[i];
+    if (String(seq.sequenceID) === String(id)) return seq;
+  }
+  return null;
+}
+function smoothyNameSequence(seq, name) {
+  seq.name = name;
+  // Updating both also updates the Project panel in Premiere versions that
+  // keep the sequence and its projectItem names separately.
+  if (seq.projectItem) seq.projectItem.name = name;
+}
+function smoothyMulticamJob(jobId) {
+  var job = SMOOTHY_MULTICAM_JOBS[jobId];
+  var clone = job ? smoothyFindSequence(job.cloneId) : null;
+  if (!clone) throw new Error("The multicam duplicate or project was closed. Refresh Premiere and try again.");
+  // Every later operation uses this captured duplicate, regardless of which
+  // sequence the user views or edits. Only changes to the working copy can
+  // invalidate the audio/camera snapshot analysed by Electron.
+  if (smoothyTimelineRevision(clone, false) !== job.cloneRevision) throw new Error("The Multicam duplicate changed during analysis. Run Multicam again from your original timeline.");
+  return job;
+}
+function smoothyMulticamIndices(indices, tracks) {
+  if (!indices || !indices.length) throw new Error("Select microphone and camera tracks.");
+  var seen = {};
+  for (var i = 0; i < indices.length; i++) {
+    var index = indices[i];
+    if (typeof index !== "number" || index !== Math.floor(index) || index < 0 || index >= tracks.numTracks || seen[index] || !tracks[index].clips.numItems) throw new Error("The selected tracks changed. Refresh Premiere and try again.");
+    seen[index] = true;
+  }
+}
+
+/** Duplicate the complete timeline; never reconstruct ProjectItems from paths. */
+function prepareMulticamTimeline(payloadJSON) {
+  try {
+    var payload = JSON.parse(payloadJSON), source = smoothyFindSequence(payload.sequenceId);
+    if (!source) throw new Error("The selected Multicam sequence or project was closed. Refresh Premiere and run Multicam again.");
+    var active = app.project.activeSequence, activeId = active ? String(active.sequenceID) : null;
+    if (!/^[a-f0-9-]{36}$/.test(payload.jobId) || SMOOTHY_MULTICAM_JOBS[payload.jobId]) throw new Error("Invalid multicam session.");
+    if (!payload.timelineRevision || smoothyTimelineRevision(source, false) !== payload.timelineRevision) throw new Error("The timeline changed. Refresh Premiere and run Multicam again.");
+    smoothyMulticamIndices(payload.audioTrackIndices, source.audioTracks);
+    smoothyMulticamIndices(payload.videoTrackIndices, source.videoTracks);
+    var audioFolder = typeof payload.audioDirectory === "string" ? new Folder(payload.audioDirectory) : null;
+    if (!audioFolder || !audioFolder.exists || !/^smoothyedit-multicam-[a-zA-Z0-9]+$/.test(audioFolder.name)) throw new Error("Refresh the updated SmoothyEdit app to create the Multicam audio folder.");
+    var oldIds = {}, i;
+    for (i = 0; i < app.project.sequences.numSequences; i++) oldIds[String(app.project.sequences[i].sequenceID)] = true;
+    // clone() has returned a Sequence, Boolean or void across Premiere versions.
+    // Find the new persistent ID instead of depending on that return value.
+    source.clone();
+    var clone = null;
+    for (i = 0; i < app.project.sequences.numSequences; i++) {
+      var candidate = app.project.sequences[i];
+      if (!oldIds[String(candidate.sequenceID)]) {
+        if (clone) throw new Error("Premiere created more than one sequence. Please inspect the Project panel.");
+        clone = candidate;
+      }
+    }
+    if (!clone || String(clone.sequenceID) === String(source.sequenceID)) throw new Error("Premiere could not duplicate the sequence.");
+    var job = { sourceId: String(source.sequenceID), cloneId: String(clone.sequenceID),
+      cloneRevision: smoothyTimelineRevision(clone, false), audioIndices: payload.audioTrackIndices, videoIndices: payload.videoTrackIndices,
+      audioDirectory: audioFolder.fsName, files: [], editing: false, complete: false, name: String(payload.sequenceName || source.name + " - Auto-Switch").substring(0, 200) };
+    SMOOTHY_MULTICAM_JOBS[payload.jobId] = job;
+    smoothyNameSequence(clone, job.name + " (analysing)");
+    var info = JSON.parse(getSequenceInfo(clone));
+    if (!info.hasSequence || !(info.duration > 0) || !(info.fps > 0)) throw new Error(info.error || "Premiere could not read the duplicate.");
+    // clone() may activate its result. Return to the sequence the user was
+    // viewing; the job remains tied to the requested source and its duplicate.
+    if (activeId && smoothyFindSequence(activeId)) app.project.openSequence(activeId);
+    return JSON.stringify({ success: true, sequenceId: job.cloneId, duration: info.duration, fps: info.fps, videoTracks: info.videoTracks });
+  } catch (error) { return JSON.stringify({ success: false, error: error.message }); }
+}
+
+function smoothyMulticamAudioPreset() {
+  var root = Folder.appPackage.fsName;
+  var roots = [root + "/MediaIO/systempresets/", root + "/Contents/MediaIO/systempresets/"];
+  var formats = ["3F3F3F3F_57415645", "3F3F3F3F_4D503320", "58444341_4d703300"];
+  for (var f = 0; f < formats.length; f++) for (var r = 0; r < roots.length; r++) {
+    var folder = new Folder(roots[r] + formats[f]);
+    if (folder.exists) {
+      var presets = folder.getFiles("*.epr");
+      if (presets.length) return presets[0].fsName;
+    }
+  }
+  throw new Error("Premiere's built-in WAV/MP3 audio export preset was not found.");
+}
+
+/** Render a single microphone through Premiere, including nest and clip effects. */
+function exportMulticamTimelineTrack(payloadJSON) {
+  var seq = null, muted = [], activeId = null;
+  try {
+    var payload = JSON.parse(payloadJSON), job = smoothyMulticamJob(payload.jobId);
+    var allowed = false;
+    for (var a = 0; a < job.audioIndices.length; a++) if (job.audioIndices[a] === payload.trackIndex) allowed = true;
+    if (!allowed) throw new Error("Choose a microphone from the analysed sequence.");
+    seq = smoothyFindSequence(job.cloneId);
+    if (app.project.activeSequence) activeId = String(app.project.activeSequence.sequenceID);
+    var preset = smoothyMulticamAudioPreset();
+    var extension = String(seq.getExportFileExtension(preset) || "wav").replace(/^\./, "").toLowerCase();
+    if (!/^(wav|mp3)$/i.test(extension)) throw new Error("The audio export preset must produce WAV or MP3.");
+    // Avoid Premiere's protected TemporaryItems folder: Electron creates and
+    // supplies this per-job folder before asking Premiere to render.
+    var file = new File(job.audioDirectory + "/microphone-" + payload.trackIndex + "." + extension);
+    if (file.exists) throw new Error("The microphone audio file already exists. Run Multicam again.");
+    job.files.push(file.fsName);
+    app.project.openSequence(job.cloneId);
+    if (!app.project.activeSequence || String(app.project.activeSequence.sequenceID) !== job.cloneId) throw new Error("Premiere could not open the Multicam duplicate for audio export.");
+    for (var i = 0; i < seq.audioTracks.numTracks; i++) muted.push(seq.audioTracks[i].isMuted() ? 1 : 0);
+    for (i = 0; i < seq.audioTracks.numTracks; i++) {
+      seq.audioTracks[i].setMute(i === payload.trackIndex ? 0 : 1);
+      if (!!seq.audioTracks[i].isMuted() !== (i !== payload.trackIndex)) throw new Error("Premiere could not isolate microphone A" + (payload.trackIndex + 1) + ".");
+    }
+    // ENCODE_ENTIRE includes leading silence and ignores the user's In/Out.
+    // Premiere export return values vary; verify the actual new file instead.
+    seq.exportAsMediaDirect(file.fsName, preset, 0);
+    if (!file.exists || file.length <= 44) throw new Error("Premiere could not render microphone A" + (payload.trackIndex + 1) + ".");
+    return JSON.stringify({ success: true, filePath: file.fsName, fileSize: file.length, duration: smoothySequenceDuration(seq) });
+  } catch (error) { return JSON.stringify({ success: false, error: error.message }); }
+  finally {
+    if (seq) for (var t = 0; t < muted.length; t++) seq.audioTracks[t].setMute(muted[t]);
+    if (activeId && smoothyFindSequence(activeId)) app.project.openSequence(activeId);
+  }
+}
+
+/**
+ * After editing, the topmost camera track must show the winning camera across
+ * every camera range with nothing disabled underneath, while the lowest
+ * camera track keeps the reverse angle it already had.
+ */
+function smoothyMulticamTrackIndices(indices) {
+  var top = -1, bottom = -1;
+  for (var i = 0; i < indices.length; i++) {
+    var index = indices[i];
+    if (top < 0 || index > top) top = index;
+    if (bottom < 0 || index < bottom) bottom = index;
+  }
+  return { top: top, bottom: bottom };
+}
+
+/** A clip collection can be out of timeline order after a native move. */
+function smoothyMulticamPiece(clip, frame) {
+  return { start: frame(clip.start.seconds), end: frame(clip.end.seconds),
+    itemId: String(clip.projectItem.nodeId), inTicks: String(clip.inPoint.ticks),
+    outTicks: String(clip.outPoint.ticks), speed: clip.getSpeed(), disabled: !!clip.disabled };
+}
+function smoothyMulticamFindClip(seq, index, piece, offset, frame) {
+  var clips = seq.videoTracks[index].clips;
+  for (var i = 0; i < clips.numItems; i++) {
+    var clip = clips[i];
+    if (frame(clip.start.seconds) === piece.start + offset && frame(clip.end.seconds) === piece.end + offset &&
+        String(clip.projectItem.nodeId) === piece.itemId && String(clip.inPoint.ticks) === piece.inTicks &&
+        String(clip.outPoint.ticks) === piece.outTicks && clip.getSpeed() === piece.speed && !!clip.disabled === piece.disabled) return clip;
+  }
+  throw new Error("Premiere did not preserve the camera piece on V" + (index + 1) + " at frame " + (piece.start + offset) + ". The original is untouched; inspect the incomplete duplicate.");
+}
+function smoothyVerifyMulticamOutput(seq, indices, expected, frame) {
+  for (var t = 0; t < indices.length; t++) {
+    var index = indices[t], track = seq.videoTracks[index], pieces = expected[index];
+    if (track.isMuted()) throw new Error("Camera V" + (index + 1) + " is hidden in the duplicate.");
+    if (track.clips.numItems !== pieces.length) throw new Error("Premiere changed the camera coverage on V" + (index + 1) + ". The original is untouched; inspect the incomplete duplicate.");
+    for (var p = 0; p < pieces.length; p++) smoothyMulticamFindClip(seq, index, pieces[p], 0, frame);
+  }
+}
+
+/** Swap existing video pieces, keeping their effects and continuous audio. */
+function applyMulticamTimelineCuts(payloadJSON) {
+  var seq = null, zeroPoint = null, job = null, scratchIndex = -1, qeSeq = null, originalTrackCount = 0;
+  try {
+    var payload = JSON.parse(payloadJSON);
+    job = smoothyMulticamJob(payload.jobId);
+    seq = smoothyFindSequence(job.cloneId);
+    var settings = seq.getSettings(), ticksPerFrame = Number(settings.videoFrameRate.ticks);
+    if (!(ticksPerFrame > 0)) throw new Error("Premiere could not read the native frame rate.");
+    var frame = function(seconds) { return Math.round(seconds * 254016000000 / ticksPerFrame); };
+    var durationFrames = frame(smoothySequenceDuration(seq)), ranges = payload.ranges;
+    if (!ranges || !ranges.length) throw new Error("No camera cuts were generated.");
+    var validTracks = {}, previousEnd = 0, r, t, c;
+    for (t = 0; t < job.videoIndices.length; t++) validTracks[job.videoIndices[t]] = true;
+    for (r = 0; r < ranges.length; r++) {
+      var range = ranges[r];
+      if (range.startFrame !== previousEnd || range.endFrame !== Math.floor(range.endFrame) || range.endFrame <= range.startFrame || range.endFrame > durationFrames || (range.trackIndex !== -1 && !validTracks[range.trackIndex])) throw new Error("Invalid camera cut ranges.");
+      previousEnd = range.endFrame;
+    }
+    if (previousEnd !== durationFrames) throw new Error("Camera decisions do not cover the full sequence.");
+    var topIndex = smoothyMulticamTrackIndices(job.videoIndices).top;
+    app.project.openSequence(job.cloneId);
+    if (String(app.project.activeSequence.sequenceID) !== job.cloneId) throw new Error("Premiere could not open the duplicate for editing.");
+    app.enableQE();
+    qeSeq = qe.project.getActiveSequence();
+    if (!qeSeq) throw new Error("Premiere could not open the duplicate's video editing interface.");
+    var audioBefore = smoothyTimelineRevision(seq, true);
+    function verifyAudio() {
+      if (smoothyTimelineRevision(seq, true) !== audioBefore) throw new Error("Premiere changed linked audio while cutting. The original is untouched; inspect the incomplete duplicate.");
+    }
+    zeroPoint = String(seq.zeroPoint);
+    seq.setZeroPoint("0");
+    job.editing = true;
+
+    // Unlink only the duplicate's selected camera video. Native video-track
+    // overwrites also insert audio and lose instance effects, so never use them.
+    for (var g = 0; g < 2; g++) {
+      var tracks = g ? seq.audioTracks : seq.videoTracks;
+      for (t = 0; t < tracks.numTracks; t++) for (c = 0; c < tracks[t].clips.numItems; c++) tracks[t].clips[c].setSelected(false, false);
+    }
+    for (t = 0; t < job.videoIndices.length; t++) {
+      var track = seq.videoTracks[job.videoIndices[t]];
+      if (track.isMuted()) track.setMute(0);
+      if (track.isMuted()) throw new Error("Premiere could not enable camera V" + (job.videoIndices[t] + 1) + ".");
+      for (c = 0; c < track.clips.numItems; c++) track.clips[c].setSelected(true, false);
+    }
+    seq.unlinkSelection(); // false also means the clips were already unlinked.
+    for (t = 0; t < job.videoIndices.length; t++) {
+      var track = seq.videoTracks[job.videoIndices[t]];
+      for (c = 0; c < track.clips.numItems; c++) track.clips[c].setSelected(false, false);
+      for (r = 1; r < ranges.length; r++) {
+        var cutTime = new Time(); cutTime.ticks = String(ranges[r].startFrame * ticksPerFrame);
+        qeSeq.getVideoTrackAt(job.videoIndices[t]).razor(cutTime.getFormatted(settings.videoFrameRate, seq.videoDisplayFormat));
+      }
+    }
+    verifyAudio();
+
+    var originals = {}, expected = {};
+    for (t = 0; t < job.videoIndices.length; t++) {
+      var index = job.videoIndices[t], track = seq.videoTracks[index], parts = [];
+      for (c = 0; c < track.clips.numItems; c++) {
+        var piece = smoothyMulticamPiece(track.clips[c], frame);
+        if (!(piece.end > piece.start)) throw new Error("Premiere returned an invalid camera piece.");
+        for (r = 1; r < ranges.length; r++) if (piece.start < ranges[r].startFrame && piece.end > ranges[r].startFrame) throw new Error("Premiere did not cut camera V" + (index + 1) + " at frame " + ranges[r].startFrame + ".");
+        parts.push(piece);
+      }
+      parts.sort(function(a, b) { return a.start - b.start; });
+      originals[index] = parts; expected[index] = [];
+    }
+    function piecesIn(index, range) {
+      var parts = [], all = originals[index];
+      for (var i = 0; i < all.length; i++) if (all[i].start >= range.startFrame && all[i].end <= range.endFrame) parts.push(all[i]);
+      return parts;
+    }
+    function requireCoverage(parts, range) {
+      var cursor = range.startFrame;
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i].disabled) continue;
+        if (parts[i].start !== cursor) break;
+        cursor = parts[i].end;
+      }
+      if (cursor !== range.endFrame) throw new Error("The winning camera is missing footage at frame " + cursor + ". The original is untouched; inspect the incomplete duplicate.");
+    }
+    function moveTrack(from, to, piece, offset) {
+      var track = qe.project.getActiveSequence().getVideoTrackAt(from), found = null;
+      for (var i = 0; i < track.numItems; i++) {
+        var item = track.getItemAt(i);
+        if (item.type === "Clip" && Math.round(Number(item.start.ticks) / ticksPerFrame) === piece.start + offset && Math.round(Number(item.end.ticks) / ticksPerFrame) === piece.end + offset) { found = item; break; }
+      }
+      if (!found || typeof found.moveToTrack !== "function") throw new Error("Premiere could not move camera video safely at frame " + piece.start + ".");
+      // Video track delta, zero audio track delta, zero time delta, move (not copy).
+      found.moveToTrack(to - from, 0, "00:00:00:00", false);
+      smoothyMulticamFindClip(seq, to, piece, offset, frame);
+    }
+    originalTrackCount = seq.videoTracks.numTracks;
+    function ensureScratchTrack() {
+      if (scratchIndex >= 0) return;
+      if (typeof qeSeq.addTracks !== "function" || typeof qeSeq.removeVideoTrack !== "function") throw new Error("This Premiere version cannot swap camera video safely.");
+      // Append one video-only track; never reuse or remove the user's tracks.
+      qeSeq.addTracks(1, originalTrackCount - 1, 0);
+      if (seq.videoTracks.numTracks !== originalTrackCount + 1) throw new Error("Premiere could not create the temporary camera track.");
+      scratchIndex = originalTrackCount;
+      qeSeq = qe.project.getActiveSequence();
+      verifyAudio();
+    }
+    function removeScratchTrack() {
+      if (scratchIndex < 0) return;
+      if (seq.videoTracks[scratchIndex].clips.numItems) throw new Error("Camera pieces remain on the temporary track. The original is untouched; inspect the incomplete duplicate.");
+      qeSeq.removeVideoTrack(scratchIndex);
+      if (seq.videoTracks.numTracks !== originalTrackCount) throw new Error("Premiere could not remove the empty temporary camera track.");
+      scratchIndex = -1;
+      verifyAudio();
+    }
+    for (r = 0; r < ranges.length; r++) {
+      var range = ranges[r], winner = range.trackIndex;
+      if (winner >= 0) requireCoverage(piecesIn(winner, range), range);
+      for (t = 0; t < job.videoIndices.length; t++) {
+        var index = job.videoIndices[t], sourceIndex = index;
+        if (winner >= 0 && winner !== topIndex) {
+          if (index === topIndex) sourceIndex = winner;
+          else if (index === winner) sourceIndex = topIndex;
+        }
+        var assigned = piecesIn(sourceIndex, range);
+        for (c = 0; c < assigned.length; c++) expected[index].push(assigned[c]);
+      }
+      if (winner < 0 || winner === topIndex) continue;
+      var top = piecesIn(topIndex, range), chosen = piecesIn(winner, range);
+      // Public TrackItem.move() can leave invisible, unselectable clips in
+      // Premiere's timeline. Swap tracks at the same time instead, preserving
+      // clip instances/effects and the timeline's native edit/display state.
+      if (top.length) ensureScratchTrack();
+      for (c = 0; c < top.length; c++) moveTrack(topIndex, scratchIndex, top[c], 0);
+      for (c = 0; c < chosen.length; c++) moveTrack(winner, topIndex, chosen[c], 0);
+      for (c = 0; c < top.length; c++) moveTrack(scratchIndex, winner, top[c], 0);
+      verifyAudio();
+    }
+    removeScratchTrack();
+    smoothyVerifyMulticamOutput(seq, job.videoIndices, expected, frame);
+    verifyAudio();
+    smoothyNameSequence(seq, job.name);
+    job.complete = true;
+    return JSON.stringify({ success: true, sequenceId: job.cloneId, sequenceName: job.name, verifiedRanges: ranges.length });
+  } catch (error) { return JSON.stringify({ success: false, error: error.message }); }
+  finally {
+    // Remove only our appended track if empty. On a partial swap retain its
+    // surviving video for recovery rather than discarding the reverse angle.
+    if (seq && scratchIndex >= 0 && seq.videoTracks.numTracks === originalTrackCount + 1 && !seq.videoTracks[scratchIndex].clips.numItems) {
+      try { qeSeq.removeVideoTrack(scratchIndex); } catch (cleanupError) {}
+    }
+    if (seq && zeroPoint !== null) seq.setZeroPoint(zeroPoint);
+  }
+}
+
+function discardMulticamTimeline(payloadJSON) {
+  try {
+    var payload = JSON.parse(payloadJSON), job = SMOOTHY_MULTICAM_JOBS[payload.jobId];
+    if (!job) return JSON.stringify({ success: true });
+    for (var f = 0; f < job.files.length; f++) {
+      try { var file = new File(job.files[f]); if (file.exists) file.remove(); } catch (error) {}
+    }
+    var clone = smoothyFindSequence(job.cloneId);
+    if (clone && !job.complete) {
+      smoothyNameSequence(clone, job.name + " (incomplete)");
+      if (app.project.activeSequence && String(app.project.activeSequence.sequenceID) === job.cloneId && smoothyFindSequence(job.sourceId)) app.project.openSequence(job.sourceId);
+    }
+    delete SMOOTHY_MULTICAM_JOBS[payload.jobId];
+    return JSON.stringify({ success: true });
+  } catch (error) { return JSON.stringify({ success: false, error: error.message }); }
 }
 
 function getSmoothyMarkerDiagnostics() {
@@ -224,9 +562,47 @@ function getSequenceVideoTracks() {
 function smoothyMediaFrameRate(projectItem) {
   try { return Number(projectItem.getFootageInterpretation().frameRate) || null; } catch (error) { return null; }
 }
-function getSequenceInfo() {
+function smoothyMediaPath(projectItem) {
+  try { return projectItem.getMediaPath() || ""; } catch (error) { return ""; }
+}
+function smoothySequenceDuration(seq) {
+  // Some CEP versions expose end as absolute ticks, including start timecode.
+  // Clip positions are always on the timeline clock and disambiguate it.
+  var raw = seq.end && typeof seq.end.seconds !== "undefined" ? Number(seq.end.seconds) : Number(seq.end) / 254016000000;
+  var lastClip = 0;
+  var groups = [seq.videoTracks, seq.audioTracks];
+  for (var g = 0; g < groups.length; g++) for (var t = 0; t < groups[g].numTracks; t++) {
+    var clips = groups[g][t].clips;
+    for (var c = 0; c < clips.numItems; c++) lastClip = Math.max(lastClip, Number(clips[c].end.seconds));
+  }
+  var offset = Number(seq.zeroPoint) / 254016000000;
+  if (offset > 0 && raw >= offset && Math.abs(raw - offset - lastClip) < Math.abs(raw - lastClip)) raw -= offset;
+  return Math.max(lastClip, isFinite(raw) ? raw : 0);
+}
+function smoothyTimelineRevision(seq, audioOnly) {
+  var groups = audioOnly ? [seq.audioTracks] : [seq.videoTracks, seq.audioTracks];
+  // Parking video can temporarily extend the sequence; that is not an audio edit.
+  var value = audioOnly ? [String(seq.timebase)] : [String(seq.timebase), smoothySequenceDuration(seq)];
+  for (var g = 0; g < groups.length; g++) {
+    var tracks = groups[g], trackValues = [];
+    for (var t = 0; t < tracks.numTracks; t++) {
+      var track = tracks[t], clips = [];
+      for (var c = 0; c < track.clips.numItems; c++) {
+        var item = track.clips[c], speed = 1;
+        try { speed = item.getSpeed(); } catch (error) {}
+        clips.push([item.name, item.projectItem ? String(item.projectItem.nodeId) : "", item.start.seconds, item.end.seconds, item.inPoint.seconds, item.outPoint.seconds, !!item.disabled, speed]);
+      }
+      var muted = false;
+      try { muted = !!track.isMuted(); } catch (error) {}
+      trackValues.push([track.name, muted, clips]);
+    }
+    value.push(trackValues);
+  }
+  return JSON.stringify(value);
+}
+function getSequenceInfo(sequenceOverride) {
   try {
-    var seq = app.project.activeSequence;
+    var seq = sequenceOverride || app.project.activeSequence;
     if (!seq) {
       return JSON.stringify({ hasSequence: false, error: "No active sequence" });
     }
@@ -237,13 +613,15 @@ function getSequenceInfo() {
       hasSequence: true,
       name: seq.name,
       id: seq.sequenceID,
-      duration: seq.end.seconds,
+      duration: smoothySequenceDuration(seq),
       fps: settings.videoFrameRate ? (1 / settings.videoFrameRate.seconds) : 30,
       width: settings.videoFrameWidth,
       height: settings.videoFrameHeight,
       markerCount: seq.markers.numMarkers,
       audioTracks: [],
-      videoTracks: []
+      videoTracks: [],
+      multicamTimelineVersion: 7,
+      timelineRevision: smoothyTimelineRevision(seq, false)
     };
 
     // Get audio tracks
@@ -260,7 +638,7 @@ function getSequenceInfo() {
         if (aClip.projectItem) {
           aTrackInfo.clips.push({
             name: aClip.name,
-            path: aClip.projectItem.getMediaPath(),
+            path: smoothyMediaPath(aClip.projectItem),
             start: aClip.start.seconds,
             end: aClip.end.seconds,
             inPoint: aClip.inPoint.seconds,
@@ -290,7 +668,7 @@ function getSequenceInfo() {
         if (vClip.projectItem) {
           vTrackInfo.clips.push({
             name: vClip.name,
-            path: vClip.projectItem.getMediaPath(),
+            path: smoothyMediaPath(vClip.projectItem),
             mediaFps: smoothyMediaFrameRate(vClip.projectItem),
             start: vClip.start.seconds,
             end: vClip.end.seconds,
@@ -351,6 +729,24 @@ function importFCPXML(xmlPath) {
  * Import a PNG/image into the project and place it at the playhead on the
  * topmost video track. Used by the desktop app's Assets tab (SVG -> PNG).
  */
+function importStockFootageToProject(filePath) {
+  try {
+    if (!app.project) return JSON.stringify({ success: false, error: "Open a Premiere project first." });
+    if (!filePath || !/\.mp4$/i.test(filePath) || !(new File(filePath)).exists) return JSON.stringify({ success: false, error: "Stock footage MP4 not found." });
+    var imported = app.project.importFiles([filePath], true, app.project.rootItem, false);
+    return JSON.stringify(imported ? { success: true, message: "Video imported into the Project panel." } : { success: false, error: "Premiere could not import this MP4." });
+  } catch (error) { return JSON.stringify({ success: false, error: error.message }); }
+}
+
+function importAudioLibraryToProject(filePath) {
+  try {
+    if (!app.project) return JSON.stringify({ success: false, error: "Open a Premiere project first." });
+    if (!filePath || !/\.mp3$/i.test(filePath) || !(new File(filePath)).exists) return JSON.stringify({ success: false, error: "Audio Library MP3 not found." });
+    var imported = app.project.importFiles([filePath], true, app.project.rootItem, false);
+    return JSON.stringify(imported ? { success: true, message: "Audio imported into the Project panel." } : { success: false, error: "Premiere could not import this MP3." });
+  } catch (error) { return JSON.stringify({ success: false, error: error.message }); }
+}
+
 function importImageToTimeline(imagePath, durationSeconds) {
   try {
     var project = app.project;

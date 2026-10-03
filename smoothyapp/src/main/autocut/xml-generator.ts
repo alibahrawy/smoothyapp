@@ -23,15 +23,13 @@ export function generateMulticamSequenceXML(
     if (!Number.isInteger(shot.camera) || !tracks[shot.camera]) throw new Error('Choose a valid camera for every speaker.');
   }
   // The upper track is the selected cut. The lower track retains alternates.
-  const main = tracks.map((track, camera) => xml.renderTrack(track, rangesFor(delayed, camera), 'video')).join('');
-  // Combine clipitems into one main track rather than stacking selected cameras.
-  const combineTracks = (value: string) => '<track>' + value.replace(/<\/?track>|<enabled>TRUE<\/enabled>|<locked>FALSE<\/locked>/g, '') + '</track>';
-  const alternatives = tracks.map((track, camera) => xml.renderTrack(track,
-    delayed.filter(shot => tracks.length > 1 && (shot.camera + 1) % tracks.length === camera)
-      .map(shot => ({ start: shot.start, end: shot.end, destination: shot.start })), 'video')).join('');
-  const video = [combineTracks(alternatives), combineTracks(main)];
-  if (wideShots.length) video.push(combineTracks(tracks.map((track, camera) => xml.renderTrack(track,
-    rangesFor(wideShots.map(shot => ({ ...shot, start: Math.min(duration, shot.start + offset), end: Math.min(duration, shot.end + offset) })), camera), 'video')).join('')));
+  const main = xml.renderCombinedTrack(tracks.map((track, camera) => ({ track, ranges: rangesFor(delayed, camera) })), 'video');
+  const alternatives = xml.renderCombinedTrack(tracks.map((track, camera) => ({ track,
+    ranges: delayed.filter(shot => tracks.length > 1 && (shot.camera + 1) % tracks.length === camera)
+      .map(shot => ({ start: shot.start, end: shot.end, destination: shot.start })) })), 'video');
+  const video = [alternatives, main];
+  if (wideShots.length) video.push(xml.renderCombinedTrack(tracks.map((track, camera) => ({ track,
+    ranges: rangesFor(wideShots.map(shot => ({ ...shot, start: Math.min(duration, shot.start + offset), end: Math.min(duration, shot.end + offset) })), camera) })), 'video'));
   const audio = (options.audioTracks ?? []).map(track => xml.renderTrack(track, [{ start: 0, end: duration, destination: 0 }], 'audio'));
   return xml.render(options.sequenceName ?? 'Auto-Switch Sequence', xml.frame(duration), video, audio);
 }

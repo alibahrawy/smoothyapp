@@ -9,7 +9,7 @@
   'use strict';
 
   const csInterface = new CSInterface();
-  const HOST_SCRIPT_VERSION = '20261001-review-host-v22';
+  const HOST_SCRIPT_VERSION = '20261004-multicam-reverse-track-v32';
   const MARKER_PAYLOAD_CHUNK_SIZE = 8000;
   let ws = null;
   let isConnected = false;
@@ -179,6 +179,19 @@
         sendSequenceInfo();
         break;
 
+      case 'prepareMulticam':
+        runMulticamHostCommand('prepareMulticamTimeline', 'multicamPrepared', data);
+        break;
+      case 'exportMulticamTrack':
+        runMulticamHostCommand('exportMulticamTimelineTrack', 'multicamTrackExported', data);
+        break;
+      case 'applyMulticamCuts':
+        runMulticamHostCommand('applyMulticamTimelineCuts', 'multicamCutsApplied', data);
+        break;
+      case 'discardMulticam':
+        runMulticamHostCommand('discardMulticamTimeline', 'multicamDiscarded', data);
+        break;
+
       case 'importXML':
         importXML(data.xmlPath, data.requestId);
         break;
@@ -214,7 +227,77 @@
       case 'importImage':
         importImageToTimeline(data.imagePath, data.durationSeconds, data.requestId);
         break;
+      case 'importAudioLibrary':
+        importAudioLibrary(data.filePath, data.requestId);
+        break;
+      case 'importStockFootage':
+        importStockFootage(data.filePath, data.requestId);
+        break;
     }
+  }
+
+  function runMulticamHostCommand(hostFunction, responseType, data) {
+    const reply = result => send(Object.assign({}, result, { type: responseType, requestId: data.requestId }));
+    ensureHostScriptLoaded(loadResult => {
+      if (!loadResult.success) { reply({ success: false, error: loadResult.error }); return; }
+      // Stage large shot lists in small chunks instead of truncating evalScript.
+      const encoded = encodeURIComponent(JSON.stringify(data));
+      csInterface.evalScript('$.global.SMOOTHY_MULTICAM_PAYLOAD = ""; "OK";', result => {
+        if (result !== 'OK') { reply({ success: false, error: 'Could not stage the Premiere multicam request.' }); return; }
+        let position = 0;
+        function append() {
+          if (position < encoded.length) {
+            const chunk = encoded.slice(position, position + MARKER_PAYLOAD_CHUNK_SIZE);
+            csInterface.evalScript('$.global.SMOOTHY_MULTICAM_PAYLOAD += ' + JSON.stringify(chunk) + '; "OK";', result => {
+              if (result !== 'OK') { reply({ success: false, error: 'Could not send the complete multicam request to Premiere.' }); return; }
+              position += chunk.length;
+              append();
+            });
+            return;
+          }
+          // Premiere can re-evaluate a cached manifest ScriptPath between
+          // evalScript calls. Reload in the same call that performs the edit.
+          const script = '$.evalFile(' + JSON.stringify(getHostScriptPath()) + '); ' +
+            'if (getSmoothyCepHostVersion() !== ' + JSON.stringify(HOST_SCRIPT_VERSION) + ') { ' +
+            'JSON.stringify({success:false,error:"Reopen the updated SmoothyEdit panel before running Multicam."}); ' +
+            '} else { ' + hostFunction + '(decodeURIComponent($.global.SMOOTHY_MULTICAM_PAYLOAD)); }';
+          csInterface.evalScript(script, result => {
+            try {
+              reply(JSON.parse(result));
+            }
+            catch (error) { reply({ success: false, error: 'Premiere could not complete Multicam. Reopen the SmoothyEdit panel and try again. ' + String(result).slice(0, 200) }); }
+            if (responseType === 'multicamCutsApplied') sendSequenceInfo();
+          });
+        }
+        append();
+      });
+    });
+  }
+
+  function importStockFootage(filePath, requestId) {
+    const reply = (result) => send(Object.assign({}, result, { type: 'stockFootageImported', requestId: requestId }));
+    if (!filePath) { reply({ success: false, error: 'No video path provided' }); return; }
+    ensureHostScriptLoaded(function(loadResult) {
+      if (!loadResult.success) { reply({ success: false, error: loadResult.error }); return; }
+      const escaped = String(filePath).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n');
+      csInterface.evalScript("importStockFootageToProject('" + escaped + "')", function(result) {
+        try { reply(JSON.parse(result)); }
+        catch (error) { reply({ success: false, error: 'Premiere could not import the stock footage. Restart Premiere and reopen the SmoothyEdit panel.' }); }
+      });
+    });
+  }
+
+  function importAudioLibrary(filePath, requestId) {
+    const reply = (result) => send(Object.assign({}, result, { type: 'audioLibraryImported', requestId: requestId }));
+    if (!filePath) { reply({ success: false, error: 'No audio path provided' }); return; }
+    ensureHostScriptLoaded(function(loadResult) {
+      if (!loadResult.success) { reply({ success: false, error: loadResult.error }); return; }
+      const escaped = String(filePath).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n');
+      csInterface.evalScript("importAudioLibraryToProject('" + escaped + "')", function(result) {
+        try { reply(JSON.parse(result)); }
+        catch (error) { reply({ success: false, error: 'Premiere could not import the audio. Restart Premiere and reopen the SmoothyEdit panel.' }); }
+      });
+    });
   }
 
   function importImageToTimeline(imagePath, durationSeconds, requestId) {
@@ -335,7 +418,11 @@
   }
 
   function sendSequenceInfo() {
-    csInterface.evalScript('getSequenceInfo()', function(result) {
+    const script = 'try { $.evalFile(' + JSON.stringify(getHostScriptPath()) + '); ' +
+      'if (getSmoothyCepHostVersion() !== ' + JSON.stringify(HOST_SCRIPT_VERSION) + ') { ' +
+      'JSON.stringify({hasSequence:false,error:"Reopen the updated SmoothyEdit panel."}); ' +
+      '} else { getSequenceInfo(); } } catch(e) { JSON.stringify({hasSequence:false,error:e.message}); }';
+    csInterface.evalScript(script, function(result) {
       try {
         const info = JSON.parse(result);
         send({
