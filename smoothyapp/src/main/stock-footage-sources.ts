@@ -92,7 +92,7 @@ export async function searchOtherStockSources(input: StockSearch, request: typeo
   const label = input.provider === 'nasa' ? 'NASA' : 'Internet Archive';
   const combined = signal ? AbortSignal.any([signal, AbortSignal.timeout(45000)]) : AbortSignal.timeout(45000);
   const json = async (url: string) => {
-    const response = await request(url, { headers: { Accept: 'application/json', 'User-Agent': 'SmoothyEdit/1.5.1 (https://smoothyedit.com; stock footage search)' }, redirect: 'error', signal: combined });
+    const response = await request(url, { headers: { Accept: 'application/json', 'User-Agent': 'SmoothyEdit/1.5.2 (https://smoothyedit.com; stock footage search)' }, redirect: 'error', signal: combined });
     if (response.status === 429) throw new Error(`${label} search limit reached. Please try again later.`);
     if (!response.ok) throw new Error(`${label} is unavailable right now. Please try again.`);
     return response.json() as Promise<any>;

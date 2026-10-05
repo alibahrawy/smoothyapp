@@ -4,6 +4,26 @@ This is the **public release repo** for the SmoothyEdit desktop app
 (`alibahrawy/smoothyapp`). Source of truth / monorepo lives at
 `/Users/alibahrawy/Documents/Coding/smoothyedit`.
 
+## Windows 1.5.2 Pixabay fix published — 2026-10-05
+
+The owner reported Pixabay missing from the shipped Windows build and supplied a
+Pixabay API key, authorizing a **Windows-only 1.5.2** update. The Windows 1.5.1
+installer was built without `SMOOTHY_STOCK_SERVICE_URL`, so `stockServiceURL()`
+resolved to `""` and Pixabay stayed hidden. Builds may now instead inject
+`SMOOTHY_PIXABAY_API_KEY` (via environment or a gitignored `.env`) to query the
+Pixabay API directly; a configured service endpoint still takes precedence. The
+key is deliberately **not** committed to this public repo and is absent from
+source, Git history and `package.json`. `electron.vite.config.js` loads the key
+through `loadEnv`, and `stock-footage-pixabay.ts` sends `key` + `per_page=12`.
+Live direct search returned 12 normalized clips; malformed/missing keys keep
+Pixabay hidden and a service endpoint overrides the key. Version bumped to
+**1.5.2** (`package.json`, `package-lock.json`); the CEP extension is unchanged
+at 1.5.13. A Windows x64 installer, blockmap and `latest.yml` were published to
+the **v1.5.2** GitHub release; the signed/notarized Mac 1.5.1 DMG/ZIP and
+`latest-mac.yml` were carried into that release so Mac downloads and updates
+keep working. The required website changelog entry still needs to be added in
+the monorepo (`smoothyedit/web/src/content/changelog/`).
+
 ## 1.5.1 app and website publication authorized — 2026-10-04
 
 The user explicitly requested: **“push everything the app and the website”** and will build Windows afterward. This authorizes committing/pushing the accumulated app/web work, publishing the verified signed/notarized **Mac 1.5.1** artifacts, then deploying the website. Earlier local-only/do-not-push notes below are historical and superseded for this release. Preserve the verified **Windows 1.5.0** installer, blockmap and `latest.yml` in the new release until the owner supplies Windows 1.5.1; do not label the existing Windows binary 1.5.1. Preserve the shared-stock build configuration and keep provider credentials server-side. Add the mandatory 1.5.1 website changelog and verify public download/update routes after publication.

@@ -108,7 +108,7 @@ export class StockFootageService {
       const params = new URLSearchParams({ action: 'query', format: 'json', formatversion: '2', generator: 'search', gsrsearch: query + ' filetype:video',
         gsrnamespace: '6', gsrlimit: '40', gsroffset: String(offset), prop: 'videoinfo', viprop: 'url|size|extmetadata|derivatives', viurlwidth: '320' });
       const response = await this.request('https://commons.wikimedia.org/w/api.php?' + params, {
-        headers: { Accept: 'application/json', 'User-Agent': 'SmoothyEdit/1.5.1 (https://smoothyedit.com; stock footage search)' }, redirect: 'error',
+        headers: { Accept: 'application/json', 'User-Agent': 'SmoothyEdit/1.5.2 (https://smoothyedit.com; stock footage search)' }, redirect: 'error',
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000)
       });
       if (response.status === 429) throw new Error('Wikimedia search limit reached. Please try again later.');

@@ -28,21 +28,34 @@ export function normalizePixabayVideo(raw: any): StockVideo | null {
 }
 
 declare const __SMOOTHY_STOCK_SERVICE_URL__: string;
+declare const __SMOOTHY_PIXABAY_API_KEY__: string;
 export function stockServiceURL(): string {
   return typeof __SMOOTHY_STOCK_SERVICE_URL__ === 'string' ? __SMOOTHY_STOCK_SERVICE_URL__ : '';
 }
+export function stockPixabayApiKey(): string {
+  return typeof __SMOOTHY_PIXABAY_API_KEY__ === 'string' ? __SMOOTHY_PIXABAY_API_KEY__ : '';
+}
+const PIXABAY_API = 'https://pixabay.com/api/videos/';
 
-/** Official builds use a server service. Provider credentials never enter the app. */
+/**
+ * Prefer a server service so provider credentials stay off the client. A build may
+ * instead inject its own Pixabay API key, which queries the Pixabay API directly.
+ */
 export class PixabayStockSource {
   private endpoint = '';
+  private apiKey = '';
   constructor(private request: typeof fetch, private cacheFolder?: string) { this.configure(stockServiceURL(), cacheFolder); }
   configure(endpoint: string, cacheFolder?: string) {
     this.endpoint = '';
+    this.apiKey = '';
     if (endpoint) {
       try {
         const url = new URL(endpoint);
         if (url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash) this.endpoint = url.href;
       } catch {}
+    } else {
+      const key = stockPixabayApiKey();
+      if (/^[A-Za-z0-9_-]{16,64}$/.test(key)) { this.endpoint = PIXABAY_API; this.apiKey = key; }
     }
     this.cacheFolder = cacheFolder;
   }
@@ -66,10 +79,13 @@ export class PixabayStockSource {
     const valid = (value: any) => Array.isArray(value?.hits) && value.hits.length <= 12 && Number.isSafeInteger(value.totalHits) && value.totalHits >= 0;
     if (!valid(data)) {
       const combined = signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000);
-      const params = new URLSearchParams({ q: input.query, page: String(page), ...(input.size ? { size: input.size } : {}) });
+      const params = new URLSearchParams({
+        ...(this.apiKey ? { key: this.apiKey, per_page: '12' } : {}),
+        q: input.query, page: String(page), ...(input.size ? { size: input.size } : {})
+      });
       try {
         const response = await this.request(this.endpoint + '?' + params, {
-          headers: { Accept: 'application/json', 'User-Agent': 'SmoothyEdit/1.5.1 (stock footage search)' }, redirect: 'error', signal: combined
+          headers: { Accept: 'application/json', 'User-Agent': 'SmoothyEdit/1.5.2 (stock footage search)' }, redirect: 'error', signal: combined
         });
         if (response.status === 429) throw new Error('Stock footage search limit reached. Please try again shortly.');
         if (!response.ok) throw new Error('Pixabay search is temporarily unavailable. Please try again.');
