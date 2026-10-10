@@ -2,6 +2,7 @@ import { app, ipcMain, dialog, type BrowserWindow } from 'electron';
 import path from 'node:path';
 import { StockFootageService, type StockSearch } from './stock-footage';
 import { stockServiceURL } from './stock-footage-pixabay';
+import { trackTool } from './telemetry';
 
 export function registerStockFootage(deps: {
   store: { get(key: string): unknown; set(key: string, value: unknown): void; delete(key: string): void };
@@ -35,6 +36,7 @@ export function registerStockFootage(deps: {
     const controller = new AbortController(); searchController = controller;
     try {
       const results = await service.search(input, controller.signal);
+      if (!controller.signal.aborted) trackTool('stock_search');
       return { success: true, ...results };
     } catch (error) { return controller.signal.aborted ? { canceled: true } : failure(error); }
     finally { if (searchController === controller) searchController = null; }
@@ -51,10 +53,12 @@ export function registerStockFootage(deps: {
         deps.window()?.webContents.send('stock-download-progress', { received, total, phase });
       });
       // Keep the original file: Premiere references its permanent location.
+      trackTool('stock_download');
       if (options.premiere) {
         deps.window()?.webContents.send('stock-download-progress', { importing: true });
         const result = await deps.importToPremiere(filePath);
         if (!result.success) return { ...failure(new Error(result.error || 'Premiere could not import this video.')), path: filePath };
+        trackTool('stock_premiere');
         return { success: true, path: filePath, imported: true };
       }
       return { success: true, path: filePath };

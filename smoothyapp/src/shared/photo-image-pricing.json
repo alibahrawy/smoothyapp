@@ -1,0 +1,236 @@
+{
+  "reviewedAt": "2026-10-10",
+  "source": "https://openrouter.ai/api/v1/images/models/{model}/endpoints",
+  "models": {
+    "black-forest-labs/flux-3-image": [
+      {
+        "billable": "output_image",
+        "unit": "image",
+        "cost_usd": 0.041,
+        "variant": "768"
+      },
+      {
+        "billable": "output_image",
+        "unit": "image",
+        "cost_usd": 0.048,
+        "variant": "1k"
+      },
+      {
+        "billable": "output_image",
+        "unit": "image",
+        "cost_usd": 0.07,
+        "variant": "1.5k"
+      },
+      {
+        "billable": "output_image",
+        "unit": "image",
+        "cost_usd": 0.1,
+        "variant": "2k"
+      },
+      {
+        "billable": "output_image",
+        "unit": "image",
+        "cost_usd": 0.607,
+        "variant": "4k"
+      }
+    ],
+    "black-forest-labs/flux.2-pro": [
+      {
+        "billable": "output_image",
+        "unit": "megapixel",
+        "cost_usd": 0.03
+      }
+    ],
+    "black-forest-labs/flux.2-flex": [
+      {
+        "billable": "input_image",
+        "unit": "megapixel",
+        "cost_usd": 0.06
+      },
+      {
+        "billable": "output_image",
+        "unit": "megapixel",
+        "cost_usd": 0.06
+      }
+    ],
+    "black-forest-labs/flux.2-max": [
+      {
+        "billable": "output_image",
+        "unit": "megapixel",
+        "cost_usd": 0.07
+      }
+    ],
+    "black-forest-labs/flux.2-klein-4b": [
+      {
+        "billable": "output_image",
+        "unit": "megapixel",
+        "cost_usd": 0.014
+      }
+    ],
+    "bytedance-seed/seedream-5-0-flash": [
+      {
+        "billable": "output_image",
+        "unit": "image",
+        "cost_usd": 0.018
+      },
+      {
+        "billable": "input_image",
+        "unit": "image",
+        "cost_usd": 0
+      }
+    ],
+    "bytedance-seed/seedream-4.5": [
+      {
+        "billable": "output_image",
+        "unit": "image",
+        "cost_usd": 0.04
+      },
+      {
+        "billable": "input_image",
+        "unit": "image",
+        "cost_usd": 0
+      }
+    ],
+    "x-ai/grok-imagine-image-2.0": [
+      {
+        "billable": "input_image",
+        "unit": "image",
+        "cost_usd": 0.01
+      },
+      {
+        "billable": "output_image",
+        "unit": "image",
+        "cost_usd": 0.04,
+        "variant": "low_1k"
+      },
+      {
+        "billable": "output_image",
+        "unit": "image",
+        "cost_usd": 0.06,
+        "variant": "low_2k"
+      },
+      {
+        "billable": "output_image",
+        "unit": "image",
+        "cost_usd": 0.06,
+        "variant": "medium_1k"
+      },
+      {
+        "billable": "output_image",
+        "unit": "image",
+        "cost_usd": 0.08,
+        "variant": "medium_2k"
+      }
+    ],
+    "sourceful/riverflow-v2-fast": [
+      {
+        "billable": "output_image",
+        "unit": "image",
+        "cost_usd": 0.02
+      },
+      {
+        "billable": "output_image",
+        "unit": "image",
+        "cost_usd": 0.04,
+        "variant": "2k"
+      },
+      {
+        "billable": "input_font",
+        "unit": "image",
+        "cost_usd": 0.03
+      },
+      {
+        "billable": "input_reference",
+        "unit": "image",
+        "cost_usd": 0.2
+      }
+    ],
+    "google/gemini-nano-banana-2.1": [{ "billable": "output_image", "unit": "token", "cost_usd": 0.00003 }],
+    "tencent/hy-image-v3.5-preview": [{ "billable": "output_image", "unit": "token", "cost_usd": 0.0000016 }],
+    "openai/gpt-image-2.5-sunburst": [
+      { "billable": "input_image", "unit": "token", "cost_usd": 0.000008 },
+      { "billable": "input_text", "unit": "token", "cost_usd": 0.000005 },
+      { "billable": "output_image", "unit": "token", "cost_usd": 0.00003 }
+    ],
+    "openai/gpt-image-2.5-flare": [
+      { "billable": "input_image", "unit": "token", "cost_usd": 0.000008 },
+      { "billable": "input_text", "unit": "token", "cost_usd": 0.000005 },
+      { "billable": "output_image", "unit": "token", "cost_usd": 0.00003 }
+    ],
+    "openai/gpt-image-2": [
+      { "billable": "input_image", "unit": "token", "cost_usd": 0.000008 },
+      { "billable": "input_text", "unit": "token", "cost_usd": 0.000005 },
+      { "billable": "output_image", "unit": "token", "cost_usd": 0.00003 }
+    ],
+    "openai/gpt-image-1-mini": [
+      { "billable": "input_image", "unit": "token", "cost_usd": 0.0000025 },
+      { "billable": "input_text", "unit": "token", "cost_usd": 0.000002 },
+      { "billable": "output_image", "unit": "token", "cost_usd": 0.000008 }
+    ],
+    "openai/gpt-image-1": [
+      { "billable": "input_image", "unit": "token", "cost_usd": 0.00001 },
+      { "billable": "input_text", "unit": "token", "cost_usd": 0.000005 },
+      { "billable": "output_image", "unit": "token", "cost_usd": 0.00004 }
+    ],
+    "microsoft/mai-image-2.6": [
+      { "billable": "input_text", "unit": "token", "cost_usd": 0.000005 },
+      { "billable": "input_image", "unit": "token", "cost_usd": 0.000008 },
+      { "billable": "output_image", "unit": "token", "cost_usd": 0.000038 }
+    ],
+    "microsoft/mai-image-2.6-flash": [
+      { "billable": "input_text", "unit": "token", "cost_usd": 0.00000175 },
+      { "billable": "input_image", "unit": "token", "cost_usd": 0.0000025 },
+      { "billable": "output_image", "unit": "token", "cost_usd": 0.000019 }
+    ],
+    "microsoft/mai-image-2.5": [
+      { "billable": "input_text", "unit": "token", "cost_usd": 0.000005 },
+      { "billable": "input_image", "unit": "token", "cost_usd": 0.000008 },
+      { "billable": "output_image", "unit": "token", "cost_usd": 0.000047 }
+    ],
+    "microsoft/mai-image-2.5-pro": [
+      { "billable": "input_text", "unit": "token", "cost_usd": 0.000005 },
+      { "billable": "input_image", "unit": "token", "cost_usd": 0.000008 },
+      { "billable": "output_image", "unit": "token", "cost_usd": 0.000108 }
+    ],
+    "bytedance-seed/seedream-5-0-lite": [
+      { "billable": "output_image", "unit": "image", "cost_usd": 0.035 },
+      { "billable": "input_image", "unit": "image", "cost_usd": 0 }
+    ],
+    "bytedance-seed/seedream-5-0-pro": [
+      { "billable": "output_image", "unit": "image", "cost_usd": 0.045 },
+      { "billable": "output_image", "unit": "image", "cost_usd": 0.09 },
+      { "billable": "input_image", "unit": "image", "cost_usd": 0.003 }
+    ],
+    "qwen/qwen-image-3-pro": [
+      { "billable": "input_image", "unit": "image", "cost_usd": 0.003 },
+      { "billable": "output_image", "unit": "image", "cost_usd": 0.04 },
+      { "billable": "output_image", "unit": "image", "cost_usd": 0.075 }
+    ],
+    "qwen/qwen-image-3": [
+      { "billable": "input_image", "unit": "image", "cost_usd": 0.003 },
+      { "billable": "output_image", "unit": "image", "cost_usd": 0.03 }
+    ],
+    "sourceful/riverflow-v2.5-pro": [
+      { "billable": "output_image", "unit": "image", "cost_usd": 0.13 },
+      { "billable": "output_image", "unit": "image", "cost_usd": 0.15 },
+      { "billable": "output_image", "unit": "image", "cost_usd": 0.17 }
+    ],
+    "sourceful/riverflow-v2.5-fast": [
+      { "billable": "output_image", "unit": "image", "cost_usd": 0.019 },
+      { "billable": "output_image", "unit": "image", "cost_usd": 0.021 }
+    ],
+    "x-ai/grok-imagine-image-quality": [
+      { "billable": "input_image", "unit": "image", "cost_usd": 0.01 },
+      { "billable": "output_image", "unit": "image", "cost_usd": 0.05 },
+      { "billable": "output_image", "unit": "image", "cost_usd": 0.07 }
+    ],
+    "recraft/recraft-v4.1-flash": [{ "billable": "output_image", "unit": "image", "cost_usd": 0.007 }],
+    "recraft/recraft-v4.1": [{ "billable": "output_image", "unit": "image", "cost_usd": 0.035 }],
+    "recraft/recraft-v4.1-pro": [{ "billable": "output_image", "unit": "image", "cost_usd": 0.21 }],
+    "recraft/recraft-v4.1-utility": [{ "billable": "output_image", "unit": "image", "cost_usd": 0.035 }],
+    "recraft/recraft-v4.1-utility-pro": [{ "billable": "output_image", "unit": "image", "cost_usd": 0.21 }],
+    "recraft/recraft-v4": [{ "billable": "output_image", "unit": "image", "cost_usd": 0.04 }],
+    "recraft/recraft-v4-pro": [{ "billable": "output_image", "unit": "image", "cost_usd": 0.25 }],
+    "recraft/recraft-v3": [{ "billable": "output_image", "unit": "image", "cost_usd": 0.04 }]
+  }
+}

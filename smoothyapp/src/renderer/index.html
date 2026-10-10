@@ -8,20 +8,17 @@
 </head>
 <body>
   <div class="app-container">
+    <!-- One shared title/status bar above both panels. -->
+    <header class="window-titlebar" aria-label="Window title and tool status"></header>
     <!-- Sidebar -->
     <aside class="sidebar">
-      <!-- Traffic light spacer (macOS) -->
-      <div class="traffic-light-spacer"></div>
-
-      <!-- Navigation -->
-      <nav class="sidebar-nav" id="sidebar-nav" aria-label="Tools">
-        <div class="nav-group-label nav-group-header">
-          <span class="nav-group-title">Free forever</span>
-          <button type="button" id="sidebar-toggle-btn" class="settings-btn sidebar-toggle-btn" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="sidebar-nav" title="Collapse sidebar">
-            <svg class="sidebar-toggle-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 17-5-5 5-5m7 10-5-5 5-5"/></svg>
-          </button>
-        </div>
-        <a href="#" class="nav-item active" data-tab="multicam">
+      <!-- Tool channels scroll independently; account and connection stay pinned. -->
+      <div class="sidebar-tools-header">
+        <div class="nav-group-label nav-group-header"><span class="nav-group-title">Your workspace</span><button type="button" id="sidebar-toggle-btn" class="settings-btn sidebar-toggle-btn" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="sidebar-nav" title="Collapse sidebar"><svg class="sidebar-toggle-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 17-5-5 5-5m7 10-5-5 5-5"/></svg></button></div>
+        <label class="tool-search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input type="search" id="tool-search" placeholder="Find a tool…" aria-label="Find a tool"><span aria-hidden="true" class="tool-search-shortcut">⌘K</span></label>
+      </div>
+      <nav class="sidebar-nav" id="sidebar-nav" aria-label="Tool channels">
+<section class="channel-group" data-channel-group="editing"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-editing"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">Editing</span></button><div class="channel-group-items" id="channels-editing"><a href="#" class="nav-item active" data-tab="multicam">
           <span class="nav-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
@@ -30,8 +27,7 @@
             </svg>
           </span>
           <span class="nav-label">Multicam</span>
-        </a>
-        <a href="#" class="nav-item" data-tab="silence">
+        </a><a href="#" class="nav-item" data-tab="silence">
           <span class="nav-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
@@ -40,24 +36,21 @@
             </svg>
           </span>
           <span class="nav-label">Silence Removal</span>
-        </a>
-        <a href="#" class="nav-item" data-tab="captions">
+        </a><a href="#" class="nav-item" data-tab="captions">
           <span class="nav-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
             </svg>
           </span>
           <span class="nav-label">Captions</span>
-        </a>
-        <a href="#" class="nav-item" data-tab="compressor">
+        </a><a href="#" class="nav-item" data-tab="compressor">
           <span class="nav-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="m4 4 6 6M4 10h6V4m10 16-6-6m6 0h-6v6"/>
             </svg>
           </span>
           <span class="nav-label">Compressor</span>
-        </a>
-        <a href="#" class="nav-item" data-tab="assets">
+        </a><a href="#" class="nav-item" data-tab="assets">
           <span class="nav-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -66,46 +59,13 @@
             </svg>
           </span>
           <span class="nav-label">Assets</span>
-        </a>
-
-        <a href="#" class="nav-item" data-tab="stock">
+        </a></div></section><section class="channel-group" data-channel-group="library"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-library"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">Library</span></button><div class="channel-group-items" id="channels-library"><a href="#" class="nav-item" data-tab="stock">
           <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m10 8 6 4-6 4zM3 7h4M3 12h4M3 17h4M17 7h4M17 17h4"/></svg></span>
           <span class="nav-label">Stock Footage</span>
-        </a>
-
-        <a href="#" class="nav-item" data-tab="audio">
+        </a><a href="#" class="nav-item" data-tab="audio">
           <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13M9 9l12-2"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
           <span class="nav-label">Audio Library</span>
-        </a>
-
-        <!-- Studio: paid cloud tools live here, never on the free tabs -->
-        <div class="sidebar-divider" role="separator" aria-label="Studio tools"></div>
-        <div class="nav-group-label">
-          <span>Studio</span>
-          <span id="studio-credits-inline" class="nav-credits hidden">—</span>
-        </div>
-        <button type="button" id="studio-dashboard-btn" class="studio-dashboard-btn" title="Open Studio Dashboard in your browser">
-          <span class="nav-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <rect x="3" y="3" width="18" height="18" rx="2"></rect>
-              <path d="M3 9h18M9 9v12"></path>
-            </svg>
-          </span>
-          <span class="nav-label">Dashboard</span>
-          <svg class="external-link-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"></path></svg>
-        </button>
-        <a href="#" class="nav-item" data-tab="bestshorts">
-          <span class="nav-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="23 7 16 12 23 17 23 7"></polygon>
-              <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
-            </svg>
-          </span>
-          <span class="nav-label">Best Shorts</span>
-          <span class="paid-badge">Credits</span>
-        </a>
-
-        <a href="#" class="nav-item hidden" data-tab="logs">
+        </a></div></section><section class="channel-group" data-channel-group="studio" data-fold-key="ai-workspace"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-studio"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">AI</span><span id="studio-credits-inline" class="nav-credits hidden">—</span></button><div class="channel-group-items" id="channels-studio"><a href="#" class="nav-item" data-tab="studio-text" style="--tab-accent:#B0EC9C" aria-label="Dashboard · Studio · Shorts, Condense, Hooks, Titles, Descriptions, Thumbnails, B-roll, Social, Blog, SFX"><span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 10h18M10 10v11"/><path d="m14 14 4 2-4 2v-4Z"/></svg></span><span class="nav-label">Dashboard</span><span class="paid-badge">Credits</span></a><a href="#" class="nav-item" data-tab="photos" aria-label="AI Photos · generate, edit, reactions, image history"><span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 5-5 4 4 4-6 5 7"/></svg></span><span class="nav-label">AI Photos</span></a><a href="#" class="nav-item" data-tab="chat" aria-label="Chat"><span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z"/></svg></span><span class="nav-label">Chat</span></a></div></section><a href="#" class="nav-item hidden" data-tab="logs">
           <span class="nav-icon">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="4 17 10 11 4 5"></polyline>
@@ -113,8 +73,7 @@
             </svg>
           </span>
           <span class="nav-label">Logs</span>
-        </a>
-      </nav>
+        </a><p id="tool-search-empty" class="help-text hidden" role="status">No tools found.</p></nav>
 
       <!-- Sidebar footer -->
       <div class="sidebar-footer">
@@ -129,6 +88,7 @@
             <span id="user-name" class="user-name">Not logged in</span>
             <span id="user-plan" class="user-plan">Studio</span>
           </div>
+          <button id="account-verify-btn" type="button" class="account-verify-btn hidden">Verify email ↗</button>
           <button id="logout-btn" class="logout-btn" title="Logout">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -178,6 +138,139 @@
 
     <!-- Main content area -->
     <main class="main-content">
+      <div class="tab-content" id="tab-studio-text">
+        <header id="studio-workspace-header" class="studio-workspace-header">
+          <div class="studio-workspace-heading"><div><h1>Studio</h1><p id="studio-workspace-description" class="help-text">One input, more possibilities.</p></div><div class="studio-header-actions"><span id="studio-workspace-credits" class="photos-credit-pill">Studio credits</span><button type="button" id="studio-dashboard-btn" class="stock-text-button" title="Open Studio Dashboard in your browser">Dashboard ↗</button><button type="button" id="shorts-history-btn" class="btn btn-secondary btn-small hidden" disabled>History</button><button type="button" id="studio-text-history-toggle" class="btn btn-secondary btn-small">History</button></div></div>
+          <div class="studio-tool-buttons" role="group" aria-label="Studio tools"><button type="button" class="studio-tool-button" data-studio-mode="shorts" style="--tool-color:#B0EC9C" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="14" height="14" rx="3"/><path d="m17 10 5-3v10l-5-3"/></svg><span>Shorts</span></button><button type="button" class="studio-tool-button" data-studio-mode="condense" style="--tool-color:#ffc99a" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h6"/><path d="m17 10 3 3-3 3M20 13h-5"/></svg><span>Condense</span></button><button type="button" class="studio-tool-button" data-studio-mode="hook" style="--tool-color:#ffe08c" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11a5 5 0 0 1-10 0v-3l3 3"/><path d="m16 3 1.5 3L21 7l-3.5 1.5L16 12l-1.5-3.5L11 7l3.5-1L16 3Z"/></svg><span>Hooks</span></button><button type="button" class="studio-tool-button" data-studio-mode="title" style="--tool-color:#9edbf8" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M12 5v14M8 19h8M4 5v3M20 5v3"/></svg><span>Titles</span></button><button type="button" class="studio-tool-button" data-studio-mode="description" style="--tool-color:#abc8ff" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h6"/></svg><span>Descriptions</span></button><button type="button" class="studio-tool-button" data-studio-mode="thumbnail" style="--tool-color:#d3b5ff" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m3 17 5-5 4 4 4-6 5 7"/></svg><span>Thumbnails</span></button><button type="button" class="studio-tool-button" data-studio-mode="broll" style="--tool-color:#a5e4c9" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 8h4M3 16h4M17 8h4M17 16h4"/><path d="m10 9 5 3-5 3V9Z"/></svg><span>B-roll</span></button><button type="button" class="studio-tool-button" data-studio-mode="twitter" style="--tool-color:#ffc0df" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H4l-1 1v-9a9 9 0 0 1 18 0Z"/><path d="M7 10h10M7 14h7"/></svg><span>Social</span></button><button type="button" class="studio-tool-button" data-studio-mode="blog" style="--tool-color:#9de2df" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-2H4V4ZM20 4h-4a3 3 0 0 0-3 3v14a4 4 0 0 1 4-2h3V4Z"/></svg><span>Blog</span></button><button type="button" class="studio-tool-button" data-studio-mode="sfx" style="--tool-color:#bfb8ff" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m10 4-5 4H2v8h3l5 4V4ZM14 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg><span>SFX</span></button></div>
+        </header>
+        <div class="content-scroll studio-text-scroll">
+          <section id="studio-text-signin" class="section"><h2>Your subtitles, more possibilities</h2><p class="help-text">Sign in to use your Studio credits and shared history. Local editing tools stay free.</p><button type="button" id="studio-text-signin-btn" class="btn btn-primary">Sign in</button></section>
+          <div id="studio-text-workspace" class="hidden">
+            <section id="studio-text-pro" class="section hidden"><p class="help-text">This tool is part of Studio Pro. Your local editing tools stay free.</p><button type="button" id="studio-text-upgrade" class="btn btn-secondary btn-small">View Studio Pro ↗</button></section>
+            <section id="studio-text-empty" class="studio-empty"><span class="studio-empty-icon" aria-hidden="true">✦</span><h2 id="studio-text-heading">Condense plan</h2><p id="studio-text-description" class="help-text"></p><span>Choose a tool above. Add your subtitles below to get started.</span></section>
+            <section id="studio-text-result-section" class="section hidden"><div class="studio-source-heading"><h2 id="studio-text-result-heading">Your edit plan</h2><div class="studio-source-actions"><button type="button" id="studio-text-copy" class="btn btn-secondary btn-small">Copy</button><button type="button" id="studio-text-save" class="btn btn-secondary btn-small">Save TXT</button></div></div><p id="studio-text-result-help" class="help-text">Review these suggestions and make the edit yourself.</p><div id="studio-result-cards" class="studio-result-cards" aria-label="Formatted Studio result"></div><button id="studio-result-edit" type="button" class="stock-text-button studio-edit-toggle" aria-pressed="false">Edit as text</button><textarea id="studio-text-result" hidden class="studio-textarea studio-draft" aria-label="Editable Studio draft" rows="12"></textarea><label for="studio-text-refine" class="help-text">Refine this draft (uses Studio credits)</label><div class="studio-inline"><input id="studio-text-refine" class="text-input" maxlength="10000" placeholder="Make it shorter, change the tone…"><button type="button" id="studio-text-refine-btn" class="btn btn-secondary btn-small">Refine</button></div></section>
+          </div>
+          <section id="studio-text-history" class="section hidden"><div class="studio-source-heading"><h2>Shared history</h2><button id="studio-text-history-refresh" type="button" class="btn btn-secondary btn-small">Refresh</button></div><div id="studio-text-history-items"></div><div class="studio-source-actions"><button id="studio-text-history-prev" type="button" class="btn btn-secondary btn-small">Previous</button><span id="studio-text-history-page" class="help-text"></span><button id="studio-text-history-next" type="button" class="btn btn-secondary btn-small">Next</button></div></section>
+        </div>
+        <footer id="studio-compose-footer" class="studio-compose-footer">
+          <div id="studio-text-composer" class="studio-composer hidden">
+            <div class="studio-composer-heading"><span id="studio-text-source-heading">Input</span></div>
+            <div id="studio-source-slider" class="studio-source-slider" role="group" aria-label="Studio input source" style="--source-index: 0">
+              <button type="button" data-shorts-source="sequence" aria-pressed="true">Premiere</button>
+              <button type="button" data-shorts-source="transcript" aria-pressed="false">Subtitles</button>
+              <button type="button" data-shorts-source="audio" aria-pressed="false">Audio/Video</button>
+              <button type="button" data-shorts-source="youtube" aria-pressed="false">YouTube</button>
+            </div>
+            <div id="shorts-source-sequence" class="shorts-source-panel">
+              <div class="section-header-row">
+                <p id="bestshorts-sequence-name" class="sequence-info">No sequence loaded</p>
+                <button id="bestshorts-refresh-btn" type="button" class="btn btn-secondary btn-small">Refresh</button>
+              </div>
+              <p id="bestshorts-sequence-details" class="help-text"></p>
+              <p class="help-text">Creates subtitles locally with your app Captions settings.</p>
+            </div>
+            <div id="shorts-source-audio" class="shorts-source-panel hidden">
+              <button id="shorts-audio-browse" type="button" class="btn btn-secondary btn-small">Choose audio or video</button>
+              <p id="shorts-audio-name" class="help-text">MP3, WAV, M4A, MP4, MOV, and more</p>
+              <p class="help-text">Creates subtitles locally with your app Captions settings.</p>
+            </div>
+            <div id="shorts-source-youtube" class="shorts-source-panel hidden">
+              <label class="shorts-input-label" for="shorts-youtube-url">YouTube video URL</label>
+              <div class="shorts-youtube-row">
+                <input id="shorts-youtube-url" type="url" class="text-input" placeholder="https://www.youtube.com/watch?v=…">
+                <button id="shorts-youtube-load" type="button" class="btn btn-secondary btn-small">Load subtitles</button>
+              </div>
+              <p id="shorts-youtube-name" class="help-text">Load once, then use any Studio tool.</p>
+            </div>
+            <div id="shorts-source-transcript" class="shorts-source-panel hidden">
+              <div class="studio-subtitle-file"><button id="studio-text-upload" type="button" class="btn btn-secondary btn-small">Upload subtitles</button><span id="studio-text-source-name" class="help-text">TXT, SRT or VTT · up to 5 MB</span></div>
+            </div>
+            <input id="studio-text-input" type="hidden">
+            <div class="studio-composer-actions"><div class="studio-source-actions"><button id="studio-text-options" type="button" class="stock-text-button" popovertarget="studio-options-popup">Options</button><span class="help-text studio-paid-note">Uses Studio credits</span></div><div class="studio-source-actions"><button id="studio-text-cancel" type="button" class="btn btn-secondary btn-small hidden">Cancel</button><button id="analyze-shorts-btn" type="button" class="btn btn-primary hidden" disabled>Find Shorts</button><button id="shorts-cancel-btn" type="button" class="btn btn-secondary btn-small hidden">Cancel</button><button id="studio-text-run" type="button" class="btn btn-primary" disabled>Suggest edit ranges</button></div></div>
+            <div id="studio-options-popup" class="photo-popup studio-source-popup" popover><h2>Tool options</h2>          <div id="studio-shorts-options" class="hidden">
+            <h3>Shorts mode</h3>
+            <div class="shorts-mode-options">
+              <label class="shorts-mode-option">
+                <input type="radio" name="shorts-mode" value="multiple" checked>
+                <span><strong>Multiple</strong><small>More clips · about one short per 3 minutes</small></span>
+              </label>
+              <label class="shorts-mode-option">
+                <input type="radio" name="shorts-mode" value="best">
+                <span><strong>Best Part</strong><small>Quality first · the single strongest moment</small></span>
+              </label>
+            </div>
+          </div><div id="studio-condense-options" class="studio-inline"><label for="studio-condense-duration">Source length (seconds, optional)</label><input id="studio-condense-duration" type="number" min="1" max="86400" placeholder="1800" class="text-input"></div><div id="studio-broll-options" class="hidden"><label for="studio-broll-type">Video type</label><button id="studio-broll-type" type="button" class="photo-picker-trigger" aria-label="Video type" aria-haspopup="listbox" aria-expanded="false" aria-controls="studio-broll-type-list" popovertarget="studio-broll-type-menu"><span class="photo-picker-label">Talking head</span><span aria-hidden="true">⌄</span></button><fieldset class="studio-broll-categories"><legend>Visual categories</legend><label><input type="checkbox" value="stock footage" checked> Stock footage</label><label><input type="checkbox" value="graphics" checked> Graphics</label><label><input type="checkbox" value="screen recordings" checked> Screen recordings</label><label><input type="checkbox" value="custom footage"> Custom footage</label></fieldset></div><div id="studio-broll-type-menu" class="photo-picker-popup photo-picker-compact" popover><div id="studio-broll-type-list" class="photo-picker-list" role="listbox" aria-label="Video types"></div></div></div>
+          </div>
+          <p id="studio-text-status" aria-live="polite" class="help-text" role="status">Choose a tool and add subtitles.</p>
+        </footer>
+      </div>
+      <div class="tab-content" id="tab-chat">
+        <div class="status-bar status-idle">Chat</div>
+        <div class="photos-header"><h1>Chat</h1><div class="photo-header-actions"><span id="chat-credits" class="photos-credit-pill">Studio credits</span><button type="button" id="chat-copy" class="stock-text-button">Copy</button><button type="button" id="chat-save" class="stock-text-button">Save</button><button type="button" id="chat-new" class="stock-text-button">New chat</button></div></div>
+        <div class="content-scroll photos-scroll" id="chat-view-panel" aria-label="Chat conversation">
+          <section id="chat-signin" class="section"><h2>Chat</h2><p class="help-text">Sign in to chat.</p><button type="button" id="chat-signin-btn" class="btn btn-primary">Sign in</button></section>
+          <div id="chat-signedin" class="hidden"><div id="chat-results" class="photo-conversation"></div><div id="chat-empty" class="photo-empty"><h2>Ask anything</h2></div></div>
+        </div>
+        <div id="chat-composer-dock" class="photo-composer-dock hidden">
+          <div class="photo-composer"><div id="chat-attachments" class="chat-attachments" aria-label="Attached files"></div><textarea id="chat-prompt" rows="2" maxlength="10000" aria-label="Message Chat" placeholder="Ask anything…"></textarea><div class="photo-composer-toolbar">
+            <button type="button" id="chat-add" class="photo-icon-button" aria-label="Add files or images" aria-expanded="false" popovertarget="chat-add-menu">＋</button>
+            <button type="button" id="chat-thinking" class="chat-thinking-toggle" role="switch" aria-checked="false"><span class="chat-thinking-switch" aria-hidden="true"></span><span>Thinking</span></button>
+            <div class="chat-send-controls">
+            <button type="button" id="chat-send" class="photo-send-button" aria-label="Send message · uses Studio credits"><svg class="chat-send-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg><svg class="chat-stop-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
+            </div>
+          </div></div>
+          <p id="chat-status" class="photos-status hidden" role="status" aria-live="polite"></p>
+        </div>
+        <div id="chat-add-menu" class="photo-picker-popup chat-add-menu" popover><div class="photo-picker-list"><button type="button" id="chat-add-image">Add images</button><button type="button" id="chat-add-file">Add files</button></div><p class="photo-picker-footnote">Images, PDF, DOCX and text · up to 4 files / 10 MB each. Documents must contain readable text. Sent only when you send your message.</p></div>
+      </div>
+      <div class="tab-content" id="tab-photos">
+        <div class="status-bar status-idle">AI Photos</div>
+        <div class="photo-workspace"><div class="photo-workspace-main">
+        <div class="photos-header"><h1 id="photos-heading">AI Photos</h1><div class="photo-header-actions"><button type="button" id="photos-history-toggle" class="stock-text-button" aria-pressed="false">History</button><button type="button" id="photos-new-chat" class="stock-text-button" title="Start a new image conversation">New chat</button></div></div>
+        <div class="content-scroll photos-scroll" id="photos-view-panel" aria-label="Image conversation">
+          <section id="photos-signin" class="section"><h2>Create something with AI Photos</h2><p class="help-text">Sign in to generate and edit pictures with your Studio credits.</p><button type="button" id="photos-signin-btn" class="btn btn-primary">Sign in</button></section>
+          <div id="photos-signedin" class="hidden">
+            <div class="photo-section-header"><h2 id="photos-results-heading" class="hidden">Saved images</h2><div id="photos-history-controls" class="hidden"><label><input type="checkbox" id="photos-favorites-only"> Favorites</label><button type="button" id="photos-history-refresh" class="stock-text-button">Refresh</button></div></div>
+            <p id="photos-history-policy" class="help-text hidden">Cloud image history is available to paid members.</p>
+            <div id="photos-results" class="photo-conversation" aria-label="Your images"></div>
+            <div id="photos-empty" class="photo-empty"><span class="photo-empty-symbol" aria-hidden="true">✦</span><h2>What would you like to create?</h2><p>Describe an image, or attach a picture and tell me what to change.</p><span>Choose an image model below, or use Reactions to create expressions from a picture.</span></div>
+            <div id="photos-history-pagination" class="photo-pagination hidden"><button type="button" id="photos-history-prev" class="btn btn-secondary">Previous</button><span id="photos-history-page"></span><button type="button" id="photos-history-next" class="btn btn-secondary">Next</button></div>
+          </div>
+        </div>
+        <div id="photos-composer-dock" class="photo-composer-dock hidden">
+          <div class="photo-composer" id="photos-drop-zone">
+            <div class="photo-reference-area"><div class="photo-reference-tools"><div id="photos-reference-slot" class="photo-reference-slot">
+              <button type="button" id="photos-attach" class="photo-reference-add" title="Attach pictures · PNG, JPEG, WebP · up to 6 / 25 MB" aria-label="Attach reference pictures"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 5-5 4 4 4-6 5 7"/></svg><span>Image refs</span></button><input type="file" id="photos-files" class="hidden" accept="image/png,image/jpeg,image/webp" multiple>
+              <div id="photos-references" class="photo-reference-list" aria-label="Attached pictures"></div>
+              <div id="photos-selected-source" class="photo-selected-source hidden"><button type="button" id="photos-source-attach" class="photo-reference-preview" aria-label="Replace reference picture" title="Choose reference pictures"><img id="photos-source-preview" alt="Selected reference"></button><span id="photos-source-label" class="sr-only"></span><button type="button" id="photos-source-clear" class="photo-reference-remove" aria-label="Remove selected reference">×</button></div>
+            </div><button type="button" id="photos-reactions" class="photo-reference-add photo-reactions-button" aria-controls="photos-reactions-panel" aria-expanded="false" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 14s1 3 4 3 4-3 4-3M8 8h.01M16 8h.01"/></svg><span>Reactions</span></button></div></div>
+            <div id="photos-presets-panel" class="photo-reactions-summary hidden"><span id="photos-presets-summary"></span><button type="button" id="photos-clear-presets" class="stock-text-button" aria-label="Clear reaction presets">×</button></div>
+            <textarea id="photos-prompt" rows="2" maxlength="10000" aria-label="Message AI Photos" placeholder="Describe an image, or attach a picture to edit…"></textarea>
+            <div class="photo-composer-toolbar">
+              <div class="photo-image-controls"><button type="button" id="photos-model" class="photo-picker-trigger photo-model-picker" aria-label="Image model" aria-haspopup="listbox" aria-expanded="false" aria-controls="photos-model-list" popovertarget="photos-model-menu"><img class="photo-model-logo" alt="" aria-hidden="true"><span class="photo-picker-label">Nano Banana 2</span></button>
+                <button type="button" id="photos-ratio" class="photo-picker-trigger photo-inline-picker" title="Image shape" aria-label="Image shape" aria-haspopup="listbox" aria-expanded="false" aria-controls="photos-ratio-list" popovertarget="photos-ratio-menu"><svg width="17" height="14" viewBox="0 0 20 16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="1.5" y="2" width="17" height="12" rx="2"/></svg><span class="photo-picker-label">16:9</span></button>
+                <div id="photos-size-field"><button type="button" id="photos-size" class="photo-picker-trigger photo-inline-picker" title="Image resolution" aria-label="Image resolution" aria-haspopup="listbox" aria-expanded="false" aria-controls="photos-size-list" popovertarget="photos-size-menu"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M3 3l6 6m12-6-6 6M3 21l6-6m12 6-6-6"/></svg><span class="photo-picker-label">1K</span></button></div>
+              </div>
+              <div class="photo-send-controls"><div class="photo-credit-details"><span id="photos-estimate" class="photo-credit-estimate" title="Approximate cost. Final credits depend on actual image usage." aria-live="polite"></span><span id="photos-credits" class="photos-credit-pill" title="Studio credit balance">Studio credits</span></div><button type="button" id="photos-generate" class="photo-send-button" title="Generate image · uses Studio credits" aria-label="Generate image · uses Studio credits"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button></div>
+              <button type="button" id="photos-stop-batch" class="stock-text-button hidden">Stop batch</button>
+            </div>
+            <p id="photos-reference-warning" class="photos-status photo-error hidden" role="status" aria-live="polite"></p>
+          </div>
+          <p class="photos-status hidden" id="photos-status" role="status" aria-live="polite"></p>
+        </div>
+        </div>
+          <aside id="photos-reactions-panel" class="photo-reactions-panel" aria-labelledby="photos-reactions-title" hidden>
+            <div class="photo-reactions-heading"><div><h2 id="photos-reactions-title">Reactions</h2><p>Give your subject a new expression.</p></div><button type="button" id="photos-reactions-close" class="photo-icon-button" aria-label="Close reactions">×</button></div>
+            <div class="photo-reactions-body"><div class="photo-reactions-source"><img id="photos-reactions-preview" alt="Reference for reactions" hidden><p id="photos-reactions-source-help">Add an image reference to get started.</p></div><p class="help-text">Choose expressions. Each selection creates one image.</p><div id="photos-presets" class="photo-preset-grid"></div><label class="photo-field">Subject details <span class="help-text">Optional · details to keep</span><input type="text" id="photos-subject" maxlength="2000" placeholder="Clothing, appearance…"></label></div>
+            <div class="photo-reactions-footer"><span id="photos-reactions-estimate" class="photo-credit-estimate" aria-live="polite"></span><p class="help-text">Estimated cost · final credits may vary.</p><div class="photo-reaction-popup-actions"><button type="button" id="photos-reactions-clear" class="stock-text-button">Clear reactions</button><button type="button" id="photos-reactions-done" class="btn btn-secondary btn-small">Done</button></div></div>
+          </aside>
+        </div>
+        <div id="photos-model-menu" class="photo-picker-popup photo-image-model-menu" popover><div class="photo-model-menu-header"><label class="photo-model-search"><span class="sr-only">Search image models</span><input type="search" id="photos-model-search" placeholder="Search image models…" aria-label="Search image models"></label><span class="photo-model-kind">Image</span></div><div class="photo-model-filters" role="group" aria-label="Filter image models"><button type="button" data-model-filter="all" aria-pressed="true">All</button><button type="button" data-model-filter="fast" aria-pressed="false">Fast</button><button type="button" data-model-filter="low-cost" aria-pressed="false">Low cost</button><button type="button" data-model-filter="4k" aria-pressed="false">4K</button></div><div id="photos-model-list" class="photo-picker-list" role="listbox" aria-label="Image models"></div><p class="photo-picker-empty hidden">No matching models</p></div>
+        <div id="photos-ratio-menu" class="photo-picker-popup photo-picker-compact" popover><div id="photos-ratio-list" class="photo-picker-list" role="listbox" aria-label="Image shapes"></div></div>
+        <div id="photos-size-menu" class="photo-picker-popup photo-picker-compact" popover><div id="photos-size-list" class="photo-picker-list" role="listbox" aria-label="Image resolutions"></div></div>
+        <dialog id="photos-viewer" class="photo-viewer" aria-labelledby="photos-viewer-title"><div class="photo-viewer-heading"><h2 id="photos-viewer-title">Image preview</h2><button type="button" id="photos-viewer-close" class="stock-text-button" aria-label="Close image preview">×</button></div><img id="photos-viewer-image" alt=""><p id="photos-viewer-meta" class="help-text"></p><div class="photo-viewer-actions"><button type="button" id="photos-viewer-use" class="btn btn-primary">Use as reference</button><button type="button" id="photos-viewer-save" class="btn btn-secondary">Save PNG</button><button type="button" id="photos-viewer-copy" class="btn btn-secondary">Copy</button><button type="button" id="photos-viewer-premiere" class="btn btn-secondary">Send to Premiere</button></div></dialog>
+      </div>
+
       <div class="tab-content" id="tab-audio">
         <div class="status-bar status-idle">Audio Library</div>
         <div class="audio-library-tabs" role="tablist" aria-label="Audio Library views">
@@ -194,6 +287,7 @@
               <label class="audio-compact-filter">Mood<select id="audio-archive-mood"><option value="">All moods</option></select></label>
               <button class="stock-text-button" type="submit" id="audio-archive-search">Search</button>
             </form>
+            <div class="audio-artist-filter hidden" id="audio-archive-artist-filter"><span id="audio-archive-artist-name"></span><button type="button" class="stock-text-button" id="audio-archive-clear-artist">Show all music</button></div>
             <div class="audio-list-info"><span id="audio-archive-count" role="status" aria-live="polite">Loading tracks…</span><button class="stock-text-button" type="button" id="audio-open">YouTube Studio ↗</button></div>
             <div class="audio-table-scroll"><table class="audio-table"><thead><tr><th aria-label="Play"></th><th aria-label="Favorite"></th><th>Track title</th><th>Genre</th><th>Mood</th><th class="audio-artist-cell">Artist</th><th>Duration</th><th class="audio-license-cell">License type</th></tr></thead><tbody id="audio-archive-results"></tbody></table></div>
             <p class="help-text audio-empty-view hidden" id="audio-archive-empty"></p>
@@ -230,7 +324,7 @@
           <audio id="audio-dock-player" preload="none"></audio>
           <div class="audio-dock-main">
             <div class="audio-dock-controls"><button type="button" id="audio-dock-previous" aria-label="Previous track"></button><button type="button" id="audio-dock-play" aria-label="Play"></button><button type="button" id="audio-dock-next" aria-label="Next track"></button></div>
-            <div class="audio-dock-track"><strong id="audio-dock-title">Choose a track to preview</strong><span id="audio-dock-artist"></span><span id="audio-dock-status" role="status" aria-live="polite"></span></div>
+            <div class="audio-dock-track"><strong id="audio-dock-title">Choose a track to preview</strong><button type="button" class="audio-artist-link" id="audio-dock-artist" disabled></button><span id="audio-dock-status" role="status" aria-live="polite"></span></div>
             <div class="audio-dock-timeline"><span id="audio-dock-elapsed">0:00</span><input type="range" id="audio-dock-seek" min="0" max="0" value="0" step="0.1" aria-label="Playback position"><span id="audio-dock-duration">—</span></div>
             <label class="audio-dock-volume" title="Volume"><span aria-hidden="true">♪</span><input type="range" id="audio-dock-volume" min="0" max="1" step="0.05" value="1" aria-label="Volume"></label>
             <button type="button" id="audio-dock-star" class="audio-star" aria-label="Favorite track" aria-pressed="false">☆</button>
@@ -299,11 +393,6 @@
 
         <!-- Scrollable content -->
         <div class="content-scroll">
-          <aside id="multicam-update-notice" class="multicam-review-notice hidden" role="note" aria-labelledby="multicam-update-title">
-            <div class="multicam-notice-heading"><strong id="multicam-update-title">Multicam update</strong><button id="multicam-update-dismiss" type="button" class="multicam-notice-close" aria-label="Dismiss Multicam notice">×</button></div>
-            <p>Multicam wasn’t working correctly in the previous update. It should now work correctly in 1.5.1 — I hope. If it doesn’t, message me on <a href="https://discord.gg/KmJRqUZzDe" data-multicam-support>Discord</a> or my socials: <a href="https://x.com/alibahrawy34" data-multicam-support>X</a> / <a href="https://www.instagram.com/alibahrawy34/" data-multicam-support>Instagram</a>. Sorry for that.</p>
-            <p>Multicam now supports source clips and nested sequences. Start from your original timeline. Review both speakers and audio sync before using the result.</p>
-          </aside>
           <aside id="multicam-result-notice" class="multicam-review-notice hidden" aria-live="polite">
             <strong>Review this result</strong>
             <ul id="multicam-review-warnings"></ul>
@@ -411,6 +500,11 @@
 
         <!-- Scrollable content -->
         <div class="content-scroll">
+          <aside id="caption-update-notice" class="caption-update-notice hidden" role="note" aria-labelledby="caption-update-title">
+            <div class="caption-notice-heading"><strong id="caption-update-title">Arabic captions</strong><button id="caption-update-dismiss" type="button" class="caption-notice-close" aria-label="Dismiss Arabic captions notice">×</button></div>
+            <p>Arabic captions from Tiny or Base can miss words or repeat text, especially with dialects. For better results, choose <strong>Arabic</strong> and <strong>Large v3 Turbo</strong>. Review names and wording before exporting.</p>
+            <p>If the result still looks wrong, message me on <a href="https://discord.gg/KmJRqUZzDe" data-caption-support>Discord</a> or my socials: <a href="https://x.com/alibahrawy34" data-caption-support>X</a> / <a href="https://www.instagram.com/alibahrawy34/" data-caption-support>Instagram</a>. Sorry for that.</p>
+          </aside>
           <!-- Source: sequence or local file -->
           <section class="section">
             <h2>Source</h2>
@@ -421,6 +515,10 @@
               <button class="source-option" id="captions-source-file" data-source="file">Audio / Video File</button>
             </div>
 
+            <div id="captions-file-drop-zone" class="caption-file-drop-zone" role="button" tabindex="0" aria-label="Choose or drop an audio or video file">
+              <strong>Drop an audio or video file here</strong>
+              <span>or click to choose · MP3, WAV, M4A, MP4, MOV and more</span>
+            </div>
             <div id="captions-file-row" class="hidden">
               <div class="bridge-path-row">
                 <input type="text" id="captions-file-path" placeholder="No file chosen" readonly>
@@ -437,6 +535,7 @@
                 <option value="auto">Auto-detect</option>
               </select>
               <p class="help-text" id="caption-language-status">Auto-detect works for any spoken language. Non-English languages need a multilingual model.</p>
+              <button type="button" id="caption-recommended-model" class="btn btn-secondary btn-small hidden">Use Large v3 Turbo</button>
             </div>
 
             <div class="form-group">
@@ -529,7 +628,7 @@
               <h2>Edit captions</h2>
               <span id="captions-count" class="help-text"></span>
             </div>
-            <p class="help-text">Edit any subtitle or timing below. Search and replace words across the whole transcript. Changes apply to Save SRT and Send to Premiere.</p>
+            <p class="help-text">Edit any subtitle or timing below. Search and replace words across the all subtitles. Changes apply to Save SRT and Send to Premiere.</p>
             <div class="caption-find-replace" role="group" aria-label="Find and replace captions">
               <div class="caption-search-fields">
                 <div class="form-group">
@@ -710,15 +809,14 @@
       <!-- Best Shorts Tab Content -->
       <div class="tab-content" id="tab-bestshorts">
         <div id="bestshorts-status-bar" class="status-bar status-idle bestshorts-statusbar-row">
-          <span id="bestshorts-status-text">Best Shorts</span>
-          <button id="shorts-history-btn" type="button" class="shorts-toolbar-btn" disabled>History</button>
+          <span id="bestshorts-status-text">Studio · Shorts</span>
         </div>
 
         <div id="bestshorts-lock" class="content-scroll hidden">
           <section class="section shorts-signin-page">
             <span class="shorts-eyebrow">STUDIO</span>
             <h1>Find your next great short.</h1>
-            <p>Turn a Premiere sequence, transcript, audio file, or YouTube video into moments worth sharing.</p>
+            <p>Turn a Premiere sequence, subtitles, audio file, or YouTube video into moments worth sharing.</p>
             <div class="shorts-signin-features">
               <span>Multiple clips or one best part</span>
               <span>Titles and descriptions ready to copy</span>
@@ -730,65 +828,24 @@
         </div>
 
         <div id="shorts-workspace" class="content-scroll hidden">
-          <section class="section">
-            <h2>Choose your source</h2><p id="shorts-credit-help" class="help-text">Studio analysis uses credits based on transcript length. Local transcription is free.</p>
-            <div class="shorts-source-tabs" role="group" aria-label="Shorts source">
-              <button type="button" class="shorts-source-btn active" data-shorts-source="sequence" aria-pressed="true">Premiere</button>
-              <button type="button" class="shorts-source-btn" data-shorts-source="transcript" aria-pressed="false">Transcript</button>
-              <button type="button" class="shorts-source-btn" data-shorts-source="audio" aria-pressed="false">Audio / Video</button>
-              <button type="button" class="shorts-source-btn" data-shorts-source="youtube" aria-pressed="false">YouTube</button>
-            </div>
-            <div id="shorts-source-sequence" class="shorts-source-panel">
-              <div class="section-header-row">
-                <p id="bestshorts-sequence-name" class="sequence-info">No sequence loaded</p>
-                <button id="bestshorts-refresh-btn" type="button" class="btn btn-secondary btn-small">Refresh</button>
-              </div>
-              <p id="bestshorts-sequence-details" class="help-text"></p>
-              <p class="help-text">Find shorts from the audio in your active Premiere sequence.</p>
-            </div>
-            <div id="shorts-source-transcript" class="shorts-source-panel hidden">
-              <input id="shorts-transcript-file" type="file" accept=".txt,.srt,.vtt" class="hidden">
-              <button id="shorts-transcript-browse" type="button" class="btn btn-secondary btn-small">Upload transcript</button>
-              <p id="shorts-transcript-name" class="help-text">TXT, SRT, or VTT · up to 5 MB</p>
-              <label class="shorts-input-label" for="shorts-transcript-text">Transcript</label>
-              <textarea id="shorts-transcript-text" class="text-input shorts-transcript" rows="4" placeholder="Or paste your transcript here…"></textarea>
-              <p class="help-text">Include timestamps for accurate time ranges.</p>
-            </div>
-            <div id="shorts-source-audio" class="shorts-source-panel hidden">
-              <button id="shorts-audio-browse" type="button" class="btn btn-secondary btn-small">Choose audio or video</button>
-              <p id="shorts-audio-name" class="help-text">MP3, WAV, M4A, MP4, MOV, and more</p>
-              <p class="help-text">Audio is transcribed locally using your Captions model and language. Studio analyzes the transcript.</p>
-            </div>
-            <div id="shorts-source-youtube" class="shorts-source-panel hidden">
-              <label class="shorts-input-label" for="shorts-youtube-url">YouTube video URL</label>
-              <div class="shorts-youtube-row">
-                <input id="shorts-youtube-url" type="url" class="text-input" placeholder="https://www.youtube.com/watch?v=…">
-                <button id="shorts-youtube-load" type="button" class="btn btn-secondary btn-small">Load transcript</button>
-              </div>
-              <p id="shorts-youtube-name" class="help-text">Load the video's transcript, then choose your Shorts mode.</p>
-            </div>
-          </section>
-
-          <section class="section">
-            <h2>Shorts mode</h2>
-            <div class="shorts-mode-options">
-              <label class="shorts-mode-option">
-                <input type="radio" name="shorts-mode" value="multiple" checked>
-                <span><strong>Multiple</strong><small>More clips · about one short per 3 minutes</small></span>
-              </label>
-              <label class="shorts-mode-option">
-                <input type="radio" name="shorts-mode" value="best">
-                <span><strong>Best Part</strong><small>Quality first · the single strongest moment</small></span>
-              </label>
-            </div>
-          </section>
-
           <section id="shorts-results-section" class="section">
             <div class="section-header-row"><h2 id="shorts-results-title">Your shorts</h2><span id="shorts-results-source" class="shorts-source-caption"></span></div>
-            <button id="shorts-history-retry" type="button" class="btn btn-secondary btn-small hidden">Retry saving history</button><button id="shorts-cancel-btn" type="button" class="btn btn-secondary btn-small hidden">Cancel</button><span id="shorts-elapsed" class="help-text"></span>
+            <button id="shorts-history-retry" type="button" class="btn btn-secondary btn-small hidden">Retry saving history</button><span id="shorts-elapsed" class="help-text"></span>
             <p id="shorts-status" class="help-text" role="status" aria-live="polite">Choose a source to get started.</p>
             <div id="shorts-results" class="shorts-results"></div>
           </section>
+
+        <section id="shorts-footer" class="shorts-marker-actions hidden">
+          <p id="shorts-action-note" class="footer-action-note">Find clip ideas using Studio credits. Add markers to locate them in your Premiere timeline.</p>
+          <p id="bestshorts-footer-status" class="footer-status"></p>
+          <div class="shorts-footer-actions">
+            <button id="send-shorts-btn" type="button" class="btn btn-secondary" aria-describedby="shorts-action-note" disabled>Add markers in Premiere</button>
+            <button id="clear-markers-btn" type="button" class="btn btn-secondary btn-small" disabled>Clear Smoothy markers</button>
+            <button id="clear-all-markers-btn" type="button" class="btn btn-secondary btn-small" disabled>Clear all…</button>
+          </div>
+        </section>
+
+
         </div>
 
         <div id="shorts-history-page" class="content-scroll hidden">
@@ -802,16 +859,7 @@
           </section>
         </div>
 
-        <footer id="shorts-footer" class="content-footer shorts-footer hidden">
-          <p id="shorts-action-note" class="footer-action-note">Find clip ideas using Studio credits. Add markers to locate them in your Premiere timeline.</p>
-          <p id="bestshorts-footer-status" class="footer-status"></p>
-          <div class="shorts-footer-actions">
-            <button id="analyze-shorts-btn" type="button" class="btn btn-primary" aria-describedby="shorts-action-note" disabled>Find Shorts</button>
-            <button id="send-shorts-btn" type="button" class="btn btn-secondary" aria-describedby="shorts-action-note" disabled>Add markers in Premiere</button>
-            <button id="clear-markers-btn" type="button" class="btn btn-secondary btn-small" disabled>Clear Smoothy markers</button>
-            <button id="clear-all-markers-btn" type="button" class="btn btn-secondary btn-small" disabled>Clear all…</button>
-          </div>
-        </footer>
+
       </div>
 
       <!-- Logs Tab Content -->
@@ -1020,6 +1068,22 @@
 
         <!-- Scrollable content -->
         <div class="content-scroll">
+          <section class="section assets-tools-section" aria-labelledby="assets-tools-heading">
+            <div class="section-header-row"><h2 id="assets-tools-heading">Image tools</h2><span class="assets-free-badge">Free · on your device</span></div>
+            <div class="assets-local-tools" aria-label="Local image tools">
+              <button id="assets-remove-background-btn" class="btn btn-secondary btn-small">Remove background</button>
+              <label for="assets-upscale-factor">Upscale</label>
+              <select id="assets-upscale-factor" class="select-input" aria-label="Upscale factor"><option value="2">2×</option><option value="4">4×</option></select>
+              <button id="assets-upscale-btn" class="btn btn-secondary btn-small">Upscale image</button>
+              <button id="assets-restore-btn" class="btn btn-secondary btn-small hidden">Restore original</button>
+              <button id="assets-process-cancel-btn" class="btn btn-secondary btn-small hidden">Cancel</button>
+            </div>
+            <p id="assets-local-note" class="help-text assets-local-note">Free, on your device · Remove backgrounds or upscale images 2× / 4×. Add an image below to start. Models download once; your images stay on this computer.</p>
+            <p id="assets-process-status" class="help-text" role="status" aria-live="polite"></p>
+            <progress id="assets-process-progress" class="hidden" max="100" aria-label="Image processing progress"></progress>
+          </section>
+
+
           <!-- Input -->
           <section class="section" id="assets-input-section">
             <h2>Add an image</h2>
@@ -1048,16 +1112,23 @@
             <h3 id="assets-guide-title">Your images, ready for Premiere</h3>
             <p>Bring graphics into your edit in a few clicks.</p>
             <ul class="assets-feature-list">
+              <li><span class="assets-feature-icon" aria-hidden="true">✂</span><span><strong>Remove background</strong><br>Create a transparent cutout, free on your device.</span></li>
+              <li><span class="assets-feature-icon" aria-hidden="true">↑</span><span><strong>Upscale 2× or 4×</strong><br>Enlarge your image while preserving detail and transparency.</span></li>
               <li><span class="assets-feature-icon" aria-hidden="true">↗</span><span><strong>Convert SVG to PNG</strong><br>Export a PNG with a transparent or custom background.</span></li>
               <li><span class="assets-feature-icon" aria-hidden="true">+</span><span><strong>Copy, paste, and import</strong><br>Copy an image, paste it here, and send it straight to your Premiere Pro timeline.</span></li>
             </ul>
           </section>
 
+
           <!-- Preview -->
           <section class="section hidden" id="assets-preview-section">
             <div class="section-header-row">
               <h2>Preview</h2>
-              <button id="assets-clear-btn" class="btn btn-secondary btn-small">Clear</button>
+              <div class="assets-preview-actions">
+                <button id="assets-replace-btn" class="btn btn-secondary btn-small">Replace image</button>
+                <button id="assets-repaste-btn" class="btn btn-secondary btn-small">Paste image</button>
+                <button id="assets-clear-btn" class="btn btn-secondary btn-small">Clear</button>
+              </div>
             </div>
             <div id="assets-file-list" class="assets-file-list" role="group" aria-label="Loaded assets"></div><p id="assets-file-errors" class="help-text" role="status"></p>
             <div class="assets-preview-card">
@@ -1069,6 +1140,7 @@
                 <p id="assets-file-info" class="help-text"></p>
               </div>
             </div>
+
           </section>
 
           <!-- SVG optimization (SVG only) -->
@@ -1172,8 +1244,8 @@
   <!-- Update notification bar -->
   <div id="update-bar" class="update-bar hidden">
     <span id="update-bar-text">A new version is available</span>
-    <button id="update-bar-btn" class="btn btn-small btn-primary">Restart to Update</button>
-    <button id="update-bar-close" class="update-bar-close">&times;</button>
+    <button id="update-bar-btn" class="btn btn-small btn-primary">See what’s new</button>
+    <button id="update-bar-close" class="btn btn-secondary">Skip</button>
   </div>
 
   <!-- Progress overlay -->
@@ -1199,13 +1271,17 @@
   </div>
 
   <!-- Update available modal -->
-  <div id="update-modal" class="overlay hidden">
+  <div id="update-modal" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="update-modal-title">
     <div class="modal-content update-modal">
-      <h3 class="update-modal-title">What's new in SmoothyEdit v<span id="update-modal-version"></span></h3>
+      <button id="update-modal-close" class="modal-close-btn" aria-label="Close update details">&times;</button>
+      <h3 id="update-modal-title" class="update-modal-title">What's new in SmoothyEdit v<span id="update-modal-version"></span></h3>
+      <p class="help-text">Read the fixes and new features, then choose whether to update. Skipping keeps your current version.</p>
       <div id="update-modal-body" class="update-modal-body"></div>
+      <button id="update-modal-release-link" class="btn btn-secondary btn-small">Open release page</button>
+      <p id="update-modal-status" class="help-text" role="status"></p>
       <div class="update-modal-actions">
-        <button id="update-modal-later" class="btn btn-secondary">Later</button>
-        <button id="update-modal-install" class="btn btn-primary">Restart &amp; Update</button>
+        <button id="update-modal-later" class="btn btn-secondary">Skip this version</button>
+        <button id="update-modal-install" class="btn btn-primary">Install update</button>
       </div>
     </div>
   </div>
@@ -1214,7 +1290,7 @@
   <div id="settings-modal" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
     <div class="modal-content settings-modal">
       <div class="modal-header">
-        <div><h3 id="settings-title">Settings</h3><p class="settings-version">SmoothyEdit <span id="settings-current-version">Version…</span></p></div>
+        <div class="settings-heading"><h3 id="settings-title">Settings</h3><p class="settings-version">SmoothyEdit <span id="settings-current-version">Version…</span></p></div>
         <button id="settings-close-btn" class="modal-close-btn" aria-label="Close settings">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -1224,6 +1300,16 @@
       </div>
 
       <div class="settings-body" id="settings-body">
+      <div class="settings-section"><h4>Studio AI</h4><label class="checkbox-label"><input type="checkbox" id="studio-enabled-toggle" checked><span>Show Studio AI features</span></label><p class="help-text">Turn off to hide Studio, Shorts, AI Photos and cloud pairing. Multicam, Silence Removal, local Captions, Compressor, Assets and the media libraries stay available for free.</p><p id="studio-preference-status" class="help-text" role="status"></p></div>
+      <div class="settings-section" data-studio-only id="chat-writing-settings">
+        <h4>Chat</h4>
+          <label for="chat-writing-prompt" class="help-text">System prompt</label>
+          <textarea id="chat-writing-prompt" rows="4" maxlength="4000" spellcheck="true" aria-describedby="chat-writing-help chat-writing-count"></textarea>
+          <p id="chat-writing-count" class="help-text"></p>
+          <p id="chat-writing-help" class="help-text">Optional. Saved on this device.</p>
+          <div class="settings-actions"><button type="button" id="chat-writing-save" class="btn btn-primary">Save</button><button type="button" id="chat-writing-reset" class="btn btn-secondary">Clear</button></div>
+        <p id="chat-writing-status" class="help-text" role="status" aria-live="polite"></p>
+      </div>
       <!-- Active NLE Selector -->
       <div class="settings-section hidden">
         <h4>Active Editor</h4>
@@ -1264,10 +1350,14 @@
         </div>
       </div>
 
-      <div class="settings-section">
-        <h4>Studio</h4>
-        <p class="help-text">Sign in to your account to use Shorts and shared history. Studio uses credits; all local tools remain free.</p>
+      <div class="settings-section" data-studio-only>
+        <h4>Account &amp; cloud tools</h4>
+        <p class="help-text">Sign in for AI Photos, Shorts and shared history. Cloud tools use credits; local tools remain free.</p>
+        <div class="settings-actions">
         <button id="settings-account-btn" class="btn btn-secondary btn-small" type="button">Sign in</button>
+        <button type="button" data-account-page="subscription" class="btn btn-secondary btn-small">Subscription &amp; credits ↗</button>
+        <button type="button" data-account-page="account/security" class="btn btn-secondary btn-small">Account security ↗</button>
+        </div>
         <details class="advanced-settings">
           <summary>Pair the web dashboard with Premiere</summary>
           <p class="help-text">Optional: this token pairs the website with Premiere. App Shorts uses your account sign-in.</p>
@@ -1283,26 +1373,39 @@
 
       <div class="settings-section" id="settings-update-section">
         <h4>App Updates</h4>
-        <p class="help-text">SmoothyEdit checks for updates automatically on startup.</p>
+        <p id="settings-update-help" class="help-text">SmoothyEdit checks for updates on startup and every six hours. Downloads and installation only start when you choose. Skip any version and keep using the one you have.</p>
 
         <div class="update-status-row">
-          <span id="settings-update-status">No updates checked yet</span>
+          <span id="settings-update-status" role="status" aria-live="polite">No updates checked yet</span>
         </div>
 
         <div id="settings-update-notes" class="settings-update-notes hidden"></div>
 
         <div class="settings-actions">
           <button id="check-update-btn" class="btn btn-secondary">Check for Updates</button>
-          <button id="settings-install-update-btn" class="btn btn-primary hidden">Restart &amp; Update</button>
+          <button id="settings-install-update-btn" class="btn btn-primary hidden">View update</button>
         </div>
+      </div>
+
+      <div class="settings-section" id="settings-feedback-section">
+        <h4>Give us feedback</h4>
+        <p class="help-text">What should we improve or build next? We’d love to hear from you.</p>
+        <div class="settings-feedback-actions">
+          <button type="button" class="settings-feedback-action" data-feedback-kind="feedback"><span><strong>Share feedback</strong><small>Tell us what’s working and what could be better.</small></span><span aria-hidden="true">↗</span></button>
+          <button type="button" class="settings-feedback-action" data-feedback-kind="feature"><span><strong>Request a feature</strong><small>Suggest a tool or feature you’d like to see.</small></span><span aria-hidden="true">↗</span></button>
+          <button type="button" class="settings-feedback-action" data-feedback-kind="bug"><span><strong>Report a problem</strong><small>Describe what happened and how to reproduce it.</small></span><span aria-hidden="true">↗</span></button>
+        </div>
+        <p class="help-text settings-feedback-help">Opens an email draft to support@smoothyedit.com for you to review and send.</p>
+        <p id="settings-feedback-status" class="help-text hidden" role="status" aria-live="polite"></p>
       </div>
 
       <div class="settings-section">
         <h4>Community</h4>
-        <p class="help-text">Report bugs, request features, and get help from other editors.</p>
+        <p class="help-text">Follow SmoothyEdit, meet other editors, and keep in touch with the creator.</p>
         <div class="settings-actions">
           <button id="settings-discord-btn" class="btn btn-secondary">Join our Discord</button>
-          <button id="settings-twitter-btn" class="btn btn-secondary">Follow on X</button>
+          <button id="settings-smoothy-twitter-btn" class="btn btn-secondary" type="button">SmoothyEdit on X</button>
+          <button id="settings-twitter-btn" class="btn btn-secondary">Ali on X</button>
           <button id="settings-instagram-btn" class="btn btn-secondary">Instagram</button>
           <button id="settings-linkedin-btn" class="btn btn-secondary" type="button">LinkedIn</button>
           <button id="settings-website-btn" class="btn btn-secondary" type="button">Personal website</button>
@@ -1322,11 +1425,11 @@
   </div>
 
   <!-- Login modal -->
-  <div id="login-modal" class="overlay hidden">
+  <div id="login-modal" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="account-heading">
     <div class="modal-content login-modal">
       <div class="modal-header">
-        <h3>Login to SmoothyEdit</h3>
-        <button id="login-close-btn" class="modal-close-btn">
+        <h3 id="account-heading">Sign in to SmoothyEdit</h3>
+        <button id="login-close-btn" class="modal-close-btn" aria-label="Close account dialog">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -1334,17 +1437,30 @@
         </button>
       </div>
 
+      <div id="account-verification" class="hidden">
+        <div class="account-mail-icon" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 6 9 7 9-7"/></svg></div>
+        <p>Open the verification email sent to <strong id="account-verification-email"></strong> and click its link.</p>
+        <label for="account-inbox-provider" class="help-text">Your email inbox</label>
+        <select id="account-inbox-provider" class="account-inbox-select"><option value="">Choose your email provider</option><option value="gmail">Gmail</option><option value="outlook">Outlook / Hotmail</option><option value="office">Microsoft 365</option><option value="yahoo">Yahoo Mail</option><option value="icloud">iCloud Mail</option></select>
+        <button type="button" id="account-open-inbox" class="btn btn-primary btn-large" disabled>Open inbox ↗</button>
+        <p class="help-text">Use a different provider? Open your email app and check its inbox or spam folder.</p>
+        <button type="button" id="account-check-verification" class="btn btn-secondary">I’ve verified — check again</button>
+        <p id="account-verification-status" class="help-text" role="status"></p>
+        <button type="button" id="account-verification-later" class="stock-text-button">Continue in the app</button>
+      </div>
       <form id="login-form" class="login-form">
+        <div id="signup-name-group" class="form-group hidden"><label for="signup-name">Name (optional)</label><input type="text" id="signup-name" maxlength="100" autocomplete="name" placeholder="Your name"></div>
         <div class="form-group">
           <label for="login-email">Email</label>
-          <input type="email" id="login-email" placeholder="you@example.com" required>
+          <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email" maxlength="254" required>
         </div>
 
         <div class="form-group">
           <label for="login-password">Password</label>
-          <input type="password" id="login-password" placeholder="Your password" required>
+          <input type="password" id="login-password" placeholder="Your password" autocomplete="current-password" maxlength="256" required>
         </div>
 
+        <div id="signup-confirm-group" class="form-group hidden"><label for="signup-confirm">Confirm password</label><input type="password" id="signup-confirm" autocomplete="new-password" maxlength="256" placeholder="Repeat your password"></div>
         <!-- 2FA field (hidden by default) -->
         <div id="totp-group" class="form-group hidden">
           <label for="login-totp">2FA Code</label>
@@ -1352,15 +1468,15 @@
           <p class="help-text">Enter the code from your authenticator app</p>
         </div>
 
-        <div id="login-error" class="error-message hidden"></div>
+        <div id="login-error" class="error-message hidden" role="alert"></div>
 
         <button type="submit" id="login-submit-btn" class="btn btn-primary btn-large">
-          Login
+          Sign in
         </button>
       </form>
 
-      <div class="login-footer">
-        <p>Don't have an account? <a href="#" id="signup-link" class="link">Sign up at smoothyedit.com</a></p>
+      <div id="account-form-footer" class="login-footer">
+        <p><span id="account-switch-label">Don’t have an account?</span> <a href="#" id="signup-link" class="link">Create account</a></p>
       </div>
     </div>
   </div>

@@ -46,7 +46,7 @@ const AVAILABLE_MODELS: Omit<ModelInfo, 'downloaded' | 'filePath'>[] = [
     name: 'Base (multilingual)',
     size: '142 MB',
     sizeBytes: 142_000_000,
-    speed: 'Fast — any language'
+    speed: 'Fast — lower accuracy for non-English speech'
   },
   {
     id: 'ggml-small.en.bin',

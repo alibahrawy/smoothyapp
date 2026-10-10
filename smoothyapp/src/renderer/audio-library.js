@@ -7,6 +7,7 @@ export function initAudioLibrary({ isConnected }) {
   const state = { tracks: [], candidates: [], watching: false, busy: false, selected: null, kind: '' };
   let community = { favorites: [], counts: {}, staffPicks: [], sharing: true, online: false };
   let archive;
+  let savedViewActive = false;
   let sharingBusy = false, sharingReady = false;
   function updateSharing() {
     if (!sharingBusy) el('share-favorites').checked = Boolean(community.sharing);
@@ -37,7 +38,8 @@ export function initAudioLibrary({ isConnected }) {
     catch (error) { message(error.message || 'Could not save favorite. Please retry.', true); }
     finally { toggling.delete(id); }
   }
-  const player = initAudioPlayer({ isConnected, onFavorite: favorite });
+  function showArtist(artist) { if (!state.busy && !archive?.isBusy()) archive?.showArtist(artist); }
+  const player = initAudioPlayer({ isConnected, onFavorite: favorite, onArtist: showArtist });
   function acceptCommunity(data) {
     const previous = community; community = { ...community, ...data }; player.favorites(community.favorites || []);
     sharingReady = true; updateSharing();
@@ -56,7 +58,7 @@ export function initAudioLibrary({ isConnected }) {
     el('send').disabled = state.busy || state.kind !== 'track' || !isConnected();
     el('send').classList.toggle('hidden', state.kind !== 'track');
     el('copy-credit').disabled = !el('credit').value.trim();
-    if (player.current()?.previewUrl?.startsWith('smoothy-audio://library/')) player.busy(state.busy);
+    player.busy(state.busy || Boolean(archive?.isBusy()));
     el('save').textContent = state.busy ? 'Saving…' : state.kind === 'track' ? 'Save details' : 'Keep in my library';
   }
   function select(item, kind) {
@@ -82,20 +84,29 @@ export function initAudioLibrary({ isConnected }) {
       dismiss.addEventListener('click', () => action(() => api.audioLibraryDismiss(item.id), 'Download dismissed.'));
       row.append(name, keep, dismiss); return row;
     }));
-    const query = el('query').value.trim().toLowerCase();
-    const filter = el('filter').value;
-    const tracks = state.tracks.filter(track => (!filter || track.license === filter) && [track.title, track.artist, track.credit].join(' ').toLowerCase().includes(query));
-    el('results').replaceChildren(...tracks.map(track => trackRow(track, { select: preview, favorite, selected: player.current()?.id === track.id, busy: state.busy, starred: community.favorites.includes(favoriteId(track)) })));
+    const tracks = visibleTracks();
+    el('results').replaceChildren(...tracks.map(track => trackRow(track, { select: preview, favorite, artist: showArtist, selected: player.current()?.id === track.id, busy: state.busy, starred: community.favorites.includes(favoriteId(track)) })));
     refreshTrackCommunity(el('results'), community);
     player.refresh();
+    if (savedViewActive) { const actions = navigation(player.current()); player.navigation(actions.previous, actions.next); }
+    else archive?.refreshNavigation();
     el('empty').classList.toggle('hidden', Boolean(tracks.length));
     el('empty').textContent = state.tracks.length ? 'No saved tracks match your search.' : 'Your saved tracks will appear here. Choose a track in Music and save its MP3.';
     update();
   }
-  function preview(track, autoplay = true) {
+  function visibleTracks() {
+    const query = el('query').value.trim().toLowerCase(), filter = el('filter').value;
+    return state.tracks.filter(track => (!filter || track.license === filter) && [track.title, track.artist, track.credit].join(' ').toLowerCase().includes(query));
+  }
+  function navigation(track) {
+    const tracks = visibleTracks(), index = tracks.findIndex(item => item.id === track?.id);
+    return { previous: index > 0 ? () => preview(tracks[index - 1]) : undefined,
+      next: index >= 0 && index < tracks.length - 1 ? () => preview(tracks[index + 1]) : undefined };
+  }
+  function preview(track, autoplay = true, queue) {
     if (!track || state.busy) return;
-    const index = state.tracks.findIndex(item => item.id === track.id);
-    player.show(track, { send: () => action(() => api.audioLibraryImport(track.id), 'Audio imported into Premiere’s Project panel.'), details: () => select(track, 'track'), previous: index > 0 ? () => preview(state.tracks[index - 1]) : undefined, next: index < state.tracks.length - 1 ? () => preview(state.tracks[index + 1]) : undefined, error: () => message('Could not preview this MP3. Check the library folder.', true) }, autoplay);
+    player.show(track, { send: () => action(() => api.audioLibraryImport(track.id), 'Audio imported into Premiere’s Project panel.'), details: () => select(track, 'track'), ...(queue || navigation(track)), error: () => message('Could not preview this MP3. Check the library folder.', true) }, autoplay);
+    if (!savedViewActive) archive?.refreshNavigation();
     update();
   }
   function accept(data) {
@@ -175,7 +186,10 @@ export function initAudioLibrary({ isConnected }) {
   api.onConnectionChange(update);
   api.onAudioLibraryChanged(accept);
   api.onAudioCommunityChanged(acceptCommunity);
-  archive = initAudioArchive({ player, community: () => community, onFavorite: favorite, onSaved: accept, localTracks: () => state.tracks, previewSaved: preview });
+  archive = initAudioArchive({ player, community: () => community, onFavorite: favorite, onArtist: showArtist,
+    onViewChange: view => { savedViewActive = view === 'saved'; render(); }, isLibraryBusy: () => state.busy,
+    onSaved: accept, localTracks: () => state.tracks, previewSaved: preview });
   api.audioCommunityState().then(result => { if (result.success) acceptCommunity(result); }).catch(() => {});
   api.audioLibraryState().then(result => { if (!result.success) throw new Error(result.error); accept(result); }).catch(() => message('Could not load the audio library. Restart the app and retry.', true));
+  return { isBusy: () => state.busy || archive?.isBusy() };
 }

@@ -2,14 +2,27 @@
  * SmoothyEdit - Renderer Script
  */
 import { findCaptionMatches, replaceCaptionMatches } from './caption-text-tools.js';
+import { initCaptionFileInput } from './caption-file-input.js';
 import { initStockFootage } from './stock-footage.js';
 import { initAudioLibrary } from './audio-library.js';
+import { initPhotos } from './photos.js';
+import { initChat } from './chat.js';
+import { initStudioText } from './studio-text.js';
+import { initAccount } from './account.js';
+import { initAppPreferences } from './app-preferences.js';
+let photosTools = null;
+let chatTools = null;
+let studioTextTools = null;
+let accountTools = null;
+let studioEnabled = true;
+let stockTools = null, audioTools = null;
 
 const state = {
   isConnected: false,
   sequenceInfo: null,
   isProcessing: false,
   currentTab: 'multicam',
+  studioMode: 'condense',
   isWebsiteConnected: false,
   isExporting: false,
   authState: null,
@@ -23,7 +36,7 @@ const state = {
   pendingUpdateNotes: null,
   updateModalOpen: false,
   appVersion: null,
-  updateState: { status: 'idle', version: null, percent: 0 },
+  updateState: { status: 'idle', version: null, percent: 0, notes: null, notesLoading: false },
   captionSource: 'sequence',
   captionFilePath: null,
   isTranscribing: false,
@@ -32,7 +45,7 @@ const state = {
   shortsSource: 'sequence',
   shortsMode: 'multiple',
   shortsAudioPath: null,
-  shortsTranscriptName: 'Pasted transcript',
+  shortsTranscriptName: '',
   shortsYoutube: null,
   shortsSourceLoading: false,
   shortsResultName: ''
@@ -86,6 +99,7 @@ const captionsSequenceSection = document.getElementById('captions-sequence-secti
 const captionsTracksSection = document.getElementById('captions-tracks-section');
 const progressCancelBtn = document.getElementById('progress-cancel-btn');
 const captionModelSelect = document.getElementById('caption-model-select');
+const captionRecommendedModel = document.getElementById('caption-recommended-model');
 const captionLanguageSelect = document.getElementById('caption-language-select');
 const captionLanguageStatus = document.getElementById('caption-language-status');
 const captionEngineSelect = document.getElementById('caption-engine-select');
@@ -162,11 +176,6 @@ const userPlan = document.getElementById('user-plan');
 const loginBtn = document.getElementById('login-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const loginModal = document.getElementById('login-modal');
-const loginForm = document.getElementById('login-form');
-const loginCloseBtn = document.getElementById('login-close-btn');
-const loginError = document.getElementById('login-error');
-const totpGroup = document.getElementById('totp-group');
-const signupLink = document.getElementById('signup-link');
 
 // Feature lock overlays (multicam lock removed — free forever; bestshorts = Studio AI upsell)
 const multicamLock = document.getElementById('multicam-lock');
@@ -177,13 +186,17 @@ const pinBtn = document.getElementById('pin-btn');
 
 // Initialize
 async function init() {
+  setupWindowTitlebar();
   setupSidebar();
+  setupSettingsLayout();
+  accountTools = initAccount({ getUser: () => state.authState?.user, enabled: () => studioEnabled, onSignedIn: initAuth });
   setupEventListeners();
   setupElectronListeners();
   setupStudioEvents();
   setupReviewUI();
-  setupPreferenceEvents();
-  setupMulticamUpdateNotice();
+  await setupPreferenceEvents();
+  await initAppPreferences({ applyStudio: applyStudioPreference }).load();
+  setupCaptionUpdateNotice();
 
   // Initialize auth state
   await initAuth();
@@ -214,6 +227,8 @@ async function init() {
     }
   } catch {}
 
+  try { applyUpdateState(await window.electronAPI.getUpdateState()); } catch {}
+
   // Caption model list + engine status
   loadCaptionModels();
   loadCaptionLanguages();
@@ -221,22 +236,109 @@ async function init() {
 
   // Assets (SVG / image -> PNG) tab
   initAssets();
-  initStockFootage({ isConnected: () => state.isConnected });
-  initAudioLibrary({ isConnected: () => state.isConnected });
+  stockTools = initStockFootage({ isConnected: () => state.isConnected });
+  audioTools = initAudioLibrary({ isConnected: () => state.isConnected });
+  chatTools = initChat({ getUser: () => studioEnabled ? state.authState?.user : null, signIn: openLoginModal, refreshCredits: refreshStudioCredits });
+  photosTools = initPhotos({ getUser: () => studioEnabled ? state.authState?.user : null, signIn: openLoginModal, refreshCredits: refreshStudioCredits });
+  studioTextTools = initStudioText({ getUser: () => state.authState?.user, enabled: () => studioEnabled, signIn: openLoginModal, refreshCredits: refreshStudioCredits,
+    getInputConfig: () => ({ source: state.shortsSource, subtitleText: document.getElementById('studio-text-input').value, fileName: state.shortsTranscriptName, audioPath: state.shortsAudioPath, ...(state.shortsSource === 'youtube' ? state.shortsYoutube || {} : {}) }),
+    getWorkspace: () => ({ mode: state.studioMode, busy: state.isProcessing || state.shortsSourceLoading, history: state.studioMode === 'shorts' && state.shortsView === 'history', connected: state.isConnected && state.sequenceInfo?.hasSequence }),
+    onSource: (text, name) => { state.shortsTranscriptName = name; updateExportButton(); },
+    runShorts: runStudioShorts,
+    onStateChange: syncStudioToolButtons,
+    selectChannel: mode => {
+      state.studioMode = mode;
+      syncStudioToolButtons();
+      updateWindowTitlebar();
+    },
+  });
 }
 
-function setupMulticamUpdateNotice() {
-  const notice = document.getElementById('multicam-update-notice');
-  const dismissedKey = 'smoothyedit:multicam-beta:1.5.1:dismissed';
+function setupWindowTitlebar() {
+  const titlebar = document.querySelector('.window-titlebar');
+  document.querySelectorAll('.tab-content').forEach(tab => {
+    let bar = tab.querySelector(':scope > .status-bar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.className = 'status-bar status-idle';
+      const name = document.createElement('span');
+      name.dataset.windowToolName = '';
+      bar.append(name);
+    }
+    bar.dataset.windowTab = tab.id.slice(4);
+    titlebar.append(bar);
+  });
+  updateWindowTitlebar();
+}
+
+function updateWindowTitlebar() {
+  const selected = document.querySelector('.nav-item.active');
+  const studioTool = ['studio-text', 'bestshorts'].includes(state.currentTab) ? document.querySelector(`[data-studio-mode="${state.studioMode}"]`) : null;
+  const label = studioTool ? `Studio · ${studioTool.textContent.trim()}` : selected?.querySelector('.nav-label')?.textContent || 'SmoothyEdit';
+  const accent = studioTool ? getComputedStyle(studioTool).getPropertyValue('--tool-color').trim() : selected && getComputedStyle(selected).getPropertyValue('--tab-accent').trim();
+  document.querySelector('.window-titlebar').style.setProperty('--window-accent', accent || '#E6E4DF');
+  document.querySelectorAll('.window-titlebar > .status-bar').forEach(bar => {
+    bar.dataset.windowActive = String(bar.dataset.windowTab === state.currentTab);
+    const name = bar.querySelector('[data-window-tool-name]');
+    if (name) name.textContent = label;
+  });
+}
+
+function syncStudioToolButtons() {
+  const busy = state.isProcessing || state.shortsSourceLoading || studioTextTools?.isBusy();
+  document.getElementById('studio-compose-footer').classList.toggle('shorts-mode', state.studioMode === 'shorts');
+  document.querySelectorAll('[data-studio-mode]').forEach(button => {
+    const active = button.dataset.studioMode === state.studioMode;
+    button.setAttribute('aria-pressed', String(active)); button.disabled = Boolean(busy);
+  });
+  document.getElementById('studio-text-history-toggle').classList.toggle('hidden', state.studioMode === 'shorts');
+  document.getElementById('shorts-history-btn').classList.toggle('hidden', state.studioMode !== 'shorts');
+  document.querySelector('.shorts-footer-actions').classList.toggle('hidden', !studioEnabled || !state.authState?.user || state.studioMode !== 'shorts' || state.shortsView === 'history');
+}
+
+function activateStudioTool(mode = state.studioMode) {
+  if (!studioEnabled || state.isProcessing || state.shortsSourceLoading || studioTextTools?.isBusy()) return;
+  const button = document.querySelector(`[data-studio-mode="${mode}"]`);
+  if (!button) return;
+  state.studioMode = mode;
+  state.currentTab = mode === 'shorts' ? 'bestshorts' : 'studio-text';
+  const channel = document.querySelector('.nav-item[data-tab="studio-text"]');
+  document.querySelectorAll('.nav-item').forEach(item => { item.classList.toggle('active', item === channel); item.setAttribute('aria-current', item === channel ? 'page' : 'false'); });
+  channel.scrollIntoView({ block: 'nearest' });
+  document.querySelectorAll('.tab-content').forEach(tab => tab.classList.toggle('active', tab.id === `tab-${state.currentTab}`));
+  document.getElementById(`tab-${state.currentTab}`).prepend(document.getElementById('studio-workspace-header'));
+  document.getElementById(`tab-${state.currentTab}`).append(document.getElementById('studio-compose-footer'));
+  studioTextTools?.refresh();
+  if (mode === 'shorts') {
+    document.getElementById('studio-workspace-description').textContent = 'Suggest source ranges for a shorter edit. You arrange the footage and make the final cut.';
+    if (state.sequenceInfo) displayBestshortsSequenceInfo(state.sequenceInfo);
+    studioTextTools?.refresh(); setShortsView(state.shortsView); refreshStudioCredits();
+    if (state.shortsView === 'history') loadShortsHistory();
+  } else studioTextTools?.activate(mode);
+  syncStudioToolButtons(); updateWindowTitlebar();
+}
+
+function applyStudioPreference(enabled, changed) {
+  studioEnabled = enabled;
+  document.querySelector('.app-container').classList.toggle('studio-disabled', !enabled);
+  if (!enabled && ['photos', 'chat', 'studio-text', 'bestshorts'].includes(state.currentTab)) document.querySelector('.nav-item[data-tab="multicam"]').click();
+  accountTools?.authChanged();
+  if (changed) { photosTools?.authChanged(); chatTools?.authChanged(); studioTextTools?.authChanged(); if (enabled) refreshStudioCredits(); }
+  document.getElementById('tool-search').dispatchEvent(new Event('input'));
+}
+
+function setupCaptionUpdateNotice() {
+  const notice = document.getElementById('caption-update-notice');
+  const dismissedKey = 'smoothyedit:arabic-captions:2026-10-09:dismissed';
   let dismissed = false;
   try { dismissed = localStorage.getItem(dismissedKey) === 'true'; } catch {}
   notice.classList.toggle('hidden', dismissed);
-  document.getElementById('multicam-update-dismiss').addEventListener('click', () => {
+  document.getElementById('caption-update-dismiss').addEventListener('click', () => {
     try { localStorage.setItem(dismissedKey, 'true'); } catch {}
     notice.classList.add('hidden');
-    document.getElementById('refresh-btn').focus();
+    captionLanguageSelect.focus();
   });
-  notice.querySelectorAll('[data-multicam-support]').forEach(link => {
+  notice.querySelectorAll('[data-caption-support]').forEach(link => {
     link.addEventListener('click', event => { event.preventDefault(); window.electronAPI.openExternal(link.href); });
   });
 }
@@ -244,6 +346,21 @@ function setupMulticamUpdateNotice() {
 function setupSidebar() {
   const container = document.querySelector('.app-container');
   const toggle = document.getElementById('sidebar-toggle-btn');
+  document.querySelector('[data-channel-group="studio"] .channel-group-name').textContent = 'AI Tools';
+  const studioNav = document.querySelector('#channels-studio [data-tab="studio-text"]');
+  studioNav.querySelector('.nav-label').textContent = 'Studio';
+  studioNav.setAttribute('aria-label', 'Studio · Shorts, Condense, Hooks, Titles, Descriptions, Thumbnails, B-roll, Social, Blog, SFX');
+  document.querySelector('#channels-studio [data-tab="chat"] .nav-icon svg').innerHTML = '<path d="M19 11a7 7 0 0 1-7 7H7l-4 3V10a7 7 0 0 1 7-7h2a7 7 0 0 1 7 7z"/><path d="M8 9h8M8 13h5"/>';
+  for (const [tab, label] of [['photos', 'AI Photos · uses Studio credits · generate, edit, reactions, image history'], ['chat', 'Chat · uses Studio credits']]) {
+    const item = document.querySelector(`#channels-studio [data-tab="${tab}"]`);
+    item.setAttribute('aria-label', label);
+    if (!item.querySelector('.paid-badge')) {
+      const badge = document.createElement('span');
+      badge.className = 'paid-badge';
+      badge.textContent = 'Credits';
+      item.append(badge);
+    }
+  }
   const applyCollapsed = (collapsed) => {
     container.classList.toggle('sidebar-collapsed', collapsed);
     const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
@@ -253,8 +370,8 @@ function setupSidebar() {
   };
   document.querySelectorAll('.sidebar-nav .nav-item, .studio-dashboard-btn').forEach(item => {
     const label = item.querySelector('.nav-label').textContent.trim();
-    item.setAttribute('aria-label', label);
-    if (!item.title) item.title = label + (item.dataset.tab === 'bestshorts' ? ' (uses credits)' : '');
+    item.setAttribute('aria-label', item.getAttribute('aria-label') || label);
+    if (!item.title) item.title = label + (['bestshorts', 'photos', 'chat'].includes(item.dataset.tab) ? ' (uses credits)' : '');
     if (item.classList.contains('nav-item')) item.setAttribute('aria-current', item.classList.contains('active') ? 'page' : 'false');
   });
   let collapsed = false;
@@ -266,6 +383,73 @@ function setupSidebar() {
     applyCollapsed(collapsed);
     try { localStorage.setItem('sidebarCollapsed', String(collapsed)); } catch {}
   });
+  const search = document.getElementById('tool-search');
+  const groups = [...document.querySelectorAll('.channel-group')];
+  let folded = {};
+  try { folded = JSON.parse(localStorage.getItem('toolChannelGroups') || '{}'); } catch {}
+  if (!folded || typeof folded !== 'object' || Array.isArray(folded)) folded = {};
+  const filter = () => {
+    const query = search.value.trim().toLowerCase(); let matches = 0;
+    groups.forEach(group => {
+      const button = group.querySelector('.channel-group-toggle');
+      const items = [...group.querySelectorAll('.nav-item, .studio-dashboard-btn')];
+      let count = 0;
+      items.forEach(item => {
+        const available = studioEnabled || !['studio', 'photos'].includes(group.dataset.channelGroup);
+        const match = available && (!query || `${group.querySelector('.channel-group-name').textContent} ${item.getAttribute('aria-label')}`.toLowerCase().includes(query));
+        item.classList.toggle('tool-filter-hidden', !match); if (match) count++;
+      });
+      matches += count; group.classList.toggle('tool-filter-hidden', count === 0);
+      const collapsed = !query && folded[group.dataset.foldKey || group.dataset.channelGroup] === true;
+      group.classList.toggle('channel-folded', collapsed); button.setAttribute('aria-expanded', String(!collapsed));
+    });
+    document.getElementById('tool-search-empty').classList.toggle('hidden', matches > 0);
+  };
+  groups.forEach(group => group.querySelector('.channel-group-toggle').addEventListener('click', () => {
+    if (search.value) { search.value = ''; }
+    const key = group.dataset.foldKey || group.dataset.channelGroup; folded[key] = !folded[key];
+    try { localStorage.setItem('toolChannelGroups', JSON.stringify(folded)); } catch {}
+    filter();
+  }));
+  search.addEventListener('input', filter);
+  search.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { search.value = ''; filter(); search.blur(); document.querySelector('.sidebar-nav .nav-item.active')?.scrollIntoView({ block: 'nearest' }); }
+    if (event.key === 'Enter') { const first = [...document.querySelectorAll('.sidebar-nav .nav-item, .studio-dashboard-btn')].find(item => item.getClientRects().length && !item.closest('.tool-filter-hidden') && !item.classList.contains('tool-filter-hidden') && !item.classList.contains('hidden')); if (first) { first.click(); first.focus(); } }
+  });
+  document.addEventListener('keydown', event => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      if (document.querySelector('dialog[open], .modal:not(.hidden)')) return;
+      event.preventDefault(); applyCollapsed(false);
+      try { localStorage.setItem('sidebarCollapsed', 'false'); } catch {}
+      search.focus(); search.select();
+    }
+  });
+  document.querySelector('.tool-search-shortcut').textContent = navigator.platform.toLowerCase().includes('mac') ? '⌘K' : 'Ctrl K';
+  filter();
+}
+
+function setupSettingsLayout() {
+  const body = document.getElementById('settings-body');
+  const sections = [...body.children].filter(element => element.classList.contains('settings-section'));
+  const visibleSections = sections.filter(section => !section.classList.contains('hidden'));
+  const hiddenSections = sections.filter(section => section.classList.contains('hidden'));
+  const columns = [document.createElement('div'), document.createElement('div')];
+  columns.forEach(column => { column.className = 'settings-column'; });
+  let compact = null;
+  const arrange = () => {
+    const nextCompact = window.innerWidth <= 800;
+    if (nextCompact === compact) return;
+    compact = nextCompact;
+    if (compact) {
+      body.replaceChildren(...sections);
+      return;
+    }
+    columns[0].replaceChildren(...visibleSections.filter((_, index) => index % 2 === 0));
+    columns[1].replaceChildren(...visibleSections.filter((_, index) => index % 2 === 1));
+    body.replaceChildren(...columns, ...hiddenSections);
+  };
+  arrange();
+  window.addEventListener('resize', arrange);
 }
 
 // ========================================
@@ -309,6 +493,10 @@ function updateAuthUI() {
     studioCreditsInline.classList.add('hidden');
   }
   syncShortsAccount();
+  accountTools?.authChanged();
+  photosTools?.authChanged(); chatTools?.authChanged();
+  studioTextTools?.authChanged();
+  requestAnimationFrame(() => document.querySelector('.sidebar-nav .nav-item.active')?.scrollIntoView({ block: 'nearest' }));
 }
 
 async function updateFeatureLocks() {
@@ -321,58 +509,7 @@ async function updateFeatureLocks() {
   setShortsView(state.shortsView);
 }
 
-function openLoginModal() {
-  loginModal.classList.remove('hidden');
-  loginError.classList.add('hidden');
-  totpGroup.classList.add('hidden');
-  loginForm.reset();
-  document.getElementById('login-email').focus();
-}
-
-function closeLoginModal() {
-  loginModal.classList.add('hidden');
-  loginError.classList.add('hidden');
-  totpGroup.classList.add('hidden');
-}
-
-async function handleLogin(e) {
-  e.preventDefault();
-
-  const email = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-password').value;
-  const totpCode = document.getElementById('login-totp').value.trim() || undefined;
-
-  const submitBtn = document.getElementById('login-submit-btn');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Logging in...';
-
-  try {
-    const result = await window.electronAPI.login(email, password, totpCode);
-
-    if (result.requires2FA) {
-      totpGroup.classList.remove('hidden');
-      loginError.classList.add('hidden');
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Login';
-      document.getElementById('login-totp').focus();
-      return;
-    }
-
-    if (result.success) {
-      closeLoginModal();
-      await initAuth();
-    } else {
-      loginError.textContent = result.error || 'Login failed';
-      loginError.classList.remove('hidden');
-    }
-  } catch (error) {
-    loginError.textContent = 'Network error. Please try again.';
-    loginError.classList.remove('hidden');
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Login';
-  }
-}
+function openLoginModal() { accountTools?.open(); }
 
 async function handleLogout() {
   await window.electronAPI.logout();
@@ -380,38 +517,44 @@ async function handleLogout() {
 }
 
 function setupEventListeners() {
-  // Update bar close button
-  document.getElementById('update-bar-close').addEventListener('click', () => {
-    document.getElementById('update-bar').classList.add('hidden');
+  document.getElementById('update-bar-close').addEventListener('click', skipPendingUpdate);
+  document.getElementById('update-bar-btn').addEventListener('click', () => showUpdateModal(state.updateState.version));
+  document.getElementById('update-modal-close').addEventListener('click', closeUpdateModal);
+  document.getElementById('update-modal-install').addEventListener('click', installPendingUpdate);
+  document.getElementById('update-modal-later').addEventListener('click', skipPendingUpdate);
+  document.getElementById('update-modal-release-link').addEventListener('click', () => {
+    if (state.updateState.version) window.electronAPI.openExternal(`https://github.com/alibahrawy/smoothyapp/releases/tag/v${encodeURIComponent(state.updateState.version)}`);
   });
-
-  // Update bar install button (was silently doing nothing before)
-  const updateBarBtn = document.getElementById('update-bar-btn');
-  if (updateBarBtn) {
-    updateBarBtn.addEventListener('click', () => {
-      if (state.updateState.status === 'stuck') {
-        window.electronAPI.openExternal('https://smoothyedit.com/features/smoothy-app');
-      } else {
-        window.electronAPI.installUpdate();
-      }
-    });
-  }
+  document.getElementById('update-modal').addEventListener('click', event => {
+    if (event.target.id === 'update-modal') closeUpdateModal();
+  });
 
   // Tab navigation
   document.querySelectorAll('.nav-item:not(.disabled)').forEach(item => {
     item.addEventListener('click', (e) => {
       e.preventDefault();
       const tab = item.dataset.tab;
+      if (!studioEnabled && ['photos', 'chat', 'bestshorts', 'studio-text'].includes(tab)) return;
+      if (tab === 'studio-text') {
+        const query = document.getElementById('tool-search').value.trim().toLowerCase();
+        const tools = [...document.querySelectorAll('[data-studio-mode]')];
+        const match = query ? tools.find(button => button.textContent.toLowerCase().includes(query)) || tools.find(button => button.title.toLowerCase().includes(query)) : null;
+        activateStudioTool(match?.dataset.studioMode || state.studioMode); return;
+      }
       state.currentTab = tab;
 
       // Update active nav item
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
       item.classList.add('active');
+      item.scrollIntoView({ block: 'nearest' });
       document.querySelectorAll('.nav-item').forEach(nav => nav.setAttribute('aria-current', nav === item ? 'page' : 'false'));
+      updateWindowTitlebar();
 
       // Show corresponding tab content
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
       document.getElementById(`tab-${tab}`).classList.add('active');
+      if (tab === 'photos') photosTools?.activate();
+      if (tab === 'chat') chatTools?.activate();
 
       // Update tabs if switching
       if (tab === 'silence' && state.sequenceInfo) {
@@ -427,6 +570,8 @@ function setupEventListeners() {
       }
     });
   });
+
+  document.querySelectorAll('[data-studio-mode]').forEach(button => button.addEventListener('click', () => activateStudioTool(button.dataset.studioMode)));
 
   refreshBtn.addEventListener('click', () => {
     window.electronAPI.refreshSequence();
@@ -489,7 +634,21 @@ function setupEventListeners() {
 
   if (captionsSourceSequence) captionsSourceSequence.addEventListener('click', () => setCaptionSource('sequence'));
   if (captionsSourceFile) captionsSourceFile.addEventListener('click', () => setCaptionSource('file'));
-  if (captionsFileBrowse) captionsFileBrowse.addEventListener('click', chooseCaptionFile);
+  initCaptionFileInput({
+    api: window.electronAPI, root: document.getElementById('tab-captions'),
+    zone: document.getElementById('captions-file-drop-zone'), browse: captionsFileBrowse,
+    busy: () => state.isProcessing || state.isTranscribing,
+    selected: filePath => {
+      state.captionFilePath = filePath;
+      if (captionsFilePath) captionsFilePath.value = filePath;
+      setCaptionSource('file');
+    }, error: showError
+  });
+  captionRecommendedModel?.addEventListener('click', async () => {
+    if (state.isProcessing || state.isTranscribing) return;
+    captionModelSelect.value = 'ggml-large-v3-turbo.bin';
+    await onCaptionModelChange();
+  });
   if (progressCancelBtn) progressCancelBtn.addEventListener('click', cancelCaptionGeneration);
   if (captionModelSelect) captionModelSelect.addEventListener('change', onCaptionModelChange);
   if (captionLanguageSelect) captionLanguageSelect.addEventListener('change', onCaptionLanguageChange);
@@ -517,6 +676,7 @@ function setupEventListeners() {
 
   // Best Shorts Tab
   bestshortsRefreshBtn.addEventListener('click', () => {
+    studioTextTools?.invalidateSource();
     window.electronAPI.refreshSequence();
   });
 
@@ -524,12 +684,25 @@ function setupEventListeners() {
 
   // Settings Modal
   settingsBtn.addEventListener('click', openSettings);
-  document.getElementById('settings-account-btn').addEventListener('click', () => { closeSettings(); if (state.authState?.user) window.electronAPI.openExternal('https://smoothyedit.com/account'); else openLoginModal(); });
+  document.getElementById('settings-account-btn').addEventListener('click', () => { closeSettings(); if (state.authState?.user) window.electronAPI.openExternal('https://smoothyedit.com/settings'); else openLoginModal(); });
+  document.querySelectorAll('[data-account-page]').forEach(button => button.addEventListener('click', () => {
+    closeSettings(); if (state.authState?.user) window.electronAPI.openExternal(`https://smoothyedit.com/${button.dataset.accountPage}`); else openLoginModal();
+  }));
   settingsCloseBtn.addEventListener('click', closeSettings);
   settingsModal.addEventListener('click', (e) => {
     if (e.target === settingsModal) closeSettings();
   });
   document.addEventListener('keydown', (e) => {
+    if (state.updateModalOpen) {
+      if (e.key === 'Escape') closeUpdateModal();
+      if (e.key === 'Tab') {
+        const focusable = [...document.getElementById('update-modal').querySelectorAll('button')].filter(el => !el.disabled && el.getClientRects().length);
+        const first = focusable[0], last = focusable.at(-1);
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      }
+      return;
+    }
     if (e.key === 'Escape' && !settingsModal.classList.contains('hidden')) closeSettings();
     if (e.key === 'Tab' && !settingsModal.classList.contains('hidden') && document.getElementById('error-modal').classList.contains('hidden')) {
       const focusable = [...settingsModal.querySelectorAll('button, input, select, summary, a[href]')].filter(element => !element.disabled && element.getClientRects().length);
@@ -563,7 +736,7 @@ function setupEventListeners() {
   // Check for updates button
   checkUpdateBtn.addEventListener('click', manualCheckForUpdates);
   if (settingsInstallUpdateBtn) {
-    settingsInstallUpdateBtn.addEventListener('click', () => window.electronAPI.installUpdate());
+    settingsInstallUpdateBtn.addEventListener('click', () => showUpdateModal(state.updateState.version));
   }
   if (discordBtn) {
     discordBtn.addEventListener('click', () => window.electronAPI.openExternal('https://discord.gg/KmJRqUZzDe'));
@@ -574,6 +747,26 @@ function setupEventListeners() {
   if (settingsTwitterBtn) {
     settingsTwitterBtn.addEventListener('click', () => window.electronAPI.openExternal('https://x.com/alibahrawy34'));
   }
+  document.getElementById('settings-smoothy-twitter-btn').addEventListener('click', () => window.electronAPI.openExternal('https://x.com/smoothyedit'));
+  document.querySelectorAll('[data-feedback-kind]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const drafts = {
+        feedback: ['SmoothyEdit feedback', 'My feedback:\n'],
+        feature: ['SmoothyEdit feature request', 'The feature I’d like to see:\n\nHow it would help my editing:\n'],
+        bug: ['SmoothyEdit bug report', 'What happened:\n\nSteps to reproduce:\n\nWhat I expected:\n']
+      };
+      const [subject, prompt] = drafts[button.dataset.feedbackKind];
+      const status = document.getElementById('settings-feedback-status');
+      status.classList.add('hidden');
+      button.disabled = true;
+      try {
+        await window.electronAPI.openExternal(`mailto:support@smoothyedit.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`SmoothyEdit v${state.appVersion || '?'}\n\n${prompt}`)}`);
+      } catch {
+        status.textContent = 'Could not open your email app. Email support@smoothyedit.com or use the Discord link below.';
+        status.classList.remove('hidden');
+      } finally { button.disabled = false; }
+    });
+  });
   settingsInstagramBtn.addEventListener('click', () => window.electronAPI.openExternal('https://www.instagram.com/alibahrawy34/'));
   instagramBtn.addEventListener('click', () => window.electronAPI.openExternal('https://www.instagram.com/alibahrawy34/'));
   settingsLinkedinBtn.addEventListener('click', () => window.electronAPI.openExternal('https://www.linkedin.com/in/alibahrawy/'));
@@ -589,17 +782,6 @@ function setupEventListeners() {
   // Auth event listeners
   loginBtn.addEventListener('click', openLoginModal);
   logoutBtn.addEventListener('click', handleLogout);
-  loginCloseBtn.addEventListener('click', closeLoginModal);
-  loginForm.addEventListener('submit', handleLogin);
-  loginModal.addEventListener('click', (e) => {
-    if (e.target === loginModal) closeLoginModal();
-  });
-
-  signupLink.addEventListener('click', (e) => {
-    e.preventDefault();
-    window.electronAPI.openExternal('https://smoothyedit.com/signup');
-  });
-
   // Feature lock buttons
   const multicamUpgradeBtn = document.getElementById('multicam-upgrade-btn');
   const multicamLoginBtn = document.getElementById('multicam-login-btn');
@@ -668,7 +850,22 @@ let shortsHistoryError = '';
 let shortsFlags = {};
 let shortsAccountKey = '';
 
+function setStudioSource(source, force = false) {
+  if (!force && (state.isProcessing || state.shortsSourceLoading || studioTextTools?.isBusy())) return;
+  if (state.shortsSource !== source) studioTextTools?.invalidateSource();
+  state.shortsSource = source;
+  const names = { sequence: 'Premiere', transcript: 'Subtitles', audio: 'Audio/Video', youtube: 'YouTube' };
+  document.getElementById('studio-source-slider').style.setProperty('--source-index', Object.keys(names).indexOf(source));
+  document.querySelectorAll('[data-shorts-source]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.shortsSource === source)));
+  for (const kind of Object.keys(names)) document.getElementById(`shorts-source-${kind}`).classList.toggle('hidden', kind !== source);
+  updateExportButton();
+}
+
 function setupStudioEvents() {
+  const shortsActions = document.querySelector('#shorts-footer .shorts-footer-actions');
+  document.getElementById('analyze-shorts-btn').after(shortsActions);
+  shortsActions.classList.add('hidden');
+  window.addEventListener('resize', updateExportButton);
   try {
     if (localStorage.getItem('shortsMode') === 'best') {
       state.shortsMode = 'best';
@@ -686,39 +883,14 @@ function setupStudioEvents() {
   });
   document.getElementById('shorts-history-refresh-btn').addEventListener('click', loadShortsHistory);
   document.getElementById('shorts-history-search').addEventListener('input', renderShortsHistory);
-  document.querySelectorAll('[data-shorts-source]').forEach(button => button.addEventListener('click', () => {
-    if (state.isProcessing) return;
-    state.shortsSource = button.dataset.shortsSource;
-    document.querySelectorAll('[data-shorts-source]').forEach(item => {
-      const active = item.dataset.shortsSource === state.shortsSource;
-      item.classList.toggle('active', active);
-      item.setAttribute('aria-pressed', String(active));
-      document.getElementById(`shorts-source-${item.dataset.shortsSource}`).classList.toggle('hidden', !active);
-    });
-    updateExportButton();
-  }));
-  document.getElementById('shorts-transcript-browse').addEventListener('click', () => document.getElementById('shorts-transcript-file').click());
-  document.getElementById('shorts-transcript-file').addEventListener('change', async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    try {
-      if (!/\.(txt|srt|vtt)$/i.test(file.name)) throw new Error('Choose a TXT, SRT, or VTT transcript.');
-      if (file.size > 5 * 1024 * 1024) throw new Error('Choose a transcript smaller than 5 MB.');
-      const text = await file.text();
-      if (!text.trim()) throw new Error('This transcript is empty.');
-      if (text.length > 2_000_000) throw new Error('The transcript is too long (maximum 2,000,000 characters).');
-      document.getElementById('shorts-transcript-text').value = text;
-      state.shortsTranscriptName = file.name;
-      document.getElementById('shorts-transcript-name').textContent = file.name;
-      updateExportButton();
-    } catch (error) { showError(error.message || 'Could not read this transcript.'); }
-  });
-  document.getElementById('shorts-transcript-text').addEventListener('input', updateExportButton);
+  document.querySelectorAll('[data-shorts-source]').forEach(button => button.addEventListener('click', () => setStudioSource(button.dataset.shortsSource)));
   document.getElementById('shorts-audio-browse').addEventListener('click', async () => {
     try {
+      const account = shortsAccountKey;
       const result = await window.electronAPI.selectShortsAudio();
+      if (account !== shortsAccountKey || !studioEnabled) return;
       if (result?.canceled || !result?.path) return;
+      studioTextTools.invalidateSource();
       state.shortsAudioPath = result.path;
       document.getElementById('shorts-audio-name').textContent = result.path.split(/[\\/]/).pop();
       updateExportButton();
@@ -727,7 +899,7 @@ function setupStudioEvents() {
   document.getElementById('shorts-youtube-load').addEventListener('click', loadShortsYoutube);
   document.getElementById('shorts-youtube-url').addEventListener('input', () => {
     state.shortsYoutube = null;
-    document.getElementById('shorts-youtube-name').textContent = "Load the video's transcript, then choose your Shorts mode.";
+    document.getElementById('shorts-youtube-name').textContent = "Load once, then use any Studio tool.";
     updateExportButton();
   });
   document.querySelectorAll('input[name="shorts-mode"]').forEach(input => input.addEventListener('change', () => {
@@ -742,6 +914,10 @@ function syncShortsAccount() {
   const key = user ? String(user.id || user.email) : '';
   if (key === shortsAccountKey) return;
   shortsAccountKey = key;
+  state.shortsAudioPath = null; state.shortsYoutube = null; state.shortsTranscriptName = '';
+  document.getElementById('studio-text-input').value = ''; document.getElementById('shorts-youtube-url').value = '';
+  document.getElementById('shorts-audio-name').textContent = 'MP3, WAV, M4A, MP4, MOV, and more';
+  setStudioSource('sequence', true);
   shortsHistoryRequest++;
   shortsHistoryItems = [];
   shortsHistoryLoading = false;
@@ -768,31 +944,33 @@ function setShortsView(view) {
   const button = document.getElementById('shorts-history-btn');
   button.disabled = !signedIn;
   button.textContent = view === 'history' ? '← Back to Shorts' : 'History';
-  bestshortsStatusText.textContent = view === 'history' ? 'Shorts history' : 'Best Shorts';
+  bestshortsStatusText.textContent = view === 'history' ? 'Studio · Shorts history' : 'Studio · Shorts';
   updateExportButton();
 }
 
 async function loadShortsYoutube() {
   const button = document.getElementById('shorts-youtube-load');
   const label = document.getElementById('shorts-youtube-name');
+  const account = shortsAccountKey;
   const url = document.getElementById('shorts-youtube-url').value.trim();
   if (!url) { label.textContent = 'Enter a YouTube video URL first.'; return; }
   state.shortsSourceLoading = true;
   state.shortsYoutube = null;
-  label.textContent = 'Loading transcript…';
+  label.textContent = 'Loading subtitles…';
   button.textContent = 'Loading…';
   updateExportButton();
   try {
     const result = await window.electronAPI.getShortsYoutubeTranscript(url);
-    if (!result?.success) throw new Error(result?.error || 'Could not load this transcript.');
+    if (account !== shortsAccountKey || !studioEnabled) return;
+    if (!result?.success) throw new Error(result?.error || 'Could not load these subtitles.');
     state.shortsYoutube = { subtitleText: result.transcript, fileName: result.fileName };
     label.textContent = `Ready · ${result.fileName}`;
     refreshStudioCredits();
   } catch (error) {
-    label.textContent = error.message || 'Could not load this transcript.';
+    if (account === shortsAccountKey) label.textContent = error.message || 'Could not load these subtitles.';
   } finally {
     state.shortsSourceLoading = false;
-    button.textContent = 'Load transcript';
+    button.textContent = 'Load subtitles';
     updateExportButton();
   }
 }
@@ -825,17 +1003,23 @@ function renderCredits(credits) {
     textEl.textContent = `${formatCredits(credits.credits)} credits`;
     textEl.title = `${formatCredits(credits.credits)} of ${formatCredits(credits.totalCredits)} Studio credits left${reset}`;
   }
+  const workspaceCredits = document.getElementById('studio-workspace-credits');
+  if (workspaceCredits) { workspaceCredits.textContent = `${formatCredits(credits.credits)} credits`; workspaceCredits.title = textEl?.title || ''; }
   if (barEl) barEl.style.width = `${pct}%`;
   updateUpgradeButton(credits);
 }
 
 async function refreshStudioCredits() {
+  if (!studioEnabled) return;
   const textEl = document.getElementById('studio-credits-inline');
   const barEl = document.getElementById('studio-credit-bar-fill');
   const upgradeBtn = document.getElementById('studio-upgrade-btn');
 
   const result = await window.electronAPI.getStudioCredits();
   if (!result || !result.success) {
+    const workspaceCredits = document.getElementById('studio-workspace-credits');
+    workspaceCredits.textContent = state.authState?.user ? 'Credits unavailable' : 'Studio credits';
+    workspaceCredits.title = '';
     if (textEl) {
       textEl.classList.toggle('hidden', !!(result && result.requiresLogin) || !state.authState?.user);
       textEl.textContent = '—';
@@ -850,7 +1034,7 @@ async function refreshStudioCredits() {
 }
 
 async function loadShortsHistory() {
-  if (!state.authState?.user) return;
+  if (!studioEnabled || !state.authState?.user) return;
   const request = ++shortsHistoryRequest;
   shortsHistoryLoading = true;
   shortsHistoryError = '';
@@ -962,25 +1146,23 @@ function renderShorts(shorts) {
   document.getElementById('shorts-results-source').textContent = state.shortsResultName || '';
   if (!state.currentShorts.length) { updateExportButton(); return; }
   const wrap = document.createElement('div');
-  wrap.className = 'shorts-table-wrap';
+  wrap.className = 'shorts-card-list';
   wrap.setAttribute('role', 'region');
   wrap.setAttribute('aria-label', 'Shorts results');
   wrap.tabIndex = 0;
-  wrap.innerHTML = `<table class="shorts-table"><thead><tr><th scope="col">#</th><th scope="col">Used</th><th scope="col">Not used</th><th scope="col">Memo</th><th scope="col">Time range</th><th scope="col">Title</th><th scope="col">Description</th></tr></thead><tbody></tbody></table>`;
-  const tbody = wrap.querySelector('tbody');
   state.currentShorts.forEach((short, index) => {
-    const row = document.createElement('tr');
+    const row = document.createElement('article');
+    row.className = 'studio-result-card shorts-result-row';
     const key = shortFlagKey(short);
     const flags = shortsFlags[key] || {};
     row.classList.toggle('short-used', !!flags.used);
     row.classList.toggle('short-not-used', !!flags.notUsed);
     const title = short.title || `Short ${index + 1}`;
     const desc = short.description || short.reason || '';
-    row.innerHTML = `<td>${index + 1}</td>
-      ${[['used', 'used'], ['notUsed', 'not used'], ['memo', 'memo']].map(([field, label]) => `<td class="shorts-flag-cell"><input type="checkbox" data-flag="${field}" aria-label="Mark short ${index + 1} as ${label}" ${flags[field] ? 'checked' : ''}></td>`).join('')}
-      <td class="shorts-time-cell">${escapeHtml(short.startTime || '—')}<br>${escapeHtml(short.endTime || '')}</td>
-      <td class="shorts-title-cell"><button type="button" class="shorts-copy-field" data-copy-label="Copy title" aria-label="Copy title for short ${index + 1}"><span>${escapeHtml(title)}</span><small class="shorts-copy-hint">Copy title</small></button></td>
-      <td class="shorts-desc-cell"><button type="button" class="shorts-copy-field" data-copy-label="Copy description" aria-label="Copy description for short ${index + 1}" ${desc ? '' : 'disabled'}><span>${escapeHtml(desc || 'No description')}</span><small class="shorts-copy-hint">Copy description</small></button></td>`;
+    row.innerHTML = `<div class="studio-result-card-heading"><h3>Short ${index + 1}</h3><span class="studio-time-badge">${escapeHtml(short.startTime || '—')} → ${escapeHtml(short.endTime || '')}</span></div>
+      <div class="shorts-title-cell"><button type="button" class="shorts-copy-field" data-copy-label="Copy title" aria-label="Copy title for short ${index + 1}"><span>${escapeHtml(title)}</span><small class="shorts-copy-hint">Copy title</small></button></div>
+      <div class="shorts-desc-cell"><button type="button" class="shorts-copy-field" data-copy-label="Copy description" aria-label="Copy description for short ${index + 1}" ${desc ? '' : 'disabled'}><span>${escapeHtml(desc || 'No description')}</span><small class="shorts-copy-hint">Copy description</small></button></div>
+      <div class="shorts-card-flags">${[['used', 'Used'], ['notUsed', 'Not used'], ['memo', 'Memo']].map(([field, label]) => `<label><input type="checkbox" data-flag="${field}" aria-label="Mark short ${index + 1} as ${label.toLowerCase()}" ${flags[field] ? 'checked' : ''}>${label}</label>`).join('')}</div>`;
     const copies = row.querySelectorAll('.shorts-copy-field');
     copies[0].addEventListener('click', () => copyShortField(copies[0], title));
     copies[1].addEventListener('click', () => copyShortField(copies[1], desc));
@@ -994,7 +1176,7 @@ function renderShorts(shorts) {
       row.classList.toggle('short-not-used', !!next.notUsed);
       saveShortFlags();
     }));
-    tbody.appendChild(row);
+    wrap.appendChild(row);
   });
   container.appendChild(wrap);
   updateExportButton();
@@ -1015,14 +1197,8 @@ async function sendShortsToPremiere(shorts, button) {
 async function runStudioShorts() {
   if (state.isProcessing || state.shortsSourceLoading) return;
   if (!state.authState?.user) { openLoginModal(); return; }
-  const config = { source: state.shortsSource, shortsMode: state.shortsMode };
-  if (config.source === 'sequence' && (!state.isConnected || !state.sequenceInfo?.hasSequence)) return;
-  if (config.source === 'audio') config.audioPath = state.shortsAudioPath;
-  if (config.source === 'transcript') {
-    config.subtitleText = document.getElementById('shorts-transcript-text').value.trim();
-    config.fileName = state.shortsTranscriptName;
-  }
-  if (config.source === 'youtube') Object.assign(config, state.shortsYoutube || {});
+  if (!await studioTextTools.prepareSource()) return;
+  const config = { ...studioTextTools.preparedInput(), shortsMode: state.shortsMode };
   const account = shortsAccountKey;
   const statusEl = document.getElementById('shorts-status');
   state.isProcessing = true;
@@ -1065,6 +1241,7 @@ function setupElectronListeners() {
   });
 
   window.electronAPI.onSequenceInfo((info) => {
+    if (state.shortsSource === 'sequence') studioTextTools?.invalidateSource();
     displaySequenceInfo(info);
   });
 
@@ -1174,29 +1351,7 @@ function setupElectronListeners() {
     applyTheme();
   });
 
-  // Auto-updater listener
-  window.electronAPI.onUpdateStatus((data) => {
-    state.updateState = {
-      status: data.status,
-      version: data.version || state.updateState.version,
-      percent: data.percent || 0
-    };
-    renderUpdateState();
-
-    // Show the "what's new" modal once a new version is fully downloaded.
-    if (data.status === 'downloaded') {
-      showUpdateModal(data.version);
-    }
-  });
-
-  // Release notes for the pending update -> shown in the settings panel + modal
-  window.electronAPI.onUpdateNotes((data) => {
-    state.pendingUpdateNotes = data.notes || null;
-    renderSettingsUpdateNotes(data.version, data.notes);
-    if (state.updateModalOpen) {
-      renderUpdateModalNotes(data.version, data.notes);
-    }
-  });
+  window.electronAPI.onUpdateStatus(applyUpdateState);
 
   // Platform info listener - applies platform-specific styles
   window.electronAPI.onPlatformInfo((data) => {
@@ -1823,82 +1978,60 @@ function showError(msg) {
 // Update "what's new" modal
 // ========================================
 
-/**
- * Single source of truth for the update UI. Called on every updater event so the
- * update bar and the settings section can never drift out of sync (previously a
- * downloaded update left the bar's button hidden and the check button disabled).
- */
-function renderUpdateState() {
-  const { status, version, percent } = state.updateState;
+function applyUpdateState(data) {
+  if (!data?.status) return;
+  state.updateState = data;
+  state.pendingUpdateNotes = data.notes || null;
+  renderUpdateState();
+  renderSettingsUpdateNotes(data.version, data.notes);
+  if (state.updateModalOpen) {
+    if (data.version) document.getElementById('update-modal-version').textContent = data.version;
+    renderUpdateModalNotes(data.version, data.notes);
+  }
+}
 
+function renderUpdateState() {
+  const { status, version, percent, error } = state.updateState;
   const updateBar = document.getElementById('update-bar');
   const updateText = document.getElementById('update-bar-text');
   const updateBtn = document.getElementById('update-bar-btn');
-  const upgradeable = status === 'available' || status === 'downloading' || status === 'downloaded' || status === 'stuck';
+  const busy = ['checking', 'downloading', 'installing'].includes(status);
+  const visible = ['available', 'downloading', 'downloaded', 'installing'].includes(status) || (status === 'error' && version);
+  checkUpdateBtn.disabled = busy || status === 'dev-build';
+  checkUpdateBtn.classList.toggle('hidden', status === 'dev-build');
+  document.getElementById('settings-update-help').textContent = status === 'dev-build'
+    ? 'This local preview does not receive automatic updates. Update checks are enabled in the published app.'
+    : 'SmoothyEdit checks for updates on startup and every six hours. Downloads and installation only start when you choose. Skip any version and keep using the one you have.';
+  checkUpdateBtn.textContent = status === 'checking' ? 'Checking…' : 'Check for Updates';
+  settingsInstallUpdateBtn.classList.toggle('hidden', !version || status === 'checking');
+  settingsInstallUpdateBtn.textContent = status === 'skipped' ? 'View skipped update' : 'View update';
+  updateBar.classList.toggle('hidden', !visible);
+  updateBtn.textContent = 'See what’s new';
+  document.getElementById('update-bar-close').disabled = busy;
 
-  // Reset shared controls to a known-good baseline on every event.
-  checkUpdateBtn.disabled = false;
-  checkUpdateBtn.textContent = 'Check for Updates';
-  if (settingsInstallUpdateBtn) settingsInstallUpdateBtn.classList.add('hidden');
-  if (updateBtn) updateBtn.style.display = '';
-
-  switch (status) {
-    case 'checking':
-      settingsUpdateStatus.textContent = `Checking for updates… (v${state.appVersion || '?'})`;
-      checkUpdateBtn.disabled = true;
-      checkUpdateBtn.textContent = 'Checking…';
-      break;
-
-    case 'available':
-      settingsUpdateStatus.textContent = `Update v${version} is available — downloading…`;
-      checkUpdateBtn.disabled = true;
-      checkUpdateBtn.textContent = 'Downloading…';
-      updateText.textContent = `Downloading update v${version}…`;
-      updateBar.classList.remove('hidden');
-      break;
-
-    case 'downloading':
-      settingsUpdateStatus.textContent = `Downloading update v${version}… ${percent}%`;
-      checkUpdateBtn.disabled = true;
-      checkUpdateBtn.textContent = 'Downloading…';
-      updateText.textContent = `Downloading update v${version}… ${percent}%`;
-      updateBar.classList.remove('hidden');
-      break;
-
-    case 'downloaded':
-      settingsUpdateStatus.textContent = `Update v${version} is ready to install`;
-      checkUpdateBtn.textContent = 'Check for Updates';
-      if (settingsInstallUpdateBtn) settingsInstallUpdateBtn.classList.remove('hidden');
-      updateText.textContent = `Update v${version} ready`;
-      updateBtn.textContent = 'Restart & Update';
-      updateBar.classList.remove('hidden');
-      break;
-
-    case 'up-to-date':
-      settingsUpdateStatus.textContent = `You're on the latest version (v${state.appVersion || '?'})`;
-      break;
-
-    case 'stuck':
-      settingsUpdateStatus.textContent = `Update v${version} downloaded but didn't install — download it manually from smoothyedit.com`;
-      updateText.textContent = `Update v${version} didn't install — download manually`;
-      updateBtn.textContent = 'Open smoothyedit.com';
-      updateBar.classList.remove('hidden');
-      break;
-
-    case 'error':
-      settingsUpdateStatus.textContent = 'Update check failed — try again later';
-      break;
-
-    case 'dev-build':
-      settingsUpdateStatus.textContent = 'Update checks are available in installed builds';
-      break;
-
-    default:
-      settingsUpdateStatus.textContent = `v${state.appVersion || '?'}`;
-  }
-
-  if (!upgradeable) {
-    updateBar.classList.add('hidden');
+  const messages = {
+    idle: `v${state.appVersion || '?'}`,
+    checking: 'Checking for updates…',
+    available: `Update v${version} is available. Review the changes before installing.`,
+    skipped: `Skipped v${version}. You’re staying on v${state.appVersion || '?'}.`,
+    downloading: `Downloading v${version}… ${percent}%`,
+    downloaded: `Update v${version} is ready. Restart when you choose to install it.`,
+    installing: `Restarting to install v${version}…`,
+    'up-to-date': `You’re on the latest version (v${state.appVersion || '?'}).`,
+    error: `Update failed${error ? `: ${error}` : '. Try again later.'}`,
+    'dev-build': 'Local preview · automatic updates unavailable'
+  };
+  settingsUpdateStatus.textContent = messages[status] || messages.idle;
+  updateText.textContent = status === 'available' ? `Update v${version} available` : (messages[status] || messages.idle);
+  if (state.updateModalOpen) {
+    const ready = status === 'downloaded' || percent === 100;
+    const install = document.getElementById('update-modal-install');
+    install.disabled = busy || !version;
+    install.textContent = status === 'downloading' ? `Downloading… ${percent}%` : status === 'installing' ? 'Restarting…' : ready ? 'Restart & Install' : 'Install update';
+    const skip = document.getElementById('update-modal-later');
+    skip.disabled = busy || status === 'skipped' || !version;
+    skip.textContent = status === 'skipped' ? 'Skipped' : 'Skip this version';
+    document.getElementById('update-modal-status').textContent = messages[status] || '';
   }
 }
 
@@ -1923,37 +2056,53 @@ function renderSettingsUpdateNotes(version, notes) {
   settingsUpdateNotes.classList.remove('hidden');
 }
 
+let updateReturnFocus = null;
 function showUpdateModal(version) {
-  const modal = document.getElementById('update-modal');
-  document.getElementById('update-modal-version').textContent = version;
-  renderUpdateModalNotes(version, state.pendingUpdateNotes);
-  modal.classList.remove('hidden');
+  if (!version) return;
+  if (!state.updateModalOpen) updateReturnFocus = document.activeElement;
   state.updateModalOpen = true;
+  document.querySelector('.app-container').inert = true;
+  settingsModal.inert = true;
+  document.getElementById('update-modal-version').textContent = version;
+  document.getElementById('update-modal').classList.remove('hidden');
+  renderUpdateModalNotes(version, state.pendingUpdateNotes);
+  renderUpdateState();
+  document.getElementById('update-modal-close').focus();
+}
 
-  document.getElementById('update-modal-install').onclick = () => {
-    modal.classList.add('hidden');
-    state.updateModalOpen = false;
-    window.electronAPI.installUpdate();
-  };
-  document.getElementById('update-modal-later').onclick = () => {
-    modal.classList.add('hidden');
-    state.updateModalOpen = false;
-  };
+function closeUpdateModal() {
+  document.getElementById('update-modal').classList.add('hidden');
+  state.updateModalOpen = false;
+  settingsModal.inert = false;
+  document.querySelector('.app-container').inert = !settingsModal.classList.contains('hidden');
+  if (updateReturnFocus?.getClientRects().length) updateReturnFocus.focus();
+  else if (!settingsModal.classList.contains('hidden')) settingsCloseBtn.focus();
+  else settingsBtn.focus();
+}
+
+async function skipPendingUpdate() {
+  try {
+    const result = await window.electronAPI.skipUpdate(state.updateState.version);
+    if (result?.success) closeUpdateModal();
+    else { closeUpdateModal(); showError(result?.error || 'Could not skip this update.'); }
+  } catch { closeUpdateModal(); showError('Could not save your update choice. Please try again.'); }
+}
+
+async function installPendingUpdate() {
+  try {
+    const result = await window.electronAPI.installUpdate(state.updateState.version);
+    if (result?.error) { closeUpdateModal(); showError(result.error); }
+  } catch { closeUpdateModal(); showError('Could not start the update. Please try again.'); }
 }
 
 function renderUpdateModalNotes(version, notes) {
   const body = document.getElementById('update-modal-body');
   body.innerHTML = '';
-
-  if (!notes) {
-    const p = document.createElement('p');
-    p.className = 'update-empty';
-    p.textContent = `SmoothyEdit v${version} is ready to install. Restart to get the latest fixes and features.`;
-    body.appendChild(p);
-    return;
-  }
-
-  renderMarkdownInto(body, notes);
+  if (notes) { renderMarkdownInto(body, notes); return; }
+  const p = document.createElement('p');
+  p.className = 'update-empty';
+  p.textContent = state.updateState.notesLoading ? 'Loading fixes and new features…' : 'Release notes are unavailable right now. Open the release page to see the fixes and new features.';
+  body.appendChild(p);
 }
 
 /**
@@ -2049,24 +2198,33 @@ function updateExportButton() {
   const hasSequence = !!(state.isConnected && state.sequenceInfo?.hasSequence);
   const busy = state.isProcessing || state.shortsSourceLoading;
   const signedIn = !!state.authState?.user;
-  let ready = hasSequence;
-  if (state.shortsSource === 'transcript') ready = !!document.getElementById('shorts-transcript-text').value.trim();
+  let ready = hasSequence || studioTextTools?.hasPreparedSource();
+  if (state.shortsSource === 'transcript') ready = !!document.getElementById('studio-text-input').value.trim();
   if (state.shortsSource === 'audio') ready = !!state.shortsAudioPath;
   if (state.shortsSource === 'youtube') ready = !!state.shortsYoutube?.subtitleText;
   clearMarkersBtn.disabled = !hasSequence || busy;
   document.getElementById('clear-all-markers-btn').disabled = !hasSequence || busy;
   const analyzeBtn = document.getElementById('analyze-shorts-btn');
   analyzeBtn.disabled = !signedIn || !ready || busy;
-  analyzeBtn.textContent = state.isProcessing ? 'Analyzing…' : state.shortsMode === 'best' ? 'Find Best Part' : 'Find Multiple Shorts';
+  analyzeBtn.textContent = state.isProcessing ? 'Analyzing…' : state.shortsMode === 'best' ? 'Find Best Part' : 'Find Shorts';
   const sendBtn = document.getElementById('send-shorts-btn');
   sendBtn.disabled = !hasSequence || busy || !state.currentShorts.length;
-  sendBtn.textContent = state.currentShorts.length > 1 ? `Add ${state.currentShorts.length} markers in Premiere` : 'Add marker in Premiere';
-  document.querySelectorAll('#shorts-workspace [data-shorts-source], #shorts-workspace input, #shorts-workspace textarea, #shorts-workspace button:not(.shorts-copy-field)').forEach(control => { control.disabled = busy; });
+  const compactActions = window.innerWidth <= 650;
+  const fullSendLabel = state.currentShorts.length > 1 ? `Add ${state.currentShorts.length} markers in Premiere` : 'Add marker in Premiere';
+  sendBtn.textContent = compactActions ? (state.currentShorts.length > 1 ? `Add ${state.currentShorts.length} markers` : 'Add marker') : fullSendLabel;
+  sendBtn.title = sendBtn.ariaLabel = fullSendLabel;
+  clearMarkersBtn.textContent = compactActions ? 'Clear markers' : 'Clear Smoothy markers';
+  clearMarkersBtn.title = clearMarkersBtn.ariaLabel = 'Clear Smoothy markers';
+  const clearAllMarkersBtn = document.getElementById('clear-all-markers-btn');
+  clearAllMarkersBtn.textContent = compactActions ? 'Clear all' : 'Clear all…';
+  clearAllMarkersBtn.title = clearAllMarkersBtn.ariaLabel = 'Clear all markers';
+  document.querySelectorAll('#studio-compose-footer [data-shorts-source], #studio-compose-footer input, #studio-compose-footer textarea, #shorts-workspace button:not(.shorts-copy-field)').forEach(control => { control.disabled = busy; });
   document.getElementById('shorts-history-btn').disabled = !signedIn || state.isProcessing;
   if (!signedIn) bestshortsFooterStatus.textContent = 'Sign in to use Studio';
-  else if (busy) bestshortsFooterStatus.textContent = state.shortsSourceLoading ? 'Loading YouTube transcript…' : 'Analyzing your source…';
+  else if (busy) bestshortsFooterStatus.textContent = state.shortsSourceLoading ? 'Loading YouTube subtitles…' : 'Analyzing your source…';
   else if (!ready) bestshortsFooterStatus.textContent = state.shortsSource === 'sequence' ? 'Connect Premiere and open a sequence' : '';
   else bestshortsFooterStatus.textContent = '';
+  syncStudioToolButtons(); studioTextTools?.refresh();
 }
 
 function displayBestshortsSequenceInfo(info) {
@@ -2280,9 +2438,20 @@ function updateCaptionLanguageHint() {
   if (!captionLanguageStatus || !captionLanguageSelect) return;
   const code = captionLanguageSelect.value;
   const modelId = captionModelSelect ? captionModelSelect.value : '';
+  const lowAccuracyArabic = code === 'ar' && /^ggml-(tiny|base)\.bin$/i.test(modelId);
+  const lowAccuracyAuto = code === 'auto' && /^ggml-(tiny|base)\.bin$/i.test(modelId);
+  captionRecommendedModel?.classList.toggle('hidden', !lowAccuracyArabic && !lowAccuracyAuto);
   if (/\.en\.bin$/i.test(modelId) && code !== 'auto' && code !== 'en') {
     const label = captionLanguageSelect.options[captionLanguageSelect.selectedIndex]?.textContent || code;
     captionLanguageStatus.textContent = `${label} needs a multilingual model — choose one above (e.g. Large v3 Turbo).`;
+    return;
+  }
+  if (lowAccuracyArabic) {
+    captionLanguageStatus.textContent = 'Tiny and Base often mishear Arabic, especially dialects. Choose Large v3 Turbo for better accuracy (1.6 GB, downloaded once).';
+    return;
+  }
+  if (lowAccuracyAuto) {
+    captionLanguageStatus.textContent = 'Tiny and Base favor speed over accuracy. For Arabic or other non-English speech, select the language and use Large v3 Turbo (1.6 GB, downloaded once).';
     return;
   }
   captionLanguageStatus.textContent = code === 'auto'
@@ -2402,19 +2571,6 @@ function setCaptionSource(source) {
 
   updateGenerateCaptionsButton();
   updateConnectionGuide();
-}
-
-async function chooseCaptionFile() {
-  try {
-    const result = await window.electronAPI.selectCaptionAudio();
-    if (!result.canceled && result.path) {
-      state.captionFilePath = result.path;
-      if (captionsFilePath) captionsFilePath.value = result.path;
-      updateGenerateCaptionsButton();
-    }
-  } catch (error) {
-    showError(error.message || 'Could not open file picker');
-  }
 }
 
 async function cancelCaptionGeneration() {
@@ -2678,7 +2834,7 @@ function displayCaptionsPreview(captions) {
   captionsPreview.innerHTML = '';
   captions.forEach((caption, index) => {
     const row = document.createElement('div'); row.className = 'caption-item';
-    row.innerHTML = `<div class="caption-row-heading">Caption ${index + 1}</div><div class="caption-time-inputs"><label>Start (s)<input type="number" step="0.01" min="0" value="${caption.startTime}" aria-label="Caption ${index + 1} start"></label><label>End (s)<input type="number" step="0.01" min="0" value="${caption.endTime}" aria-label="Caption ${index + 1} end"></label></div><textarea class="caption-text-editor" aria-label="Caption ${index + 1} text" rows="2">${escapeHtml(caption.text)}</textarea><p class="caption-warning help-text"></p>`;
+    row.innerHTML = `<div class="caption-row-heading">Caption ${index + 1}</div><div class="caption-time-inputs"><label>Start (s)<input type="number" step="0.01" min="0" value="${caption.startTime}" aria-label="Caption ${index + 1} start"></label><label>End (s)<input type="number" step="0.01" min="0" value="${caption.endTime}" aria-label="Caption ${index + 1} end"></label></div><textarea class="caption-text-editor" dir="auto" aria-label="Caption ${index + 1} text" rows="2">${escapeHtml(caption.text)}</textarea><p class="caption-warning help-text"></p>`;
     const warning = row.querySelector('.caption-warning'); warning.textContent = captionWarning(caption);
     row.querySelector('textarea').addEventListener('input', event => {
       invalidateCaptionReformat(); discardCaptionReplacementUndo(); state.captionEdited = true;
@@ -2947,19 +3103,10 @@ function updateNLESelectorUI() {
 // Update Functions
 // ========================================
 
-function manualCheckForUpdates() {
-  state.updateState = { status: 'checking', version: null, percent: 0 };
-  renderUpdateState();
-  window.electronAPI.checkForUpdates();
-
-  // Re-enable after 15s in case no response comes back
-  setTimeout(() => {
-    if (state.updateState.status === 'checking' || checkUpdateBtn.textContent === 'Checking…') {
-      state.updateState = { status: 'idle', version: null, percent: 0 };
-      renderUpdateState();
-      settingsUpdateStatus.textContent = 'No response from the update service — try again later';
-    }
-  }, 15000);
+async function manualCheckForUpdates() {
+  checkUpdateBtn.disabled = true;
+  try { applyUpdateState(await window.electronAPI.checkForUpdates()); }
+  catch { applyUpdateState({ status: 'error', version: null, percent: 0, notes: null, error: 'Could not reach the update service.' }); }
 }
 
 // ========================================
@@ -3707,9 +3854,41 @@ function setupAssetsListeners() {
   assetsBrowseBtn.addEventListener('click', openAssetFilePicker);
   assetsPasteBtn.addEventListener('click', () => pasteAssetsFromClipboard(null));
   assetsClearBtn.addEventListener('click', clearAssets);
+  document.getElementById('assets-replace-btn').addEventListener('click', openAssetFilePicker);
+  document.getElementById('assets-repaste-btn').addEventListener('click', () => pasteAssetsFromClipboard(null));
+  document.getElementById('assets-remove-background-btn').addEventListener('click', () => processActiveAsset('remove-background'));
+  document.getElementById('assets-upscale-btn').addEventListener('click', () => processActiveAsset('upscale'));
+  document.getElementById('assets-restore-btn').addEventListener('click', restoreOriginalAsset);
+  document.getElementById('assets-process-cancel-btn').addEventListener('click', async () => {
+    assetsState.cancelRequested = true;
+    document.getElementById('assets-process-cancel-btn').disabled = true;
+    document.getElementById('assets-process-status').textContent = 'Canceling…';
+    await window.electronAPI.assetsCancelProcessing();
+  });
+  window.electronAPI.onAssetsProcessingProgress?.(progress => {
+    if (!assetsState.processing) return;
+    document.getElementById('assets-process-status').textContent = progress.message;
+    const bar = document.getElementById('assets-process-progress');
+    if (typeof progress.percent === 'number') bar.value = progress.percent;
+    else bar.removeAttribute('value');
+  });
+  assetsPreviewImg.addEventListener('load', () => {
+    const item = assetsState.items[assetsState.activeIndex];
+    if (!item || item.previewTracked || assetsPreviewImg.src !== assetsState.previewUrl) return;
+    item.previewTracked = true;
+    window.electronAPI.trackMediaPreview?.('assets')?.catch(() => {});
+  });
+  const previewFrame = document.querySelector('.assets-preview-frame');
+  previewFrame.addEventListener('dragover', e => e.preventDefault());
+  previewFrame.addEventListener('drop', async e => {
+    e.preventDefault();
+    if (!assetsState.busy && e.dataTransfer?.files.length) await handleAssetFiles(Array.from(e.dataTransfer.files));
+  });
 
   document.addEventListener('paste', (e) => {
     if (state.currentTab !== 'assets') return;
+    if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
+    e.preventDefault();
     pasteAssetsFromClipboard(e.clipboardData);
   });
 
@@ -3739,6 +3918,7 @@ function setupAssetsListeners() {
 }
 
 function openAssetFilePicker() {
+  if (assetsState.busy) return;
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.svg,image/*';
@@ -3779,6 +3959,7 @@ async function changeAssetsOutputFolder() {
 }
 
 async function handleAssetFiles(files) {
+  if (assetsState.busy) return;
   const loaded = [];
   const failures = [];
   for (const file of files) {
@@ -3797,6 +3978,7 @@ async function handleAssetFiles(files) {
   }
 
   assetsState.items = loaded;
+  document.getElementById('assets-process-status').textContent = '';
   assetsState.failures = failures;
   document.getElementById('assets-file-errors').textContent = failures.join(' · ');
   renderAssetsFileList();
@@ -3814,11 +3996,13 @@ async function handleAssetFiles(files) {
 }
 
 function clearAssets() {
+  if (assetsState.busy) return;
   if (assetsState.previewUrl) {
     URL.revokeObjectURL(assetsState.previewUrl);
     assetsState.previewUrl = null;
   }
   assetsState.items = [];
+  document.getElementById('assets-process-status').textContent = '';
   assetsState.failures = []; document.getElementById('assets-file-errors').textContent = ''; renderAssetsFileList();
   assetsState.activeIndex = 0;
   assetsPreviewImg.removeAttribute('src');
@@ -4152,6 +4336,7 @@ async function sendAssetsToPremiere() {
 
 function renderAssetsFileList() {
   const list = document.getElementById('assets-file-list'); list.innerHTML = '';
+  if (assetsState.items.length < 2) return;
   assetsState.items.forEach((item, index) => {
     const button = document.createElement('button'); button.type = 'button'; button.className = 'asset-file-option';
     button.textContent = item.name + (item.error ? ' — failed' : ''); button.title = item.error || item.name; button.setAttribute('aria-pressed', String(index === assetsState.activeIndex));
@@ -4162,7 +4347,18 @@ function renderAssetsFileList() {
 }
 function updateAssetsUI() {
   renderAssetsFileList();
+  const tools = document.querySelector('.assets-tools-section');
+  if (assetsState.items.length) assetsPreviewSection.after(tools); else document.getElementById('assets-input-section').before(tools);
+  document.getElementById('assets-local-note').textContent = assetsState.items.length ? 'Free, on your device · Remove backgrounds or upscale images 2× / 4×. Models download once; your images stay on this computer.' : 'Remove backgrounds or upscale images 2× / 4×, free on your device. Add an image below to start. Models download once; your images stay on this computer.';
   const enabled = assetsState.items.length > 0 && !assetsState.busy;
+  document.getElementById('assets-input-section').classList.toggle('hidden', assetsState.items.length > 0);
+  for (const id of ['assets-clear-btn', 'assets-replace-btn', 'assets-repaste-btn', 'assets-remove-background-btn', 'assets-upscale-btn', 'assets-upscale-factor', 'assets-restore-btn']) {
+    document.getElementById(id).disabled = !enabled;
+  }
+  document.getElementById('assets-restore-btn').classList.toggle('hidden', !assetsState.items[assetsState.activeIndex]?.original);
+  document.getElementById('assets-process-cancel-btn').classList.toggle('hidden', !assetsState.processing);
+  document.getElementById('assets-process-progress').classList.toggle('hidden', !assetsState.processing);
+  document.getElementById('assets-preview-section').setAttribute('aria-busy', String(!!assetsState.processing));
   assetsEmptyGuide.classList.toggle('hidden', assetsState.items.length > 0);
   [assetsConvertBtn, assetsSaveAsBtn, assetsSendBtn].forEach((btn) => {
     if (btn) btn.disabled = !enabled || (btn === assetsSendBtn && !(state.isConnected && state.sequenceInfo?.hasSequence));
@@ -4185,7 +4381,72 @@ function updateAssetsUI() {
   }
 }
 
+async function processActiveAsset(operation) {
+  if (assetsState.busy || !assetsState.items.length) return;
+  const index = assetsState.activeIndex;
+  const item = assetsState.items[index];
+  const factor = Number(document.getElementById('assets-upscale-factor').value);
+  assetsState.busy = true;
+  assetsState.processing = true;
+  assetsState.cancelRequested = false;
+  document.getElementById('assets-process-progress').value = 0;
+  document.getElementById('assets-process-cancel-btn').disabled = false;
+  document.getElementById('assets-process-status').textContent = 'Preparing image…';
+  updateAssetsUI();
+  try {
+    // Work on the selected image's pixels, before output resizing/background compositing.
+    const input = await renderAssetToPng(item, { optimize: false, width: null, background: 'transparent' });
+    if (assetsState.cancelRequested) {
+      document.getElementById('assets-process-status').textContent = 'Canceled. Your image is unchanged.';
+      setAssetsStatus('Image processing canceled', 'idle');
+      return;
+    }
+    const result = await window.electronAPI.assetsProcessImage({ operation, factor, bytes: input.bytes });
+    if (result?.canceled) {
+      document.getElementById('assets-process-status').textContent = 'Canceled. Your image is unchanged.';
+      setAssetsStatus('Image processing canceled', 'idle');
+      return;
+    }
+    if (!result?.success || !result.bytes?.length) throw new Error(result?.error || 'Could not process this image.');
+    const suffix = operation === 'upscale' ? `-${factor}x` : '-cutout';
+    const file = new File([result.bytes], item.name.replace(/\.[^.]+$/, '') + suffix + '.png', { type: 'image/png' });
+    const updated = await loadAssetFile(file);
+    updated.original = item.original || item;
+    assetsState.items[index] = updated;
+    assetsState.widthTouched = false;
+    if (operation === 'remove-background') {
+      assetsBackground.value = 'transparent';
+      assetsBackgroundColor.classList.add('hidden');
+    }
+    renderAssetsPreview();
+    document.getElementById('assets-process-status').textContent = operation === 'upscale'
+      ? `Upscaled ${factor}× to ${updated.width} × ${updated.height}. Ready to save or send to Premiere.`
+      : 'Background removed. Ready to save a transparent PNG or send to Premiere.';
+    setAssetsStatus(operation === 'upscale' ? 'Image upscaled' : 'Background removed', 'success');
+  } catch (error) {
+    document.getElementById('assets-process-status').textContent = error.message || 'Image processing failed. Try again.';
+    setAssetsStatus('Image processing failed', 'error');
+  } finally {
+    assetsState.busy = false;
+    assetsState.processing = false;
+    updateAssetsUI();
+  }
+}
+
+function restoreOriginalAsset() {
+  if (assetsState.busy) return;
+  const item = assetsState.items[assetsState.activeIndex];
+  if (!item?.original) return;
+  assetsState.items[assetsState.activeIndex] = item.original;
+  assetsState.widthTouched = false;
+  document.getElementById('assets-process-status').textContent = '';
+  renderAssetsPreview();
+  updateAssetsUI();
+  setAssetsStatus('Original image restored', 'idle');
+}
+
 async function pasteAssetsFromClipboard(clipboardData) {
+  if (assetsState.busy) return;
   try {
     const files = [];
 

@@ -1,0 +1,1028 @@
+{
+  "IMAGE_MODELS": [
+    {
+      "id": "openai/gpt-image-2.5-flare",
+      "label": "GPT Image 2.5 Flare"
+    },
+    {
+      "id": "openai/gpt-5-image-mini",
+      "label": "GPT Image Mini"
+    },
+    {
+      "id": "google/gemini-nano-banana-2.1",
+      "label": "Nano Banana 2.1"
+    },
+    {
+      "id": "google/gemini-3.1-flash-image",
+      "label": "Nano Banana 2"
+    },
+    {
+      "id": "google/gemini-3.1-flash-lite-image",
+      "label": "Nano Banana 2 Lite"
+    },
+    {
+      "id": "google/gemini-3-pro-image",
+      "label": "Nano Banana Pro"
+    },
+    {
+      "id": "openai/gpt-5.4-image-2",
+      "label": "GPT-5.4 Image"
+    },
+    {
+      "id": "openai/gpt-5-image",
+      "label": "GPT Image"
+    },
+    {
+      "id": "openai/gpt-image-2.5-sunburst",
+      "label": "GPT Image 2.5 Sunburst"
+    },
+    {
+      "id": "openai/gpt-image-2",
+      "label": "GPT Image 2"
+    },
+    {
+      "id": "openai/gpt-image-1-mini",
+      "label": "GPT Image 1 Mini"
+    },
+    {
+      "id": "openai/gpt-image-1",
+      "label": "GPT Image 1"
+    },
+    {
+      "id": "black-forest-labs/flux-3-image",
+      "label": "FLUX.3 Image"
+    },
+    {
+      "id": "black-forest-labs/flux.2-pro",
+      "label": "FLUX.2 Pro"
+    },
+    {
+      "id": "black-forest-labs/flux.2-flex",
+      "label": "FLUX.2 Flex"
+    },
+    {
+      "id": "black-forest-labs/flux.2-max",
+      "label": "FLUX.2 Max"
+    },
+    {
+      "id": "black-forest-labs/flux.2-klein-4b",
+      "label": "FLUX.2 Klein"
+    },
+    {
+      "id": "bytedance-seed/seedream-5-0-flash",
+      "label": "Seedream 5.0 Flash"
+    },
+    {
+      "id": "bytedance-seed/seedream-5-0-lite",
+      "label": "Seedream 5.0 Lite"
+    },
+    {
+      "id": "bytedance-seed/seedream-5-0-pro",
+      "label": "Seedream 5.0 Pro"
+    },
+    {
+      "id": "bytedance-seed/seedream-4.5",
+      "label": "Seedream 4.5"
+    },
+    {
+      "id": "qwen/qwen-image-3-pro",
+      "label": "Qwen Image 3 Pro"
+    },
+    {
+      "id": "qwen/qwen-image-3",
+      "label": "Qwen Image 3"
+    },
+    {
+      "id": "microsoft/mai-image-2.6",
+      "label": "MAI-Image 2.6"
+    },
+    {
+      "id": "microsoft/mai-image-2.6-flash",
+      "label": "MAI-Image 2.6 Flash"
+    },
+    {
+      "id": "microsoft/mai-image-2.5-pro",
+      "label": "MAI-Image 2.5 Pro"
+    },
+    {
+      "id": "microsoft/mai-image-2.5",
+      "label": "MAI-Image 2.5"
+    },
+    {
+      "id": "tencent/hy-image-v3.5-preview",
+      "label": "Hy Image 3.5 Preview"
+    },
+    {
+      "id": "krea/krea-2-large",
+      "label": "Krea 2 Large"
+    },
+    {
+      "id": "krea/krea-2-medium",
+      "label": "Krea 2 Medium"
+    },
+    {
+      "id": "krea/krea-2-medium-turbo",
+      "label": "Krea 2 Medium Turbo"
+    },
+    {
+      "id": "recraft/recraft-v4.1-flash",
+      "label": "Recraft V4.1 Flash"
+    },
+    {
+      "id": "recraft/recraft-v4.1",
+      "label": "Recraft V4.1"
+    },
+    {
+      "id": "recraft/recraft-v4.1-pro",
+      "label": "Recraft V4.1 Pro"
+    },
+    {
+      "id": "recraft/recraft-v4.1-utility",
+      "label": "Recraft V4.1 Utility"
+    },
+    {
+      "id": "recraft/recraft-v4.1-utility-pro",
+      "label": "Recraft V4.1 Utility Pro"
+    },
+    {
+      "id": "recraft/recraft-v4",
+      "label": "Recraft V4"
+    },
+    {
+      "id": "recraft/recraft-v4-pro",
+      "label": "Recraft V4 Pro"
+    },
+    {
+      "id": "recraft/recraft-v3",
+      "label": "Recraft V3"
+    },
+    {
+      "id": "x-ai/grok-imagine-image-2.0",
+      "label": "Grok Imagine Image 2.0"
+    },
+    {
+      "id": "x-ai/grok-imagine-image-quality",
+      "label": "Grok Imagine Image Quality"
+    },
+    {
+      "id": "sourceful/riverflow-v2.5-pro",
+      "label": "Riverflow V2.5 Pro"
+    },
+    {
+      "id": "sourceful/riverflow-v2.5-fast",
+      "label": "Riverflow V2.5 Fast"
+    },
+    {
+      "id": "sourceful/riverflow-v2-fast",
+      "label": "Riverflow V2 Fast"
+    }
+  ],
+  "DEFAULT_IMAGE_MODEL": "openai/gpt-image-2.5-flare",
+  "ASPECT_RATIOS": [
+    "21:9",
+    "16:9",
+    "3:2",
+    "5:4",
+    "4:3",
+    "1:1",
+    "3:4",
+    "4:5",
+    "2:3",
+    "9:16"
+  ],
+  "DEFAULT_ASPECT_RATIO": "16:9",
+  "IMAGE_SIZES": [
+    "1K",
+    "2K",
+    "4K"
+  ],
+  "DEFAULT_IMAGE_SIZE": "1K",
+  "MODEL_CAPABILITIES": {
+    "google/gemini-3.1-flash-image": {
+      "supportsImageSize": true
+    },
+    "google/gemini-3.1-flash-lite-image": {
+      "supportsImageSize": false
+    },
+    "google/gemini-3-pro-image": {
+      "supportsImageSize": true
+    },
+    "openai/gpt-5.4-image-2": {
+      "supportsImageSize": false
+    },
+    "openai/gpt-5-image-mini": {
+      "supportsImageSize": false,
+      "maxReferences": 6,
+      "aspectRatios": [
+        "1:1",
+        "3:2",
+        "2:3"
+      ]
+    },
+    "openai/gpt-5-image": {
+      "supportsImageSize": false,
+      "maxReferences": 6,
+      "aspectRatios": [
+        "1:1",
+        "3:2",
+        "2:3"
+      ]
+    },
+    "black-forest-labs/flux-3-image": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 6,
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "3:2",
+        "5:4",
+        "4:3",
+        "1:1",
+        "3:4",
+        "4:5",
+        "2:3",
+        "9:16"
+      ],
+      "imageSizes": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    "black-forest-labs/flux.2-pro": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 6,
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "3:2",
+        "4:3",
+        "1:1",
+        "3:4",
+        "2:3",
+        "9:16"
+      ]
+    },
+    "black-forest-labs/flux.2-flex": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 6,
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "3:2",
+        "4:3",
+        "1:1",
+        "3:4",
+        "2:3",
+        "9:16"
+      ]
+    },
+    "black-forest-labs/flux.2-max": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 6,
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "3:2",
+        "4:3",
+        "1:1",
+        "3:4",
+        "2:3",
+        "9:16"
+      ]
+    },
+    "black-forest-labs/flux.2-klein-4b": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 4,
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "3:2",
+        "4:3",
+        "1:1",
+        "3:4",
+        "2:3",
+        "9:16"
+      ]
+    },
+    "bytedance-seed/seedream-5-0-flash": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 6,
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "3:2",
+        "5:4",
+        "4:3",
+        "1:1",
+        "3:4",
+        "4:5",
+        "2:3",
+        "9:16"
+      ],
+      "imageSizes": [
+        "1K",
+        "2K"
+      ]
+    },
+    "bytedance-seed/seedream-4.5": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 6,
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "3:2",
+        "5:4",
+        "4:3",
+        "1:1",
+        "3:4",
+        "4:5",
+        "2:3",
+        "9:16"
+      ],
+      "imageSizes": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    "x-ai/grok-imagine-image-2.0": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 3,
+      "aspectRatios": [
+        "16:9",
+        "3:2",
+        "4:3",
+        "1:1",
+        "3:4",
+        "2:3",
+        "9:16"
+      ],
+      "imageSizes": [
+        "1K",
+        "2K"
+      ]
+    },
+    "sourceful/riverflow-v2-fast": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 4,
+      "aspectRatios": [
+        "21:9",
+        "16:9",
+        "3:2",
+        "4:3",
+        "1:1",
+        "3:4",
+        "2:3",
+        "9:16"
+      ],
+      "imageSizes": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    "google/gemini-nano-banana-2.1": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 6,
+      "aspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "3:4",
+        "4:3",
+        "4:5",
+        "5:4",
+        "9:16",
+        "16:9",
+        "21:9"
+      ],
+      "imageSizes": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    "tencent/hy-image-v3.5-preview": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 6,
+      "aspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "3:4",
+        "4:3",
+        "4:5",
+        "5:4",
+        "9:16",
+        "16:9"
+      ],
+      "imageSizes": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    "openai/gpt-image-2.5-sunburst": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 6,
+      "aspectRatios": [
+        "1:1",
+        "3:2",
+        "2:3",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "21:9"
+      ]
+    },
+    "openai/gpt-image-2.5-flare": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 6,
+      "aspectRatios": [
+        "1:1",
+        "3:2",
+        "2:3",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "21:9"
+      ]
+    },
+    "openai/gpt-image-2": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 6,
+      "aspectRatios": [
+        "1:1",
+        "3:2",
+        "2:3",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "21:9"
+      ]
+    },
+    "openai/gpt-image-1-mini": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 6,
+      "aspectRatios": [
+        "1:1",
+        "3:2",
+        "2:3"
+      ]
+    },
+    "openai/gpt-image-1": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 6,
+      "aspectRatios": [
+        "1:1",
+        "3:2",
+        "2:3"
+      ]
+    },
+    "microsoft/mai-image-2.6": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 5,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3"
+      ]
+    },
+    "microsoft/mai-image-2.6-flash": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 5,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3"
+      ]
+    },
+    "microsoft/mai-image-2.5": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 1,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3"
+      ]
+    },
+    "microsoft/mai-image-2.5-pro": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 1,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3"
+      ]
+    },
+    "bytedance-seed/seedream-5-0-lite": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 6,
+      "aspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "3:4",
+        "4:3",
+        "4:5",
+        "5:4",
+        "9:16",
+        "16:9",
+        "21:9"
+      ],
+      "imageSizes": [
+        "2K",
+        "4K"
+      ]
+    },
+    "bytedance-seed/seedream-5-0-pro": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 6,
+      "aspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "3:4",
+        "4:3",
+        "4:5",
+        "5:4",
+        "9:16",
+        "16:9",
+        "21:9"
+      ],
+      "imageSizes": [
+        "1K",
+        "2K"
+      ]
+    },
+    "qwen/qwen-image-3-pro": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 4,
+      "aspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "3:4",
+        "4:3",
+        "4:5",
+        "5:4",
+        "9:16",
+        "16:9"
+      ],
+      "imageSizes": [
+        "1K",
+        "2K"
+      ]
+    },
+    "qwen/qwen-image-3": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 4,
+      "aspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "3:4",
+        "4:3",
+        "4:5",
+        "5:4",
+        "9:16",
+        "16:9"
+      ],
+      "imageSizes": [
+        "1K",
+        "2K"
+      ]
+    },
+    "krea/krea-2-large": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 1,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:2",
+        "16:9",
+        "4:5",
+        "2:3",
+        "9:16"
+      ],
+      "imageSizes": [
+        "1K"
+      ]
+    },
+    "krea/krea-2-medium": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 1,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:2",
+        "16:9",
+        "4:5",
+        "2:3",
+        "9:16"
+      ],
+      "imageSizes": [
+        "1K"
+      ]
+    },
+    "krea/krea-2-medium-turbo": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 1,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:2",
+        "16:9",
+        "4:5",
+        "2:3",
+        "9:16"
+      ],
+      "imageSizes": [
+        "1K"
+      ]
+    },
+    "sourceful/riverflow-v2.5-pro": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 6,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "3:2",
+        "2:3",
+        "16:9",
+        "9:16",
+        "21:9"
+      ],
+      "imageSizes": [
+        "1K",
+        "2K",
+        "4K"
+      ]
+    },
+    "sourceful/riverflow-v2.5-fast": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 4,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "3:2",
+        "2:3",
+        "16:9",
+        "9:16",
+        "21:9"
+      ],
+      "imageSizes": [
+        "1K",
+        "2K"
+      ]
+    },
+    "x-ai/grok-imagine-image-quality": {
+      "supportsImageSize": true,
+      "api": "images",
+      "maxReferences": 3,
+      "aspectRatios": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "9:16",
+        "16:9",
+        "2:3",
+        "3:2"
+      ],
+      "imageSizes": [
+        "1K",
+        "2K"
+      ]
+    },
+    "recraft/recraft-v4.1-flash": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 0,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16"
+      ]
+    },
+    "recraft/recraft-v4.1": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 1,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16"
+      ]
+    },
+    "recraft/recraft-v4.1-pro": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 1,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16"
+      ]
+    },
+    "recraft/recraft-v4.1-utility": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 1,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16"
+      ]
+    },
+    "recraft/recraft-v4.1-utility-pro": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 1,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16"
+      ]
+    },
+    "recraft/recraft-v4": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 1,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16"
+      ]
+    },
+    "recraft/recraft-v4-pro": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 1,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16"
+      ]
+    },
+    "recraft/recraft-v3": {
+      "supportsImageSize": false,
+      "api": "images",
+      "maxReferences": 1,
+      "aspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16"
+      ]
+    }
+  },
+  "IMAGE_MODEL_DESCRIPTIONS": {
+    "openai/gpt-5-image-mini": "Fast and economical",
+    "google/gemini-nano-banana-2.1": "Google's latest image generation and editing model",
+    "google/gemini-3.1-flash-image": "Fast · best all-round",
+    "google/gemini-3.1-flash-lite-image": "Fastest · cheapest",
+    "google/gemini-3-pro-image": "Best quality",
+    "openai/gpt-5.4-image-2": "OpenAI · reasoning and image generation",
+    "openai/gpt-5-image": "OpenAI · top quality",
+    "openai/gpt-image-2.5-sunburst": "OpenAI · precision image generation and editing",
+    "openai/gpt-image-2.5-flare": "Default · latest OpenAI · fast image generation and editing",
+    "openai/gpt-image-2": "OpenAI · high-fidelity generation and editing",
+    "openai/gpt-image-1-mini": "OpenAI · economical image generation",
+    "openai/gpt-image-1": "OpenAI · detailed generation and editing",
+    "black-forest-labs/flux-3-image": "Generation and reference edits",
+    "black-forest-labs/flux.2-pro": "Detailed images and reference edits",
+    "black-forest-labs/flux.2-flex": "Typography and fine details",
+    "black-forest-labs/flux.2-max": "Highest FLUX.2 quality",
+    "black-forest-labs/flux.2-klein-4b": "Fast, economical reference edits",
+    "bytedance-seed/seedream-5-0-flash": "Fast generation and consistent edits",
+    "bytedance-seed/seedream-5-0-lite": "Knowledge-rich visual creation",
+    "bytedance-seed/seedream-5-0-pro": "Commercial visual production",
+    "bytedance-seed/seedream-4.5": "Reference edits and 4K images",
+    "qwen/qwen-image-3-pro": "Precise text rendering and reference edits",
+    "qwen/qwen-image-3": "Precise text rendering and reference edits",
+    "microsoft/mai-image-2.6": "Microsoft · design-ready generation and edits",
+    "microsoft/mai-image-2.6-flash": "Microsoft · fast generation and edits",
+    "microsoft/mai-image-2.5": "Microsoft · photorealistic images",
+    "microsoft/mai-image-2.5-pro": "Microsoft · high-quality images",
+    "tencent/hy-image-v3.5-preview": "Tencent · multi-turn image generation and editing",
+    "krea/krea-2-large": "Krea · high-capability images",
+    "krea/krea-2-medium": "Krea · balanced quality and speed",
+    "krea/krea-2-medium-turbo": "Krea · fast visual iteration",
+    "recraft/recraft-v4.1-flash": "Recraft · fast image generation",
+    "recraft/recraft-v4.1": "Recraft · high-aesthetic image generation",
+    "recraft/recraft-v4.1-pro": "Recraft · high-resolution visuals",
+    "recraft/recraft-v4.1-utility": "Recraft · general-purpose visuals",
+    "recraft/recraft-v4.1-utility-pro": "Recraft · high-resolution general-purpose visuals",
+    "recraft/recraft-v4": "Recraft · high-aesthetic image generation",
+    "recraft/recraft-v4-pro": "Recraft · high-resolution visuals",
+    "recraft/recraft-v3": "Recraft · image generation and editing",
+    "x-ai/grok-imagine-image-2.0": "Generation and reference edits",
+    "x-ai/grok-imagine-image-quality": "xAI · high-fidelity image generation and editing",
+    "sourceful/riverflow-v2.5-pro": "Sourceful · detailed text and reference control",
+    "sourceful/riverflow-v2.5-fast": "Sourceful · fast generation and editing",
+    "sourceful/riverflow-v2-fast": "Fast generation and reference edits"
+  },
+  "IMAGE_TOKEN_PRICING": {
+    "openai/gpt-5-image-mini": {
+      "input": 2.5,
+      "output": 2
+    },
+    "google/gemini-3.1-flash-image": {
+      "input": 0.5,
+      "output": 35
+    },
+    "google/gemini-3.1-flash-lite-image": {
+      "input": 0.25,
+      "output": 17.5
+    },
+    "google/gemini-3-pro-image": {
+      "input": 1,
+      "output": 40
+    },
+    "openai/gpt-5.4-image-2": {
+      "input": 8,
+      "output": 15
+    },
+    "openai/gpt-5-image": {
+      "input": 10,
+      "output": 10
+    }
+  },
+  "VERTICAL_THUMBNAIL_PROMPT": "Reframe this horizontal 16:9 YouTube thumbnail into a vertical 9:16 image for YouTube Shorts, TikTok, and Reels. Keep the main subject, faces, and any large title text fully visible, sharp, and centered — never crop, cut off, or distort the subject or text. Intelligently extend the existing background upward and downward to fill the taller vertical canvas, seamlessly matching the original colors, lighting, textures, and art style with no visible seams, borders, or repetition. Keep the original focal point centered in the frame. Output a single high-quality vertical image.",
+  "REACTION_PRESETS": [
+    {
+      "id": "curious",
+      "label": "Curious / Thinking",
+      "icon": "Lightbulb",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. Their head is slightly tilted, and one hand is thoughtfully placed on their chin with eyebrows raised in a curious expression as they explore an idea. Their upper body is visible from the chest up, with both shoulders in the shot. Their hair and clothing are complete and well-defined. They are looking forward, making direct eye contact with the camera. The background is a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "mindblown",
+      "label": "Mind-Blown",
+      "icon": "Sparkles",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. Their eyes are wide with astonishment and both hands are on the sides of their head in a 'mind-blown' gesture. Their upper body is visible from the chest up, with both shoulders in the shot. Their hair and clothing are complete and well-defined. They are looking forward, making direct eye contact with the camera. The background is a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "confident",
+      "label": "Confident / Smirk",
+      "icon": "Smile",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. They have a confident smirk on their face and one eyebrow is slightly raised in a knowing look. Their upper body is completely visible from the chest up, with both shoulders fully rendered and in the shot. Their hair and clothing are complete and well-defined. They are looking forward, making direct and clear eye contact with the camera. The entire background is replaced with a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "excited",
+      "label": "Excited / Happy",
+      "icon": "Zap",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. They have a natural, big, and excited smile, with their eyes wide and bright. Their upper body is completely visible from the chest up, with both shoulders fully rendered and in the shot. Their hair and clothing are complete and well-defined. They are looking forward, making direct and clear eye contact with the camera. The entire background is replaced with a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "surprised",
+      "label": "Surprised / Impressed",
+      "icon": "CircleAlert",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. They have an expression of being impressed, with wide eyes and their mouth slightly open in surprise. Their upper body is completely visible from the chest up, with both shoulders fully rendered and in the shot. Their hair and clothing are complete and well-defined. They are looking forward, making direct and clear eye contact with the camera. The entire background is replaced with a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "focused",
+      "label": "Focused / Serious",
+      "icon": "Target",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. They have a focused and serious expression with a straight face and intense eyes. Their upper body is completely visible from the chest up, with both shoulders fully rendered and in the shot. Their hair and clothing are complete and well-defined. They are looking forward, making direct and clear eye contact with the camera. The entire background is replaced with a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "confused",
+      "label": "Confused / Frustrated",
+      "icon": "CircleAlert",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. They have a confused and frustrated expression, with their brows furrowed and a slight frown on their face. Their upper body is completely visible from the chest up, with both shoulders fully rendered and in the shot. Their hair and clothing are complete and well-defined. They are looking forward, making direct and clear eye contact with the camera. The entire background is replaced with a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "suspicious",
+      "label": "Suspicious / Skeptical",
+      "icon": "Eye",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. They have a skeptical expression, with one eyebrow raised and their eyes giving a slight side-eye glance toward the camera. Their upper body is completely visible from the chest up, with both shoulders fully rendered and in the shot. Their hair and clothing are complete and well-defined. The entire background is replaced with a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "pointing",
+      "label": "Pointing Reaction",
+      "icon": "ArrowUpRight",
+      "prompt": "A medium close-up portrait of the subject from the reference image, centered in the frame. With an engaging expression, they are pointing their index finger directly forward toward the camera, as if highlighting a key piece of information. Their upper body is visible from the chest up, with both shoulders in the shot. Their hair and clothing are complete and well-defined. They are making direct eye contact. The background is a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "secret",
+      "label": "\"Secret Hack\" Look",
+      "icon": "ShieldCheck",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. They have a slight, knowing smile and are holding one index finger to their lips in a 'secret' or 'shushing' gesture. Their upper body is completely visible from the chest up, with both shoulders fully rendered and in the shot. Their hair and clothing are complete and well-defined. They are looking forward, making direct and clear eye contact with the camera. The entire background is replaced with a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "excited-hands-cheeks",
+      "label": "Excited - Hands on Cheeks",
+      "icon": "Star",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. They have an extremely excited and delighted expression with wide eyes and a big smile. Both of their hands are placed on their cheeks in an amazed, overwhelmed gesture, as if they just heard incredible news. Their upper body is completely visible from the chest up, with both shoulders fully rendered and in the shot. Their hair and clothing are complete and well-defined. They are looking forward, making direct and clear eye contact with the camera. The entire background is replaced with a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "thinking-chin",
+      "label": "Thinking - Hand on Chin",
+      "icon": "Brain",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. They have a thoughtful, contemplative expression with one hand gently resting on their chin, fingers along their jawline, as if deeply considering something important. Their eyes are focused and engaged. Their upper body is completely visible from the chest up, with both shoulders fully rendered and in the shot. Their hair and clothing are complete and well-defined. They are looking forward, making direct and clear eye contact with the camera. The entire background is replaced with a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "thinking-thumb-camera",
+      "label": "Thinking - Thumb on Head (Looking)",
+      "icon": "Eye",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. They have a pensive, analytical expression with their thumb resting on the side of their head or temple, as if processing complex information. Their upper body is completely visible from the chest up, with both shoulders fully rendered and in the shot. Their hair and clothing are complete and well-defined. They are looking forward, making direct and clear eye contact with the camera with an engaged, thoughtful gaze. The entire background is replaced with a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "thinking-thumb-away",
+      "label": "Thinking - Thumb on Head (Away)",
+      "icon": "EyeOff",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. They have a deeply contemplative expression with their thumb resting on the side of their head or temple, appearing lost in thought. Their upper body is completely visible from the chest up, with both shoulders fully rendered and in the shot. Their hair and clothing are complete and well-defined. They are NOT looking at the camera - instead, their gaze is directed to the side or slightly downward, as if pondering something privately. The entire background is replaced with a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "shocked-horror",
+      "label": "Shocked / Horror",
+      "icon": "CircleAlert",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. They have a shocked and horrified expression with extremely wide eyes and mouth open in disbelief. Both hands are covering their mouth or placed on their cheeks in a gasping, shocked gesture, as if witnessing something unbelievable or scary. Their upper body is completely visible from the chest up, with both shoulders fully rendered and in the shot. Their hair and clothing are complete and well-defined. They are looking forward, making direct and clear eye contact with the camera. The entire background is replaced with a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "victory-celebrating",
+      "label": "Victory / Celebrating",
+      "icon": "Trophy",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. They have a triumphant, victorious expression with a huge genuine smile and bright, excited eyes. One or both arms are raised up in a celebrating victory gesture with fists pumped or arms in the air, expressing pure joy and achievement. Their upper body is completely visible from the chest up, with both shoulders fully rendered and in the shot. Their hair and clothing are complete and well-defined. They are looking forward, making direct and clear eye contact with the camera. The entire background is replaced with a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "disappointed-sad",
+      "label": "Disappointed / Sad",
+      "icon": "CircleAlert",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. They have a disappointed and sad expression with downturned lips in a pout or frown, and eyes that convey sadness or letdown. Their eyebrows may be slightly furrowed in disappointment. Their upper body is completely visible from the chest up, with both shoulders fully rendered and in the shot. Their hair and clothing are complete and well-defined. They are looking forward, making direct and clear eye contact with the camera with a melancholic gaze. The entire background is replaced with a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    },
+    {
+      "id": "laughing-joy",
+      "label": "Laughing / Joyful",
+      "icon": "Smile",
+      "prompt": "A medium close-up portrait of the subject from the reference image, perfectly centered. They have a genuine, hearty laughing expression with their mouth wide open in laughter, eyes crinkled with joy, and head may be slightly tilted back naturally in the moment of laughter. Their expression radiates pure happiness and infectious joy. Their upper body is completely visible from the chest up, with both shoulders fully rendered and in the shot. Their hair and clothing are complete and well-defined. They are looking forward or slightly upward, expressing uncontained laughter and delight. The entire background is replaced with a solid, light gray, neutral color. Expand the background to fill the extra space. Keep the subject exactly the same, without cropping or distortion. Extend the background seamlessly in a photorealistic way, matching the original style, details, colors, lighting, and textures. Ensure smooth blending with no visible edges, borders, or repetition."
+    }
+  ]
+}

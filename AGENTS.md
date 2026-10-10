@@ -4,6 +4,15 @@ This is the **public release repo** for the SmoothyEdit desktop app
 (`alibahrawy/smoothyapp`). Source of truth / monorepo lives at
 `/Users/alibahrawy/Documents/Coding/smoothyedit`.
 
+## Mandatory feature usage tracking — 2026-10-05
+
+The user requires usage counts for **every existing and future feature, free and paid**, like Multicam. Treat tracking as part of completing a feature, including desktop tools and Studio features. Use stable feature/action IDs, update `/Users/alibahrawy/Documents/Coding/smoothyedit/web/src/lib/feature-catalog.ts`, and expose the counts in the private Admin → Usage table. Include meaningful exports/imports/saves and previews; do not count navigation, preference reads, polling, or internal provider passes as feature runs.
+
+Desktop tracking belongs at the main-process operation boundary, with playback starts reported once per media selection. Respect `SMOOTHY_TELEMETRY=0`; collect no content, search text, file paths or account details, and never let analytics block a tool. Studio tracking uses the server-verified plan at request time, with separate Free/Paid/Anonymous counts and one event per accepted request even for multi-pass AI. Document whether a metric counts a started run or a successful action; canceled/failed saves and imports must not count as successful actions. Do not invent historical activity for newly instrumented features.
+
+Before completing a new feature, verify its real success/start path, cancellation/failure path and admin aggregation as applicable. Add its measurement definition to [`docs/FEATURE-USAGE.md`](/Users/alibahrawy/Documents/Coding/smoothyedit/docs/FEATURE-USAGE.md). Keep tracking independent of credit billing. Existing local-only/publication restrictions still apply: **desktop v2 is local only; do not commit, push or publish the app without a new instruction.**
+
+
 ## 1.5.1 app and website publication authorized — 2026-10-04
 
 The user explicitly requested: **“push everything the app and the website”** and will build Windows afterward. This authorizes committing/pushing the accumulated app/web work, publishing the verified signed/notarized **Mac 1.5.1** artifacts, then deploying the website. Earlier local-only/do-not-push notes below are historical and superseded for this release. Preserve the verified **Windows 1.5.0** installer, blockmap and `latest.yml` in the new release until the owner supplies Windows 1.5.1; do not label the existing Windows binary 1.5.1. Preserve the shared-stock build configuration and keep provider credentials server-side. Add the mandatory 1.5.1 website changelog and verify public download/update routes after publication.

@@ -4,6 +4,8 @@
 
 import { app, BrowserWindow, ipcMain, shell, dialog, Menu, clipboard } from 'electron';
 import { autoUpdater } from 'electron-updater';
+import './assets-image-ipc';
+import { createUpdateService } from './update-service';
 import Store from 'electron-store';
 import { initTelemetry, trackEvent, trackTool, startHeartbeat } from './telemetry';
 import path from 'path';
@@ -52,6 +54,7 @@ import {
   initializeTrial,
   getAuthState,
   login,
+  signup,
   logout,
   refreshUserData,
   getTrialStatus,
@@ -80,6 +83,7 @@ import {
   FormattedCaption
 } from './captions/caption-formatter';
 import * as whisperService from './captions/whisper-service';
+import { CAPTION_AUDIO_EXTENSIONS, CAPTION_VIDEO_EXTENSIONS, validateCaptionMediaPath } from './captions/media-input';
 import { checkCancellation } from './captions/download-file';
 import {
   stitchTimelineAudio,
@@ -95,6 +99,11 @@ import type { StudioShort } from './web-api';
 import { runShortsAnalysis, type ShortsAnalysisConfig } from './shorts-service';
 import { registerStockFootage } from './stock-footage-ipc';
 import { registerAudioLibrary } from './audio-library-ipc';
+import { registerPhotos } from './photo-ipc';
+import { registerStudioTools } from './studio-ipc';
+import { createStudioSourceService } from './studio-source-service';
+import { registerChat } from './chat-ipc';
+import { createAppPreferences, configureStudioPreference, assertStudioEnabled, studioPreferenceChanged, studioSignal } from './app-preferences';
 
 function swallowStdIOMaybeEpipe() {
   const handle = (err: any) => {
@@ -114,11 +123,33 @@ let mainWindow: BrowserWindow | null = null;
 const isMac = process.platform === 'darwin';
 const isWindows = process.platform === 'win32';
 const store = new Store();
+const appPreferences = createAppPreferences(store, () => mainWindow?.webContents.send('app-preferences-changed', appPreferences.snapshot()), trackTool);
+configureStudioPreference(() => appPreferences.snapshot().studioEnabled);
+let studioToolsService: ReturnType<typeof registerStudioTools> | null = null;
+let chatService: ReturnType<typeof registerChat> | null = null;
+ipcMain.handle('get-app-preferences', () => appPreferences.snapshot());
+for (const [channel, save] of [
+  ['save-chat-writing-prompt', (value: unknown) => appPreferences.saveChatWritingPrompt(value)],
+  ['reset-chat-writing-prompt', () => appPreferences.resetChatWritingPrompt()],
+] as const) ipcMain.handle(channel, (_, value) => {
+  try { return { success: true, ...save(value) }; }
+  catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not save writing preferences.' }; }
+});
+ipcMain.handle('set-studio-enabled', (_, value) => {
+  try {
+    const before = appPreferences.snapshot().studioEnabled;
+    const result = appPreferences.setStudioEnabled(value);
+    if (before !== result.studioEnabled) studioPreferenceChanged();
+    if (!result.studioEnabled) {
+      studioToolsService?.cancel(); studioSourceService.cancel(); chatService?.reset(); shortsJobController?.abort(); disconnectFromWebsite();
+    }
+    return { success: true, ...result };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not save preferences.' }; }
+});
 registerStockFootage({ store, window: () => mainWindow, connected: getConnectionStatus, importToPremiere: importStockFootageToNLE });
 let compressorEventsBound = false;
 
-// Cached GitHub release notes for the pending update (null = not fetched yet).
-let updateNotesCache: string | null = null;
+let updateService: ReturnType<typeof createUpdateService> | null = null;
 
 // Whether a caption/transcription job is currently running (for cancellation).
 let captionsJobActive = false;
@@ -138,14 +169,12 @@ async function fetchUpdateNotes(version: string): Promise<string | null> {
   if (token) headers.Authorization = `Bearer ${token}`;
 
   try {
-    const res = await fetch('https://api.github.com/repos/alibahrawy/smoothyapp/releases?per_page=20', { headers });
+    const res = await fetch(`https://api.github.com/repos/alibahrawy/smoothyapp/releases/tags/${encodeURIComponent(`v${version.replace(/^v/, '')}`)}`, {
+      headers, signal: AbortSignal.timeout(10000)
+    });
     if (!res.ok) return null;
-    const releases = await res.json() as Array<{ tag_name?: string; name?: string; body?: string }>;
-    const normalized = version.replace(/^v/, '');
-    const match = releases.find((r) =>
-      (r.tag_name || '').replace(/^v/, '') === normalized || (r.name || '').replace(/^v/, '') === normalized
-    );
-    return match?.body?.trim() || null;
+    const release = await res.json() as { body?: string };
+    return release.body?.trim() || null;
   } catch (err) {
     console.warn('[Updater] Failed to fetch release notes:', err instanceof Error ? err.message : err);
     return null;
@@ -155,18 +184,6 @@ async function fetchUpdateNotes(version: string): Promise<string | null> {
 function sendLog(level: string, message: string) {
   const timestamp = new Date().toLocaleTimeString();
   mainWindow?.webContents.send('log-message', { level, message, timestamp });
-}
-
-/** Compare dotted numeric versions: -1 when a < b, 1 when a > b, 0 when equal. */
-function compareVersions(a: string, b: string): number {
-  const pa = String(a).replace(/^v/, '').split('.').map((p) => parseInt(p, 10) || 0);
-  const pb = String(b).replace(/^v/, '').split('.').map((p) => parseInt(p, 10) || 0);
-  const len = Math.max(pa.length, pb.length);
-  for (let i = 0; i < len; i++) {
-    const diff = (pa[i] || 0) - (pb[i] || 0);
-    if (diff !== 0) return diff < 0 ? -1 : 1;
-  }
-  return 0;
 }
 
 function bindCompressorEventForwarding() {
@@ -446,10 +463,10 @@ function createWindow() {
     icon: path.join(__dirname, '../../build/icon.png')
   };
 
-  // macOS-specific: hidden title bar with traffic lights
+  // macOS: keep native traffic lights visible inside the compact shared bar.
   if (isMac) {
-    windowOptions.titleBarStyle = 'hiddenInset';
-    windowOptions.trafficLightPosition = { x: 15, y: 15 };
+    windowOptions.titleBarStyle = 'hidden';
+    windowOptions.trafficLightPosition = { x: 16, y: 12 };
   }
 
   // Windows-specific: native frame with no menu bar
@@ -495,6 +512,9 @@ app.whenReady().then(async () => {
   // Register the media protocol before loading the renderer. A window loaded
   // earlier keeps a URL loader without this scheme and every preview fails.
   await registerAudioLibrary({ store, window: () => mainWindow, connected: getConnectionStatus, importToPremiere: importAudioLibraryToNLE }).catch(error => console.error('[Audio Library]', error));
+  registerPhotos({ window: () => mainWindow, connected: getConnectionStatus, importToPremiere: file => importImageToNLE(file, 5) });
+  studioToolsService = registerStudioTools(() => mainWindow, () => appPreferences.snapshot().studioEnabled);
+  chatService = registerChat(() => mainWindow, () => appPreferences.snapshot().studioEnabled, () => appPreferences.snapshot().chatWritingPrompt || undefined, store);
   console.log('[App] Starting SmoothyEdit...');
 
   // Remove the default menu bar on Windows (File, Edit, View, etc.)
@@ -557,6 +577,7 @@ app.whenReady().then(async () => {
       mainWindow?.webContents.send('theme-sync', { theme });
     },
     onMessage: async (data) => {
+      if (!appPreferences.snapshot().studioEnabled) return;
       sendLog('info', `Website message: ${data.type}`);
 
       if (data.type === 'addMarkers' && data.markers) {
@@ -627,7 +648,7 @@ app.whenReady().then(async () => {
 
   // Try to connect to website if token exists
   const token = getConnectionToken();
-  if (token) {
+  if (token && appPreferences.snapshot().studioEnabled) {
     connectToWebsite();
   }
 
@@ -658,89 +679,21 @@ app.whenReady().then(async () => {
   // when the panel itself did not need reinstalling.
   writeCepBridgeConfig(getInstalledPanelPath(), bridgeToken);
 
-  // Auto-updater setup
-  autoUpdater.autoDownload = true;
-  autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.allowDowngrade = false;
   autoUpdater.logger = {
     info: (msg?: any) => console.log('[Updater]', msg),
     warn: (msg?: any) => console.warn('[Updater]', msg),
     error: (msg?: any) => console.error('[Updater]', msg),
     debug: (msg?: any) => console.log('[Updater:debug]', msg)
   } as any;
-  updateNotesCache = null;
-  autoUpdater.on('checking-for-update', () => {
-    console.log('[Updater] Checking for updates...');
-    mainWindow?.webContents.send('update-status', { status: 'checking' });
+  const updatesConfigured = app.isPackaged && fs.existsSync(path.join(process.resourcesPath, 'app-update.yml'));
+  updateService = createUpdateService({
+    updater: autoUpdater, store, packaged: app.isPackaged, configured: updatesConfigured, fetchNotes: fetchUpdateNotes,
+    send: status => mainWindow?.webContents.send('update-status', status)
   });
-
-  autoUpdater.on('update-available', (info) => {
-    console.log('[Updater] Update available:', info.version);
-    mainWindow?.webContents.send('update-status', { status: 'available', version: info.version });
-    updateNotesCache = null;
-    fetchUpdateNotes(info.version).then((notes) => {
-      updateNotesCache = notes;
-      mainWindow?.webContents.send('update-notes', { version: info.version, notes });
-    });
-  });
-
-  autoUpdater.on('update-not-available', () => {
-    console.log('[Updater] App is up to date');
-    mainWindow?.webContents.send('update-status', { status: 'up-to-date' });
-  });
-
-  autoUpdater.on('download-progress', (progress) => {
-    mainWindow?.webContents.send('update-status', {
-      status: 'downloading',
-      percent: Math.round(progress.percent)
-    });
-  });
-
-  autoUpdater.on('update-downloaded', (info) => {
-    console.log('[Updater] Update downloaded:', info.version);
-    // Remember the downloaded version so a relaunch that is still on the old
-    // version can be detected ("stuck" update) and surfaced to the user.
-    store.set('lastDownloadedUpdateVersion', info.version);
-    mainWindow?.webContents.send('update-status', { status: 'downloaded', version: info.version });
-
-    const emit = (notes: string | null) => mainWindow?.webContents.send('update-notes', { version: info.version, notes });
-    if (updateNotesCache !== null) {
-      emit(updateNotesCache);
-    } else {
-      fetchUpdateNotes(info.version).then((notes) => {
-        updateNotesCache = notes;
-        emit(notes);
-      });
-    }
-  });
-
-  autoUpdater.on('error', (err) => {
-    console.error('[Updater] Error:', err.message);
-    mainWindow?.webContents.send('update-status', { status: 'error', error: err.message });
-  });
-
-  // Check for updates (don't block app startup)
-  setTimeout(() => {
-    // If a previously downloaded update never actually installed (the running
-    // version is older than what was downloaded), tell the user explicitly and
-    // skip the automatic check — re-downloading the same broken update would
-    // just repeat the loop.
-    const lastDownloaded = store.get('lastDownloadedUpdateVersion') as string | null;
-    if (lastDownloaded && compareVersions(app.getVersion(), lastDownloaded) < 0) {
-      console.warn(`[Updater] Update to v${lastDownloaded} was downloaded but never installed`);
-      mainWindow?.webContents.send('update-status', { status: 'stuck', version: lastDownloaded });
-      return;
-    }
-
-    // The running version caught up with the last downloaded update — clear the flag.
-    if (lastDownloaded) {
-      store.delete('lastDownloadedUpdateVersion');
-    }
-
-    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-      console.error('[Updater] Check failed:', err.message);
-    });
-  }, 3000);
+  if (updatesConfigured) {
+    setTimeout(() => void updateService?.check(), 3000).unref();
+    setInterval(() => void updateService?.check(), 6 * 60 * 60 * 1000).unref();
+  }
 
   console.log('[App] Ready! Listening on ws://localhost:3456');
 });
@@ -772,8 +725,7 @@ ipcMain.handle('refresh-sequence', () => {
 });
 
 ipcMain.handle('start-autocut', async (_, config) => {
-  trackTool('multicam');
-  return runAutoCut(config);
+  return runAutoCut(config, () => trackTool('multicam'));
 });
 
 ipcMain.handle('start-silence-removal', async (_, config) => {
@@ -792,6 +744,7 @@ ipcMain.handle('get-connection-token', () => {
 });
 
 ipcMain.handle('connect-to-website', async () => {
+  if (!appPreferences.snapshot().studioEnabled) return { success: false, error: 'Studio AI is turned off in Settings.' };
   return await connectToWebsite();
 });
 
@@ -805,8 +758,9 @@ ipcMain.handle('get-website-connection-status', () => {
 });
 
 ipcMain.handle('export-audio-to-website', async () => {
-  trackTool('shorts');
   try {
+    assertStudioEnabled();
+    const signal = studioSignal();
     const seqInfo = getSequenceInfo();
     if (!seqInfo || !seqInfo.hasSequence) {
       return { success: false, error: 'No active sequence' };
@@ -819,7 +773,10 @@ ipcMain.handle('export-audio-to-website', async () => {
     }
 
     // Send to website
+    signal.throwIfAborted();
+    assertStudioEnabled();
     sendAudioToWebsite(result.audioBase64, seqInfo.name, seqInfo.duration);
+    trackTool('studio_audio_export');
 
     return { success: true };
   } catch (error) {
@@ -831,6 +788,7 @@ ipcMain.handle('export-audio-to-website', async () => {
 ipcMain.handle('clear-markers', async (_, options = {}) => {
   try {
     const result = await clearMarkersFromSequence(options.scope === 'all' ? 'all' : 'smoothy', options.sequenceId);
+    if (result.success) trackTool('markers_clear');
     return result;
   } catch (error) {
     console.error('[Main] Clear markers error:', error);
@@ -854,6 +812,7 @@ ipcMain.handle('export-subtitles', async () => {
       console.log('[Main] SRT saved to:', filePath);
 
       result.savedPath = filePath;
+      trackTool('subtitles_export');
     }
 
     return result;
@@ -865,12 +824,14 @@ ipcMain.handle('export-subtitles', async () => {
 
 // Auth handlers
 ipcMain.handle('auth-login', async (_, { email, password, totpCode }) => {
+  if (!appPreferences.snapshot().studioEnabled) return { success: false, error: 'Studio AI is turned off in Settings.' };
   const result = await login(email, password, totpCode);
+  if (result.success) trackTool('auth_login');
 
   // If login successful, auto-generate connection token and connect to website
-  if (result.success) {
+  if (result.success && appPreferences.snapshot().studioEnabled) {
     const token = await generateConnectionToken();
-    if (token) {
+    if (token && appPreferences.snapshot().studioEnabled) {
       saveConnectionToken(token);
       await connectToWebsite();
     }
@@ -879,7 +840,33 @@ ipcMain.handle('auth-login', async (_, { email, password, totpCode }) => {
   return result;
 });
 
+ipcMain.handle('auth-signup', async (_, input) => {
+  if (!appPreferences.snapshot().studioEnabled) return { success: false, error: 'Studio AI is turned off in Settings.' };
+  const result = await signup(input);
+  if (result.accountCreated) trackTool('auth_signup');
+  if (result.success && appPreferences.snapshot().studioEnabled) {
+    const token = await generateConnectionToken();
+    if (token && appPreferences.snapshot().studioEnabled) { saveConnectionToken(token); await connectToWebsite(); }
+  }
+  return result;
+});
+
+// Fixed inbox URLs: account addresses and credentials are never put in the URL.
+ipcMain.handle('auth-open-inbox', async (_, provider: string) => {
+  const inboxes: Record<string, string> = {
+    gmail: 'https://mail.google.com/mail/u/0/#inbox',
+    outlook: 'https://outlook.live.com/mail/0/inbox',
+    office: 'https://outlook.office.com/mail/inbox',
+    yahoo: 'https://mail.yahoo.com/',
+    icloud: 'https://www.icloud.com/mail',
+  };
+  if (!Object.hasOwn(inboxes, provider)) return { success: false, error: 'Choose your email provider.' };
+  try { await shell.openExternal(inboxes[provider]); trackTool('auth_open_inbox'); return { success: true }; }
+  catch { return { success: false, error: 'Could not open your inbox. Open your email app to find the verification link.' }; }
+});
+
 ipcMain.handle('auth-logout', () => {
+  chatService?.reset();
   logout();
   disconnectFromWebsite();
   return { success: true };
@@ -1002,6 +989,7 @@ ipcMain.handle('reformat-captions', async (_, input) => {
   if (![settings.maxCharsPerLine, settings.maxLines, settings.maxDurationSeconds].every(Number.isFinite) ||
       settings.maxCharsPerLine < 1 || settings.maxCharsPerLine > 120 || ![1, 2].includes(settings.maxLines) || settings.maxDurationSeconds <= 0 || settings.maxDurationSeconds > 30) return { success: false, error: 'Invalid caption settings.' };
   const captions = formatCaptions({ text: input.chunks.map((chunk: any) => chunk.text).join(' '), chunks: input.chunks }, settings);
+  trackTool('captions_reformat');
   return { success: true, captions };
 });
 
@@ -1039,14 +1027,9 @@ ipcMain.handle('generate-captions', async (_, config: {
         status: 'exporting',
         message: 'Preparing audio file...'
       });
-      try {
-        const normalized = await extractAudioTrack(audioPath, `caption_file_${Date.now()}`);
-        tempAudioFiles.push(normalized);
-        audioPath = normalized;
-      } catch (err) {
-        if (err instanceof Error && err.message === 'AUDIO_EXTRACTION_CANCELLED') throw err;
-        console.warn('[Captions] Could not normalize audio file, using it as-is:', err);
-      }
+      const normalized = await extractAudioTrack(audioPath, `caption_file_${Date.now()}`);
+      tempAudioFiles.push(normalized);
+      audioPath = normalized;
     }
 
     // If no audio path provided, extract from sequence using ffmpeg
@@ -1234,21 +1217,27 @@ ipcMain.handle('cancel-generate-captions', async () => {
   return { success: true };
 });
 
+ipcMain.handle('validate-caption-audio', async (_, input: unknown) => {
+  try { return { success: true, path: await validateCaptionMediaPath(input) }; }
+  catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not read this file.' }; }
+});
+
 ipcMain.handle('select-caption-audio', async () => {
   if (!mainWindow) return { canceled: true };
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Choose an audio or video file',
     properties: ['openFile'],
     filters: [
-      { name: 'Audio', extensions: ['mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'opus', 'wma', 'aiff', 'aif'] },
-      { name: 'Video', extensions: ['mp4', 'mov', 'mkv', 'avi', 'webm', 'm4v', 'mts', 'm2ts', 'mpg', 'mpeg'] },
+      { name: 'Audio', extensions: CAPTION_AUDIO_EXTENSIONS },
+      { name: 'Video', extensions: CAPTION_VIDEO_EXTENSIONS },
       { name: 'All Files', extensions: ['*'] }
     ]
   });
   if (result.canceled || !result.filePaths[0]) {
     return { canceled: true };
   }
-  return { canceled: false, path: result.filePaths[0] };
+  try { return { canceled: false, success: true, path: await validateCaptionMediaPath(result.filePaths[0]) }; }
+  catch (error) { return { canceled: false, success: false, error: error instanceof Error ? error.message : 'Could not read this file.' }; }
 });
 
 ipcMain.handle('save-captions', async (_, { format, content, fileName }: {
@@ -1279,6 +1268,7 @@ ipcMain.handle('save-captions', async (_, { format, content, fileName }: {
     }
 
     fs.writeFileSync(result.filePath, content, 'utf-8');
+    trackTool('captions_export');
     return { success: true, path: result.filePath };
   } catch (error) {
     console.error('[Main] Save captions error:', error);
@@ -1301,6 +1291,7 @@ ipcMain.handle('import-captions-to-premiere', async (_, captions: FormattedCapti
     fs.writeFileSync(srtPath, toSRT(captions), 'utf-8');
 
     const result = await sendCaptionsToNLE(srtPath);
+    if (result.success) trackTool('captions_premiere');
 
     return result;
   } catch (error) {
@@ -1392,6 +1383,7 @@ ipcMain.handle('get-shorts-history', async (_, page = 1) => {
 
 ipcMain.handle('add-shorts-markers', async (_, shorts: StudioShort[]) => {
   try {
+    assertStudioEnabled();
     if (!Array.isArray(shorts) || shorts.length === 0) {
       return { success: false, error: 'No shorts to send' };
     }
@@ -1402,6 +1394,7 @@ ipcMain.handle('add-shorts-markers', async (_, shorts: StudioShort[]) => {
       comment: short.description || short.reason || ''
     }));
     const result = await addMarkersToSequence(markers);
+    if (result.success) trackTool('shorts_markers');
     return result;
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to add markers' };
@@ -1418,42 +1411,17 @@ ipcMain.handle('get-shorts-youtube-transcript', async (_, url: string) => {
 });
 
 ipcMain.handle('copy-shorts-text', (_, text: string) => {
-  if (typeof text !== 'string' || text.length > 2_000_000) {
+  if (!appPreferences.snapshot().studioEnabled) return { success: false, error: 'Studio AI is turned off in Settings.' };
+  if (typeof text !== 'string' || !text.trim() || text.length > 2_000_000) {
     return { success: false, error: 'Could not copy this text.' };
   }
   clipboard.writeText(text);
+  trackTool('studio_copy');
   return { success: true };
 });
 
-let shortsJobActive = false;
-let shortsUsesAudio = false;
-ipcMain.handle('analyze-shorts', async (_, config: ShortsAnalysisConfig = {}) => {
-  if (!config || typeof config !== 'object') return { success: false, error: 'Choose a Shorts source.' };
-  if (!getAuthState().user) return studioErrorPayload(new webApi.NotSignedInError());
-  const needsAudio = !config.source || config.source === 'sequence' || config.source === 'audio';
-  if (shortsJobActive || (needsAudio && captionsJobActive)) {
-    return { success: false, error: 'Wait for the current analysis or transcription to finish.' };
-  }
-  trackTool('bestshorts');
-  shortsJobActive = true;
-  shortsUsesAudio = needsAudio;
-  const controller = new AbortController();
-  shortsJobController = controller;
-  const tempAudioFiles: string[] = [];
-  if (needsAudio) {
-    resetAudioExtractionCancel();
-    captionsJobActive = true;
-  }
-  const progress = (message: string) => mainWindow?.webContents.send('shorts-progress', { message });
 
-  try {
-    const result = await runShortsAnalysis(config, {
-      progress,
-      signal: controller.signal,
-      analyze: webApi.analyzeShorts,
-      saveHistory: webApi.saveShortsToHistory,
-      getCredits: webApi.getCredits,
-      prepareAudio: async (input) => {
+async function prepareStudioAudio(input: ShortsAnalysisConfig, signal: AbortSignal, progress: (message: string) => void, tempAudioFiles: string[]) {
         let audioPath: string;
         let fileName: string;
         let duration: number | undefined;
@@ -1497,19 +1465,77 @@ ipcMain.handle('analyze-shorts', async (_, config: ShortsAnalysisConfig = {}) =>
         if (!whisperService.isModelLoaded() || whisperService.getCurrentModelId() !== selectedModel) {
           progress('Preparing transcription engine…');
           await whisperService.loadModel(selectedModel, (p) => progress(p.status === 'downloading'
-            ? `Downloading model: ${p.progress || 0}%` : `Preparing: ${p.status}`), controller.signal);
+            ? `Downloading model: ${p.progress || 0}%` : `Preparing: ${p.status}`), signal);
         }
-        checkCancellation(controller.signal);
+        checkCancellation(signal);
         progress(language === 'auto' && !isEnglishOnlyModel(selectedModel)
           ? 'Detecting language and transcribing audio locally…'
           : `Transcribing ${getLanguageName(isEnglishOnlyModel(selectedModel) ? 'en' : language)} locally…`);
         const transcription = await whisperService.transcribe(audioPath, (p) => progress(p.status),
-          selectedModel, isEnglishOnlyModel(selectedModel) ? 'en' : language, controller.signal);
-        checkCancellation(controller.signal);
+          selectedModel, isEnglishOnlyModel(selectedModel) ? 'en' : language, signal);
+        checkCancellation(signal);
         const subtitleText = toSRT(formatCaptions(transcription, {}));
         if (!duration) duration = Math.max(0, ...transcription.chunks.map(chunk => chunk.timestamp[1])) || undefined;
         return { subtitleText, fileName, duration };
-      }
+}
+
+const studioSourceService = createStudioSourceService({
+  owner: () => getAuthState().user?.id || null,
+  enabled: () => appPreferences.snapshot().studioEnabled,
+  busy: () => captionsJobActive || shortsJobActive,
+  pickTranscript: async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Subtitles', extensions: ['txt', 'srt', 'vtt'] }] });
+    return result.canceled ? null : result.filePaths[0] || null;
+  },
+  readTranscript: async file => {
+    if (!/\.(txt|srt|vtt)$/i.test(file) || (await fs.promises.stat(file)).size > 5 * 1024 * 1024) throw new Error('Choose a TXT, SRT or VTT subtitle file smaller than 5 MB.');
+    return { subtitleText: await fs.promises.readFile(file, 'utf8'), fileName: path.basename(file) };
+  },
+  prepareAudio: async (input, signal) => {
+    captionsJobActive = true; resetAudioExtractionCancel();
+    const files: string[] = [];
+    try { return await prepareStudioAudio(input, signal, message => mainWindow?.webContents.send('studio-source-progress', { message }), files); }
+    finally { files.forEach(file => cleanupTempFile(file)); captionsJobActive = false; }
+  },
+  stopAudio: async () => { cancelAudioExtraction(); await whisperService.cancelTranscription(); },
+  track: trackTool,
+});
+ipcMain.handle('studio-source-import', async (_, input) => {
+  try { return { success: true, ...await studioSourceService.importSource(input) }; }
+  catch (error) { return studioErrorPayload(error); }
+});
+ipcMain.handle('studio-source-cancel', () => { studioSourceService.cancel(); return { success: true }; });
+
+let shortsJobActive = false;
+let shortsUsesAudio = false;
+ipcMain.handle('analyze-shorts', async (_, config: ShortsAnalysisConfig = {}) => {
+  if (!appPreferences.snapshot().studioEnabled) return { success: false, error: 'Studio AI is turned off in Settings.' };
+  if (!config || typeof config !== 'object') return { success: false, error: 'Choose a Shorts source.' };
+  if (!getAuthState().user) return studioErrorPayload(new webApi.NotSignedInError());
+  const needsAudio = !config.source || config.source === 'sequence' || config.source === 'audio';
+  if (shortsJobActive || studioSourceService.isBusy() || (needsAudio && captionsJobActive)) {
+    return { success: false, error: 'Wait for the current analysis or transcription to finish.' };
+  }
+  trackTool('bestshorts');
+  shortsJobActive = true;
+  shortsUsesAudio = needsAudio;
+  const controller = new AbortController();
+  shortsJobController = controller;
+  const tempAudioFiles: string[] = [];
+  if (needsAudio) {
+    resetAudioExtractionCancel();
+    captionsJobActive = true;
+  }
+  const progress = (message: string) => mainWindow?.webContents.send('shorts-progress', { message });
+
+  try {
+    const result = await runShortsAnalysis(config, {
+      progress,
+      signal: controller.signal,
+      analyze: webApi.analyzeShorts,
+      saveHistory: webApi.saveShortsToHistory,
+      getCredits: webApi.getCredits,
+      prepareAudio: input => prepareStudioAudio(input, controller.signal, progress, tempAudioFiles)
     });
     return { success: true, ...result };
   } catch (error) {
@@ -1534,25 +1560,20 @@ ipcMain.handle('cancel-analyze-shorts', async () => {
   return { success: true };
 });
 
-// Auto-updater handlers
-ipcMain.handle('install-update', () => {
-  // isForceRunAfter=true relaunches the app right after the installer finishes,
-  // so a completed update can never leave the user on the old version.
-  autoUpdater.quitAndInstall(false, true);
-});
-
-ipcMain.handle('check-for-updates', () => {
-  if (!app.isPackaged) {
-    mainWindow?.webContents.send('update-status', { status: 'dev-build' });
-    return;
-  }
-  autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-    console.error('[Updater] Manual check failed:', err.message);
-    mainWindow?.webContents.send('update-status', { status: 'error' });
-  });
-});
+// Update actions are scoped to the release the user actually reviewed.
+ipcMain.handle('install-update', (_event, version: unknown) => updateService?.install(version));
+ipcMain.handle('skip-update', (_event, version: unknown) => updateService?.skip(version));
+ipcMain.handle('get-update-state', () => updateService?.snapshot());
+ipcMain.handle('check-for-updates', () => updateService?.check(true));
 
 ipcMain.handle('get-app-version', () => app.getVersion());
+
+// Count decoded image previews / actual playback once per selection.
+ipcMain.handle('track-media-preview', (_, kind: unknown) => {
+  if (kind !== 'audio' && kind !== 'stock' && kind !== 'assets') return { success: false };
+  trackTool(kind === 'audio' ? 'audio_preview' : kind === 'assets' ? 'assets_preview' : 'stock_preview');
+  return { success: true };
+});
 
 // Premiere Bridge handlers
 ipcMain.handle('get-bridge-status', () => {

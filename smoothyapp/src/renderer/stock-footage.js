@@ -38,12 +38,19 @@ export function initStockFootage({ isConnected }) {
   }
   const duration = seconds => seconds > 0 ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}` : 'Duration unavailable';
   const version = file => file.width && file.height ? `${file.width} × ${file.height}${file.fps ? ' · ' + file.fps + ' fps' : ''}` : file.label || 'MP4 · Dimensions unavailable';
+  function setPreviewRatio(width, height) {
+    const player = el('preview-video');
+    if (width > 0 && height > 0) player.style.setProperty('--stock-preview-ratio', String(width / height));
+    else player.style.removeProperty('--stock-preview-ratio');
+  }
   function closePreview() {
     el('preview-video').pause(); el('preview-video').removeAttribute('src'); el('preview-video').load();
+    setPreviewRatio(0, 0);
     el('preview').classList.add('hidden'); data.selected = null; update();
   }
   function preview(video) {
     if (data.downloading) return;
+    previewTracked = false;
     data.selected = video;
     el('preview-title').textContent = `${video.title} · ${duration(video.duration)}`;
     el('preview-credit').textContent = `${sources[video.provider || 'commons'].name} · ${video.license} · ${video.creator} · View source ↗`;
@@ -59,6 +66,7 @@ export function initStockFootage({ isConnected }) {
     el('resolution').value = defaultFile.id;
     // Preview a small version; download resolution is independent.
     const previewFile = (video.provider === 'nasa' && video.files.find(file => file.label === 'Small MP4')) || video.files.find(file => file.width * file.height <= 1280 * 720) || video.files.at(-1);
+    setPreviewRatio(previewFile.width, previewFile.height);
     el('preview-video').poster = video.image;
     el('preview-video').src = previewFile.link;
     el('preview').classList.remove('hidden');
@@ -139,6 +147,14 @@ export function initStockFootage({ isConnected }) {
     if (link) { event.preventDefault(); api.openExternal(link.href); }
   });
   document.querySelectorAll('.nav-item').forEach(nav => nav.addEventListener('click', () => { if (nav.dataset.tab !== 'stock') el('preview-video').pause(); }));
+  let previewTracked = false;
+  el('preview-video').addEventListener('loadedmetadata', () => {
+    const player = el('preview-video');
+    if (data.selected) setPreviewRatio(player.videoWidth, player.videoHeight);
+  });
+  el('preview-video').addEventListener('playing', () => {
+    if (data.selected && !previewTracked) { previewTracked = true; void api.trackMediaPreview('stock'); }
+  });
   el('preview-video').addEventListener('error', () => { if (data.selected) message('action-status', 'Preview could not play. You can still download the MP4 or view it on the source page.', true); });
   api.onConnectionChange(update);
   api.onStockDownloadProgress(progress => {
@@ -154,4 +170,5 @@ export function initStockFootage({ isConnected }) {
     message('search-status', 'Search for a subject, place, or mood to find your next shot.'); update();
   }).catch(() => message('action-status', 'Could not load download settings. Restart the app and retry.', true));
   update();
+  return { isBusy: () => data.downloading || data.importing };
 }

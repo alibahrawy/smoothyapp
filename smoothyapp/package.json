@@ -1,6 +1,6 @@
 {
   "name": "smoothyedit",
-  "version": "1.5.1",
+  "version": "2.0.0",
   "description": "SmoothyEdit - AI-powered multicam editing for Premiere Pro",
   "main": "out/main/index.js",
   "author": "SmoothyEdit",
@@ -16,10 +16,15 @@
   },
   "dependencies": {
     "@fugood/whisper.node": "^1.0.15",
+    "adm-zip": "0.5.16",
     "electron-store": "^8.1.0",
     "electron-updater": "^6.7.3",
     "ffmpeg-static": "^5.3.0",
     "ffprobe-static": "^3.1.0",
+    "mammoth": "1.13.0",
+    "onnxruntime-node": "1.23.2",
+    "sharp": "0.34.5",
+    "unpdf": "1.8.1",
     "ws": "^8.14.2"
   },
   "devDependencies": {
@@ -27,7 +32,6 @@
     "electron-builder": "^24.9.1",
     "electron-icon-builder": "^2.0.1",
     "electron-vite": "^2.0.0",
-    "sharp": "^0.34.5",
     "vite": "^5.0.0"
   },
   "build": {
@@ -49,13 +53,19 @@
       "node_modules/ffmpeg-static/**/*",
       "node_modules/ffprobe-static/**/*",
       "node_modules/@fugood/whisper.node/**/*",
-      "node_modules/@fugood/node-whisper-*/**/*"
+      "node_modules/@fugood/node-whisper-*/**/*",
+      "node_modules/onnxruntime-node/**/*",
+      "node_modules/sharp/**/*",
+      "node_modules/@img/**/*"
     ],
     "asarUnpack": [
       "node_modules/ffmpeg-static/**/*",
       "node_modules/ffprobe-static/**/*",
       "node_modules/@fugood/whisper.node/**/*",
-      "node_modules/@fugood/node-whisper-*/**/*"
+      "node_modules/@fugood/node-whisper-*/**/*",
+      "node_modules/onnxruntime-node/**/*",
+      "node_modules/sharp/**/*",
+      "node_modules/@img/**/*"
     ],
     "extraResources": [
       {
@@ -64,6 +74,10 @@
         "filter": [
           "**/*"
         ]
+      },
+      {
+        "from": "build/local-image-models-LICENSES.txt",
+        "to": "local-image-models-LICENSES.txt"
       }
     ],
     "win": {

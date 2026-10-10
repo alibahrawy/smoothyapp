@@ -93,14 +93,14 @@ async function telemetry(disabled = false) {
   return module;
 }
 
-test('Assets telemetry contains only the anonymous install and action metadata', async () => {
+test('Assets and Chat telemetry contain only the anonymous install and action metadata', async () => {
   const original = globalThis.fetch;
   const payloads = [];
   try {
     globalThis.fetch = async (_url, options) => { payloads.push(JSON.parse(options.body)); return new Response(); };
     const client = await telemetry();
-    client.trackTool('assets_export'); client.trackTool('assets_premiere');
-    assert.deepEqual(payloads.map(p => p.tool), ['assets_export', 'assets_premiere']);
+    for (const id of ['assets_export', 'assets_premiere', 'assets_preview', 'assets_remove_background', 'assets_upscale', 'chat_reply', 'chat_copy', 'chat_save', 'chat_attach', 'chat_natural_reply', 'chat_writing_save', 'studio_transcript_import', 'studio_copy']) client.trackTool(id);
+    assert.deepEqual(payloads.map(p => p.tool), ['assets_export', 'assets_premiere', 'assets_preview', 'assets_remove_background', 'assets_upscale', 'chat_reply', 'chat_copy', 'chat_save', 'chat_attach', 'chat_natural_reply', 'chat_writing_save', 'studio_transcript_import', 'studio_copy']);
     for (const payload of payloads) {
       assert.deepEqual(Object.keys(payload).sort(), ['appVersion', 'event', 'installId', 'platform', 'tool']);
       assert.equal(payload.event, 'tool_run');
@@ -109,15 +109,16 @@ test('Assets telemetry contains only the anonymous install and action metadata',
   } finally { globalThis.fetch = original; }
 });
 
-test('Assets actions respect the existing telemetry opt-out', async () => {
+test('Assets and Chat actions respect the existing telemetry opt-out', async () => {
   const original = globalThis.fetch;
   try {
     globalThis.fetch = async () => { throw new Error('Telemetry must not send'); };
     const client = await telemetry(true);
     let calls = 0;
     globalThis.fetch = async () => { calls++; return new Response(); };
-    client.trackTool('assets_export'); client.trackTool('assets_premiere');
+    for (const id of ['assets_export', 'assets_premiere', 'assets_preview', 'assets_remove_background', 'assets_upscale', 'chat_reply', 'chat_copy', 'chat_save', 'chat_attach', 'chat_natural_reply', 'chat_writing_save', 'studio_transcript_import', 'studio_copy']) client.trackTool(id);
     assert.equal(calls, 0);
+    assert.doesNotThrow(() => client.trackTool('assets_export'));
   } finally { globalThis.fetch = original; }
 });
 

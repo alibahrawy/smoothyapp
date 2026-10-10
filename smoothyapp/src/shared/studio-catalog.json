@@ -1,0 +1,47 @@
+[
+  {
+    "id": "condense",
+    "label": "Condense plan",
+    "description": "Suggest source ranges for a shorter edit. You arrange the footage and make the final cut."
+  },
+  {
+    "id": "hook",
+    "label": "Hook ideas",
+    "description": "Suggest opening moments and wording from your transcript. You choose and edit the opening."
+  },
+  {
+    "id": "title",
+    "label": "Title drafts",
+    "description": "Draft title options for you to review and publish."
+  },
+  {
+    "id": "description",
+    "label": "Descriptions",
+    "description": "Draft upload descriptions. Check the facts, timestamps and links before publishing."
+  },
+  {
+    "id": "thumbnail",
+    "label": "Thumbnail ideas",
+    "description": "Suggest thumbnail concepts. You design the finished thumbnail."
+  },
+  {
+    "id": "broll",
+    "label": "B-roll ideas",
+    "description": "Suggest visuals and source timestamps. You find and place the footage."
+  },
+  {
+    "id": "twitter",
+    "label": "Social posts",
+    "description": "Draft social posts for you to check and publish."
+  },
+  {
+    "id": "blog",
+    "label": "Video to blog",
+    "description": "Turn your transcript into a blog draft for you to edit."
+  },
+  {
+    "id": "sfx",
+    "label": "SFX ideas",
+    "description": "Suggest sound-effect cues. You source licensed audio and add it to your timeline."
+  }
+]

@@ -16,6 +16,8 @@ import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { randomUUID } from 'crypto';
+import { DEFAULT_CAPTION_LANGUAGE } from './languages';
 import {
   ensureModelDownloaded,
   getModelFilePath
@@ -276,9 +278,10 @@ export async function transcribe(
     throw new Error(`Model file missing: ${modelPath}`);
   }
 
-  const lang = language && language.trim() ? language.trim() : 'en';
+  const lang = language && language.trim() ? language.trim() : DEFAULT_CAPTION_LANGUAGE;
 
-  const outBase = path.join(os.tmpdir(), `smoothyedit-whisper-${Date.now()}`);
+  // Separate app instances must not read/delete each other's native output.
+  const outBase = path.join(os.tmpdir(), `smoothyedit-whisper-${randomUUID()}`);
   const threads = os.cpus().length;
   const jsonPath = `${outBase}.json`;
 
@@ -290,7 +293,9 @@ export async function transcribe(
       '-oj',            // JSON output
       '-of', outBase,
       '-t', String(threads),
+      '-mc', '0',       // don't feed prior guesses into later audio windows (repetition loops)
       '-ml', '50',      // max segment length (chars) -> short phrases
+      '-sow',           // split at words: token boundaries can bisect Arabic words/UTF-8
       '-pp'             // print progress
     ];
 

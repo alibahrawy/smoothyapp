@@ -1,0 +1,32 @@
+{
+  "google": {
+    "domain": "google.com",
+    "source": "https://t0.gstatic.com/faviconV2?client=SOCIAL&fallback_opts=TYPE%2CSIZE%2CURL&size=128&type=FAVICON&url=https%3A%2F%2Fgoogle.com",
+    "bytes": 2326
+  },
+  "openai": {
+    "domain": "openai.com",
+    "source": "https://t0.gstatic.com/faviconV2?client=SOCIAL&fallback_opts=TYPE%2CSIZE%2CURL&size=128&type=FAVICON&url=https%3A%2F%2Fopenai.com",
+    "bytes": 1829
+  },
+  "black-forest-labs": {
+    "domain": "bfl.ai",
+    "source": "https://t0.gstatic.com/faviconV2?client=SOCIAL&fallback_opts=TYPE%2CSIZE%2CURL&size=128&type=FAVICON&url=https%3A%2F%2Fbfl.ai",
+    "bytes": 1124
+  },
+  "bytedance-seed": {
+    "domain": "seed.bytedance.com",
+    "source": "https://t0.gstatic.com/faviconV2?client=SOCIAL&fallback_opts=TYPE%2CSIZE%2CURL&size=128&type=FAVICON&url=https%3A%2F%2Fseed.bytedance.com",
+    "bytes": 777
+  },
+  "x-ai": {
+    "domain": "x.ai",
+    "source": "https://t0.gstatic.com/faviconV2?client=SOCIAL&fallback_opts=TYPE%2CSIZE%2CURL&size=128&type=FAVICON&url=https%3A%2F%2Fx.ai",
+    "bytes": 1152
+  },
+  "sourceful": {
+    "domain": "sourceful.com",
+    "source": "https://t0.gstatic.com/faviconV2?client=SOCIAL&fallback_opts=TYPE%2CSIZE%2CURL&size=128&type=FAVICON&url=https%3A%2F%2Fsourceful.com",
+    "bytes": 1188
+  }
+}

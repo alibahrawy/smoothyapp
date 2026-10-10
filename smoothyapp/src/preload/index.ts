@@ -5,6 +5,29 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  getAppPreferences: () => ipcRenderer.invoke('get-app-preferences'),
+  setStudioEnabled: (value: boolean) => ipcRenderer.invoke('set-studio-enabled', value),
+  saveChatWritingPrompt: (value: string) => ipcRenderer.invoke('save-chat-writing-prompt', value),
+  resetChatWritingPrompt: () => ipcRenderer.invoke('reset-chat-writing-prompt'),
+  onAppPreferencesChanged: (callback: (data: any) => void) => ipcRenderer.on('app-preferences-changed', (_, data) => callback(data)),
+  studioSourceImport: (input: { source: 'transcript' | 'sequence' | 'audio'; audioPath?: string }) => ipcRenderer.invoke('studio-source-import', input),
+  studioSourceCancel: () => ipcRenderer.invoke('studio-source-cancel'),
+  onStudioSourceProgress: (callback: (data: { message: string }) => void) => { ipcRenderer.on('studio-source-progress', (_, data) => callback(data)); },
+  studioToolsRun: (input: unknown) => ipcRenderer.invoke('studio-tools-run', input),
+  studioToolsCancel: () => ipcRenderer.invoke('studio-tools-cancel'),
+  studioToolsHistory: (input: { mode: string; page: number }) => ipcRenderer.invoke('studio-tools-history', input),
+  studioToolsCopy: (text: string) => ipcRenderer.invoke('studio-tools-copy', text),
+  studioToolsSave: (input: { mode: string; text: string }) => ipcRenderer.invoke('studio-tools-save', input),
+  photosRun: (input: unknown) => ipcRenderer.invoke('photos-run', input),
+  photosHistory: (input: { page?: number; favorites?: boolean }) => ipcRenderer.invoke('photos-history', input),
+  photosFavorite: (input: { id: string; active: boolean }) => ipcRenderer.invoke('photos-favorite', input),
+  photosDelete: (id: string) => ipcRenderer.invoke('photos-delete', id),
+  photosReset: () => ipcRenderer.invoke('photos-reset'),
+  photosSave: (id: string) => ipcRenderer.invoke('photos-save', id),
+  photosCopy: (id: string) => ipcRenderer.invoke('photos-copy', id),
+  photosPreview: (id: string) => ipcRenderer.invoke('photos-preview', id),
+  photosPremiere: (id: string) => ipcRenderer.invoke('photos-premiere', id),
+  trackMediaPreview: (kind: 'audio' | 'stock' | 'assets') => ipcRenderer.invoke('track-media-preview', kind),
   // Get current status
   getStatus: () => ipcRenderer.invoke('get-status'),
 
@@ -49,6 +72,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('generate-captions', config),
   cancelCaptions: () => ipcRenderer.invoke('cancel-generate-captions'),
   selectCaptionAudio: () => ipcRenderer.invoke('select-caption-audio'),
+  validateCaptionAudio: (filePath: string) => ipcRenderer.invoke('validate-caption-audio', filePath),
   saveCaptions: (options: { format: string; content: string; fileName?: string }) =>
     ipcRenderer.invoke('save-captions', options),
   importCaptionsToPremiere: (captions: any[]) =>
@@ -66,6 +90,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Auth
   login: (email: string, password: string, totpCode?: string) =>
     ipcRenderer.invoke('auth-login', { email, password, totpCode }),
+  signup: (input: { name: string; email: string; password: string }) => ipcRenderer.invoke('auth-signup', input),
+  openInbox: (provider: string) => ipcRenderer.invoke('auth-open-inbox', provider),
   logout: () => ipcRenderer.invoke('auth-logout'),
   getAuthState: () => ipcRenderer.invoke('auth-get-state'),
   refreshAuth: () => ipcRenderer.invoke('auth-refresh'),
@@ -87,7 +113,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setShowLogs: (value: boolean) => ipcRenderer.invoke('set-show-logs', value),
 
   // Auto-updater
-  installUpdate: () => ipcRenderer.invoke('install-update'),
+  installUpdate: (version: string) => ipcRenderer.invoke('install-update', version),
+  skipUpdate: (version: string) => ipcRenderer.invoke('skip-update', version),
+  getUpdateState: () => ipcRenderer.invoke('get-update-state'),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
@@ -102,6 +130,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setCepPath: (customPath?: string) => ipcRenderer.invoke('set-cep-path', customPath),
   browseCepPath: () => ipcRenderer.invoke('browse-cep-path'),
 
+  // Text chat: signed requests and fixed, inexpensive models only.
+  chatRun: (input: any) => ipcRenderer.invoke('chat-run', input),
+  onChatChunk: (callback: (data: { requestId: string; delta: string }) => void) => {
+    const listener = (_: unknown, data: { requestId: string; delta: string }) => callback(data);
+    ipcRenderer.on('chat-chunk', listener);
+    return () => ipcRenderer.removeListener('chat-chunk', listener);
+  },
+  chatCancel: () => ipcRenderer.invoke('chat-cancel'),
+  chatReset: () => ipcRenderer.invoke('chat-reset'),
+  chatAttach: (kind: 'image' | 'file', slots: number) => ipcRenderer.invoke('chat-attach', kind, slots),
+  chatRelease: (ids: string[]) => ipcRenderer.invoke('chat-release', ids),
+  chatHistoryList: () => ipcRenderer.invoke('chat-history-list'),
+  chatHistorySave: (conversationId: string | null, turns: any[]) => ipcRenderer.invoke('chat-history-save', conversationId, turns),
+  chatHistoryLoad: (conversationId: string) => ipcRenderer.invoke('chat-history-load', conversationId),
+  chatHistoryDelete: (conversationId: string) => ipcRenderer.invoke('chat-history-delete', conversationId),
+  chatCopy: (text: string) => ipcRenderer.invoke('chat-copy', text),
+  chatSave: (text: string) => ipcRenderer.invoke('chat-save', text),
+
   // Assets (SVG / image -> PNG)
   assetsGetOutputFolder: () => ipcRenderer.invoke('assets-get-output-folder'),
   assetsSelectOutputFolder: (defaultPath?: string) => ipcRenderer.invoke('assets-select-output-folder', defaultPath),
@@ -110,6 +156,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   assetsSendToPremiere: (options: { fileName: string; bytes: Uint8Array; durationSeconds?: number }) =>
     ipcRenderer.invoke('assets-send-to-premiere', options),
   assetsReadClipboard: () => ipcRenderer.invoke('assets-read-clipboard'),
+  assetsProcessImage: (options: { operation: 'remove-background' | 'upscale'; bytes: Uint8Array; factor?: number }) => ipcRenderer.invoke('assets-process-image', options),
+  assetsCancelProcessing: () => ipcRenderer.invoke('assets-cancel-processing'),
+  onAssetsProcessingProgress: (callback: (data: any) => void) => ipcRenderer.on('assets-processing-progress', (_, data) => callback(data)),
 
   // Local audio collection and no-key Wikimedia Commons stock footage
   audioLibraryState: () => ipcRenderer.invoke('audio-library-state'),
@@ -207,9 +256,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateStatus: (callback: (data: any) => void) => {
     ipcRenderer.on('update-status', (_, data) => callback(data));
   },
-  onUpdateNotes: (callback: (data: { version: string; notes: string | null }) => void) => {
-    ipcRenderer.on('update-notes', (_, data) => callback(data));
-  },
+
 
   // Log streaming from main process
   onLogMessage: (callback: (data: { level: string; message: string; timestamp: string }) => void) => {

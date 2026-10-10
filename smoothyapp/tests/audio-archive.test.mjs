@@ -45,6 +45,20 @@ test('genre browsing works without a query, combines mood/search, and keeps coun
  assert.equal(first.categories.reduce((total, item) => total + (item.id === 'all' ? 0 : item.count), 0), all.length);
  for (const input of [{ category: '../files' }, { category: ['cinematic'] }, { mood: 'unavailable' }]) await assert.rejects(service.search(input), /available audio type/);
 }));
+test('exact artist filtering searches the entire catalog before pagination and excludes title-only matches', async () => fixture(async dir => {
+ const index = JSON.parse(await readFile(new URL('../src/main/data/audio-archive-tags.json', import.meta.url), 'utf8')).tracks;
+ const entries = Object.entries(index).filter(([, entry]) => entry[3] === 'Kevin MacLeod').slice(0, 45);
+ const all = [...entries.map(([id, entry]) => ({ id, name: entry[0] + '.mp3', mimeType: 'audio/mpeg' })), ...catalog.all,
+   { id: 'titlematch'.padEnd(30, 'b'), name: 'Kevin_MacLeod.mp3', mimeType: 'audio/mpeg' }];
+ const service = new AudioArchive(dir, async () => Response.json({ all }));
+ const first = await service.search({ artist: ' kevin macleod ', shuffleSeed: 42 });
+ const last = await service.search({ artist: 'Kevin MacLeod', shuffleSeed: 42, offset: 40 });
+ assert.equal(first.total, 45); assert.equal(first.tracks.length, 40); assert.equal(last.tracks.length, 5);
+ assert.ok([...first.tracks, ...last.tracks].every(track => track.artist === 'Kevin MacLeod'));
+ assert.equal(new Set([...first.tracks, ...last.tracks].map(track => track.id)).size, 45);
+ assert.equal((await service.search({ artist: 'Kevin' })).total, 0);
+ for (const artist of [3, {}, 'x'.repeat(301)]) await assert.rejects(service.search({ artist }), /Choose an artist/);
+}));
 test('title search, bounded pagination, cache reuse and concurrent requests use one public catalog request', async () => fixture(async dir => {
  const all = Array.from({ length: 85 }, (_, i) => ({ id: 'track'.padEnd(25, 'a') + i, name: `Jazz_Rain_${String(i).padStart(2, '0')}.mp3`, mimeType: 'audio/mpeg' }));
  let count = 0; const service = new AudioArchive(dir, async (url, options) => { count++; assert.equal(url, AUDIO_ARCHIVE_URL); assert.equal(options.credentials, 'omit'); return Response.json({ all }); });

@@ -34,9 +34,7 @@ app.whenReady().then(async () => {
     await win.loadFile(path.join(root, 'out/renderer/index.html')); await pause(250);
     assert.equal(await js(`document.getElementById('autocut-btn').disabled`), false);
     assert.match(await js(`document.getElementById('video-tracks-list').textContent`), /Camera nest 1/);
-    assert.match(await js(`document.getElementById('multicam-update-notice').textContent`), /It should now work correctly in 1.5.1/);
-    assert.match(await js(`document.getElementById('multicam-update-notice').textContent`), /supports source clips and nested sequences/);
-    assert.equal(await js(`document.getElementById('multicam-update-notice').classList.contains('hidden')`), false);
+    assert.equal(await js(`document.getElementById('multicam-update-notice')`), null);
     const captures = path.resolve(root, '..', 'docs/reviews/smoothyapp-1.5.1'); fs.mkdirSync(captures, { recursive: true });
     for (const windows of [false, true]) for (const [width, height] of [[900, 700], [600, 500]]) {
       await js(`window.electronAPI.__emit('onPlatformInfo',{isWindows:${windows},isMac:${!windows}})`);
@@ -49,9 +47,6 @@ app.whenReady().then(async () => {
         if (!windows && !collapsed) fs.writeFileSync(path.join(captures, `multicam-nests-${width}x${height}.png`), (await win.webContents.capturePage()).toPNG());
       }
     }
-    await js(`document.querySelector('[data-multicam-support]').click();document.getElementById('multicam-update-dismiss').click()`);
-    assert.equal(await js(`document.getElementById('multicam-update-notice').classList.contains('hidden')`), true);
-    assert.equal((await js(`window.electronAPI.__calls()`)).find(call => call.name === 'openExternal').args[0], 'https://discord.gg/KmJRqUZzDe');
     await js(`document.getElementById('autocut-btn').click()`); await pause(30);
     const request = (await js(`window.electronAPI.__calls()`)).find(call => call.name === 'startAutoCut').args[0];
     assert.equal(request.options.sequenceId, sequence.id); assert.equal(request.options.timelineRevision, sequence.timelineRevision);
@@ -63,7 +58,7 @@ app.whenReady().then(async () => {
     assert.equal(await js(`document.getElementById('multicam-review-warnings').querySelector('camera')`), null);
     assert.match(await js(`document.getElementById('footer-status').textContent`), /Review the warnings/);
     assert.equal(await js(`document.getElementById('multicam-result-notice').classList.contains('hidden')`), false);
-    assert.equal(await js(`document.getElementById('multicam-update-notice').classList.contains('hidden')`), true);
+    assert.equal(await js(`document.getElementById('multicam-update-notice')`), null);
     await js(`document.querySelector('.speaker-camera[data-track-index="0"]').value='1';document.querySelector('.speaker-camera[data-track-index="1"]').value='0';document.getElementById('autocut-btn').click()`); await pause(30);
     const reversed = (await js(`window.electronAPI.__calls()`)).filter(call => call.name === 'startAutoCut').at(-1).args[0];
     assert.deepEqual(reversed.sources.map(source => source.camera), [1, 0]);
@@ -72,13 +67,13 @@ app.whenReady().then(async () => {
     const button = await js(`(() => {const b=document.getElementById('autocut-btn').getBoundingClientRect();return {bottom:b.bottom,height:innerHeight};})()`);
     assert.ok(button.bottom <= button.height + 1);
     const loaded = new Promise(resolve => win.webContents.once('did-finish-load', resolve)); win.reload(); await loaded; await pause(250);
-    assert.equal(await js(`document.getElementById('multicam-update-notice').classList.contains('hidden')`), true);
+    assert.equal(await js(`document.getElementById('multicam-update-notice')`), null);
     if (process.env.SMOOTHY_TEST_RENDERER) {
       await win.loadFile(process.env.SMOOTHY_TEST_RENDERER); await pause(250);
-      assert.equal(await js(`document.getElementById('multicam-update-notice').classList.contains('hidden')`), true);
+      assert.equal(await js(`document.getElementById('multicam-update-notice')`), null);
     }
     assert.equal(failures.length, 0, failures.join('\n'));
-    console.log('Multicam update notice, external support links, dismissal/reload persistence, independent job warnings, nested/reversed mapping and Mac/Windows layouts passed at 900×700 / 600×500 with both sidebar states.');
+    console.log('Old Multicam announcement removed; independent job warnings, nested/reversed mapping and Mac/Windows layouts passed at 900×700 / 600×500 with both sidebar states.');
     win.destroy(); app.quit();
   } catch (error) { console.error(error); win.destroy(); app.exit(1); }
 });

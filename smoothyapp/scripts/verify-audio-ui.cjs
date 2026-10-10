@@ -31,6 +31,7 @@ Object.assign(api, {
   if(input.view==='favorites')tracks=tracks.filter(t=>community.favorites.includes(t.id));if(input.view==='staff')tracks=tracks.filter(t=>community.staffPicks.includes(t.id));
   if(input.category==='cinematic')tracks=tracks.filter(t=>t.genre==='Cinematic');if(input.mood)tracks=tracks.filter(t=>t.mood===input.mood);
   if(input.query)tracks=tracks.filter(t=>[t.title,t.artist].join(' ').toLowerCase().includes(input.query.toLowerCase()));
+  if(input.artist)tracks=tracks.filter(t=>t.artist.toLowerCase()===input.artist.trim().toLowerCase());
   return {success:true,tracks:tracks.slice(input.offset,input.offset+40),total:tracks.length,hasMore:input.offset+40<tracks.length,offset:input.offset,categories:[{id:'all',label:'All tracks',count:43},{id:'cinematic',label:'Cinematic',count:21},{id:'jazz-blues',label:'Jazz & Blues',count:22}],moods:[{label:'Calm',count:22},{label:'Dramatic',count:21}]};
  },
  audioArchiveDownload:input=>{calls.push({name:'audioArchiveDownload',args:[input]});return new Promise(resolve=>resolveArchive=resolve);},
@@ -65,6 +66,7 @@ Object.assign(api, {
  stockSelectFolder:async()=>({success:true,folder:'/fixture/New Stock Folder'}),
  openExternal:async url=>{calls.push({name:'openExternal',args:[url]});},
  __calls:()=>calls,
+ __savedTracks:tracks=>{audioState.tracks=tracks.map(track=>({...track,previewUrl:'data:audio/wav;base64,'+fixtureAudio}));emitAudio();},
  __useFlakyAudio:()=>{previewOverride='smoothy-audio://preview/retry';},
  __enablePixabay:()=>{pixabayEnabled=true;},
  __emitConnection:connected=>{for(const callback of callbacks.onConnectionChange||[])callback({connected,nle:'premiere'});},
@@ -78,15 +80,60 @@ app.whenReady().then(async()=>{
  const win=new BrowserWindow({width:1100,height:750,show:false,webPreferences:{preload,contextIsolation:true,nodeIntegration:false}});
  const errors=[];win.webContents.on('console-message',event=>{if(event.level==='error')errors.push(event.message)});
  const js=code=>win.webContents.executeJavaScript(code), pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
- const snap=async name=>{const dest=path.resolve(root,'../docs/reviews/smoothyapp-1.5.1/audio-refresh');fs.mkdirSync(dest,{recursive:true});fs.writeFileSync(path.join(dest,name+'.png'),(await win.webContents.capturePage()).toPNG());};
+ const snap=async name=>{const dest=process.env.SMOOTHY_REVIEW_DIR||path.resolve(root,'../docs/reviews/smoothyapp-1.5.1/audio-refresh');fs.mkdirSync(dest,{recursive:true});fs.writeFileSync(path.join(dest,name+'.png'),(await win.webContents.capturePage()).toPNG());};
+ const until=async code=>{for(let i=0;i<80;i++){if(await js(code))return;await pause(50);}assert.ok(await js(code),code);};
  try {
- await win.loadFile(path.join(root,'out/renderer/index.html'));await pause(150);
+ await win.loadFile(process.env.SMOOTHY_TEST_RENDERER||path.join(root,'out/renderer/index.html'));await pause(150);
  await js(`document.querySelector('[data-tab="audio"]').click()`);await pause(80);
  assert.equal(await js(`document.querySelectorAll('#audio-archive-results tr').length`),40);
  const initialSeed=await js(`window.electronAPI.__calls().filter(call=>call.name==='audioArchiveSearch').at(-1).args[0].shuffleSeed`);
  assert.ok(Number.isInteger(initialSeed)&&initialSeed>=0&&initialSeed<=0xFFFFFFFF);
  assert.deepEqual(await js(`Array.from(document.querySelectorAll('#audio-archive-panel th')).slice(2).map(el=>el.textContent)`),['Track title','Genre','Mood','Artist','Duration','License type']);
  assert.equal(await js(`document.querySelectorAll('#audio-archive-results script').length`),0);
+ // Exercise registered OS handlers, focused keyboard buttons and actual natural endings.
+ await js(`window.mediaActions={};const register=navigator.mediaSession.setActionHandler.bind(navigator.mediaSession);navigator.mediaSession.setActionHandler=(name,handler)=>{mediaActions[name]=handler;register(name,handler);};document.querySelector('#audio-archive-results .audio-row-play').click()`);
+ await until(`document.getElementById('audio-dock-player').currentTime>.1`);
+ assert.equal(await js(`navigator.mediaSession.metadata.title`),'<script>Jazz</script>');
+ await js(`mediaActions.pause();mediaActions.pause()`);assert.equal(await js(`document.getElementById('audio-dock-player').paused`),true);
+ await js(`mediaActions.play();mediaActions.play()`);await until(`!document.getElementById('audio-dock-player').paused`);
+ await js(`mediaActions.nexttrack()`);await until(`document.getElementById('audio-dock-title').textContent==='Archive Track 1'`);
+ await js(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'MediaTrackPrevious',bubbles:true,cancelable:true}))`);await until(`document.getElementById('audio-dock-title').textContent==='<script>Jazz</script>'`);
+ await js(`document.dispatchEvent(new KeyboardEvent('keydown',{key:'MediaPlayPause',bubbles:true,cancelable:true}))`);assert.equal(await js(`document.getElementById('audio-dock-player').paused`),true);
+ await js(`mediaActions.play()`);await until(`document.getElementById('audio-dock-player').readyState>=2`);
+ await js(`document.getElementById('audio-dock-player').currentTime=document.getElementById('audio-dock-player').duration-.1`);
+ await until(`document.getElementById('audio-dock-title').textContent==='Archive Track 1'`);
+ assert.equal(await js(`navigator.mediaSession.metadata.title`),'Archive Track 1');
+ await js(`document.querySelector('#audio-archive-results tr[data-id="archive-39"] .audio-row-play').click()`);
+ await until(`document.getElementById('audio-dock-player').readyState>=2`);
+ await js(`document.getElementById('audio-dock-player').currentTime=document.getElementById('audio-dock-player').duration-.1`);
+ await until(`document.getElementById('audio-dock-title').textContent==='Archive Track 40'`);
+ assert.equal(await js(`document.querySelectorAll('#audio-archive-results tr').length`),43);
+ assert.equal(await js(`window.electronAPI.__calls().filter(c=>c.name==='audioArchiveSearch').at(-1).args[0].background`),true);
+ await js(`document.getElementById('audio-view-all').click()`);await pause(80);
+ await js(`document.querySelector('#audio-archive-results tr[data-id="archive-1"] .audio-artist-link').click()`);await pause(80);
+ assert.equal(await js(`document.querySelectorAll('#audio-archive-results tr').length`),1);
+ assert.equal(await js(`document.getElementById('audio-archive-artist-name').textContent`),'Artist: Artist B');
+ assert.equal(await js(`document.getElementById('audio-archive-genre').value`),'all');
+ await snap('artist-filter');
+ await js(`document.getElementById('audio-archive-clear-artist').click()`);await pause(80);
+ await js(`document.querySelector('#audio-archive-results tr[data-id="archive-1"] .audio-row-play').click();document.getElementById('audio-dock-artist').click()`);await pause(80);
+ assert.equal(await js(`document.querySelectorAll('#audio-archive-results tr').length`),1);
+ assert.equal(await js(`document.getElementById('audio-archive-artist-filter').classList.contains('hidden')`),false);
+ await js(`window.electronAPI.__savedTracks([{id:'00000000-0000-4000-8000-000000000011',title:'Keep First',artist:'Artist A',license:'unverified'},{id:'00000000-0000-4000-8000-000000000012',title:'Skip This',artist:'Other Artist',license:'unverified'},{id:'00000000-0000-4000-8000-000000000013',title:'Keep Last',artist:'Artist A',license:'unverified'}]);document.getElementById('audio-view-saved').click();document.getElementById('audio-query').value='Keep';document.getElementById('audio-query').dispatchEvent(new Event('input'))`);await pause(80);
+ assert.equal(await js(`document.querySelectorAll('#audio-results tr').length`),2);
+ await js(`document.querySelector('#audio-results .audio-row-play').click()`);await until(`document.getElementById('audio-dock-player').readyState>=2`);
+ await js(`document.getElementById('audio-dock-player').currentTime=document.getElementById('audio-dock-player').duration-.1`);await until(`document.getElementById('audio-dock-title').textContent==='Keep Last'`);
+ assert.equal(await js(`document.getElementById('audio-dock-next').disabled`),true);
+ await js(`mediaActions.previoustrack()`);await until(`document.getElementById('audio-dock-title').textContent==='Keep First'`);
+ await js(`document.querySelector('#audio-results .audio-artist-link').click()`);await pause(80);
+ assert.equal(await js(`document.getElementById('audio-view-all').getAttribute('aria-selected')`),'true');
+ assert.equal(await js(`document.querySelectorAll('#audio-archive-results tr').length`),42); // 40 archive matches + two local matches.
+ assert.ok(await js(`Array.from(document.querySelectorAll('#audio-archive-results .audio-artist-link')).every(el=>el.textContent==='Artist A')`));
+ await js(`document.getElementById('audio-archive-more').click()`);await pause(80);
+ assert.equal(await js(`document.querySelectorAll('#audio-archive-results tr').length`),44);
+ await snap('artist-with-saved-tracks');
+ await js(`window.electronAPI.__savedTracks([]);document.getElementById('audio-query').value='';document.getElementById('audio-view-all').click();document.querySelector('#tab-audio .content-scroll').scrollTop=0`);await pause(80);
+ assert.equal(await js(`document.querySelectorAll('#audio-archive-results tr').length`),40);
  await js(`document.getElementById('audio-info-open').click()`);
  assert.equal(await js(`document.getElementById('audio-info-dialog').open`),true);
  assert.equal(await js(`document.activeElement.id`),'audio-info-close');
@@ -242,6 +289,6 @@ app.whenReady().then(async()=>{
  console.log('Retry fixture:',previewRequests,await js(`(()=>{const a=document.getElementById('audio-dock-player');return {time:a.currentTime,paused:a.paused,error:a.error?.message,status:document.getElementById('audio-dock-status').textContent};})()`));
  assert.ok(await js(`document.getElementById('audio-dock-player').currentTime>.2`));
  assert.equal(previewRequests,2);assert.equal(await js(`document.getElementById('audio-dock-status').textContent`),'');assert.equal(await js(`document.getElementById('audio-archive-status').textContent`),'');
- console.log('PASS: full Electron audio rows, metadata, persistent bottom player, native playback/seek, favorite/community scroll and focus retention, paginated Favorites refresh, saved stars, Staff picks, search/filters/pagination, cancellation/saves/credits and keyboard/minimum Mac/Windows layouts. Native APIs and community server mocked.');
+ console.log('PASS: OS media handlers, media keyboard buttons, real natural-end auto-next, automatic page loading, exact artist filters from rows/dock/Saved MP3s, filtered saved queues, plus playback/retry, favorite scroll/focus, saves/cancel and Mac/Windows layouts. Native APIs and community server mocked; no external media requests or project changes.');
  }catch(error){console.error(error);process.exitCode=1;}finally{win.destroy();fs.rmSync(scratch,{recursive:true,force:true});app.exit(process.exitCode||0);}
 });

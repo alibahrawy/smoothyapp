@@ -1,9 +1,9 @@
 import { trackRow, refreshTrackCommunity } from './audio-player.js';
 
-export function initAudioArchive({ onSaved, player, community, onFavorite, localTracks, previewSaved }) {
+export function initAudioArchive({ onSaved, player, community, onFavorite, onArtist, onViewChange, isLibraryBusy = () => false, localTracks, previewSaved }) {
   const api = window.electronAPI, el = id => document.getElementById('audio-archive-' + id);
   const freshSeed = () => crypto.getRandomValues(new Uint32Array(1))[0];
-  const state = { tracks: [], category: 'all', mood: '', view: 'all', signature: '', shuffleSeed: freshSeed(), offset: 0, total: 0, hasMore: false, searching: false, downloading: false, selected: null, generation: 0, cancelable: false };
+  const state = { tracks: [], category: 'all', mood: '', artist: '', view: 'all', signature: '', shuffleSeed: freshSeed(), offset: 0, total: 0, hasMore: false, searching: false, downloading: false, selected: null, generation: 0, cancelable: false };
   const message = (text, error = false) => { el('status').textContent = text; el('status').classList.toggle('stock-error', error); };
   let searchTimer;
   function update() {
@@ -11,29 +11,62 @@ export function initAudioArchive({ onSaved, player, community, onFavorite, local
     el('more').disabled = state.searching || state.downloading; el('more').classList.toggle('hidden', !state.hasMore);
     el('cancel').classList.toggle('hidden', !state.cancelable);
     el('results').querySelectorAll('button').forEach(button => { button.disabled = state.downloading; });
-    if (player.current()?.id === state.selected?.id) player.busy(state.downloading);
+    player.busy(state.downloading || isLibraryBusy());
+    el('artist-filter').classList.toggle('hidden', !state.artist);
+    el('artist-name').textContent = state.artist ? 'Artist: ' + state.artist : '';
+    el('clear-artist').disabled = state.downloading;
+    refreshNavigation();
+  }
+  function visibleTracks() {
+    const favorites = new Set(community().favorites || []), query = el('query').value.trim().toLocaleLowerCase();
+    const locals = state.view === 'favorites' || state.artist ? localTracks().filter(track => !track.archiveId &&
+      (state.view !== 'favorites' || favorites.has('local:' + track.id)) &&
+      (!state.artist || track.artist?.trim().toLocaleLowerCase() === state.artist.toLocaleLowerCase()) &&
+      (!state.mood || track.mood === state.mood) && (state.category === 'all' || el('genre').selectedOptions[0]?.textContent === track.genre) &&
+      [track.title, track.artist].join(' ').toLocaleLowerCase().includes(query)) : [];
+    return [...state.tracks, ...locals];
+  }
+  function navigation(track) {
+    const rows = visibleTracks(), index = rows.findIndex(item => item.id === track?.id);
+    return { previous: !state.searching && index > 0 ? () => advance(track, -1) : undefined,
+      next: !state.searching && index >= 0 && (index < rows.length - 1 || state.hasMore) ? () => advance(track, 1) : undefined };
+  }
+  function refreshNavigation() {
+    if (state.view === 'saved') return;
+    const actions = navigation(player.current()); player.navigation(actions.previous, actions.next);
+  }
+  async function advance(track, direction) {
+    if (state.downloading || state.searching || player.current()?.id !== track.id) return;
+    const rows = visibleTracks(), index = rows.findIndex(item => item.id === track.id);
+    if (index < 0) return;
+    const next = rows[index + direction];
+    if (next) { select(next); return; }
+    if (direction !== 1 || !state.hasMore) return;
+    const loaded = new Set(state.tracks.map(item => item.id)), signature = state.signature;
+    const success = await search(true, false, true);
+    if (!success || player.current()?.id !== track.id || state.signature !== signature || state.view === 'saved') return;
+    const added = state.tracks.find(item => !loaded.has(item.id));
+    if (added) select(added);
   }
   function select(track) {
     if (!track || state.downloading) return;
+    const actions = navigation(track);
+    if (!state.tracks.some(item => item.id === track.id)) { previewSaved(track, true, actions); refreshNavigation(); return; }
     state.selected = track;
-    const index = state.tracks.findIndex(item => item.id === track.id);
     player.show(track, {
       save: () => save(false), send: () => save(true),
-      previous: index > 0 ? () => select(state.tracks[index - 1]) : undefined,
-      next: index < state.tracks.length - 1 ? () => select(state.tracks[index + 1]) : undefined,
+      ...actions,
       error: () => message('This archived track is unavailable right now. Choose another track or retry later.', true),
     });
     message(''); update();
   }
   function render(preserveRows = false) {
     const data = community(), favorites = new Set(data.favorites || []), staff = new Set(data.staffPicks || []);
-    const query = el('query').value.trim().toLowerCase();
-    const locals = state.view === 'favorites' ? localTracks().filter(track => !track.archiveId && favorites.has('local:' + track.id) && (!state.mood || track.mood === state.mood) && (state.category === 'all' || el('genre').selectedOptions[0]?.textContent === track.genre) && [track.title, track.artist].join(' ').toLowerCase().includes(query)) : [];
-    const rows = [...state.tracks, ...locals];
+    const rows = visibleTracks(), locals = rows.filter(track => !state.tracks.includes(track));
     const results = el('results'), scroll = results.closest('.content-scroll'), scrollTop = scroll.scrollTop;
     const existing = preserveRows ? new Map([...results.children].map(row => [row.dataset.id, row])) : new Map();
     const nextRows = rows.map(track => existing.get(track.id) || trackRow({ ...track, staffPick: staff.has(track.id), favoriteCount: data.counts?.[track.id] || 0 }, {
-      select: locals.includes(track) ? previewSaved : select, favorite: onFavorite, selected: player.current()?.id === track.id, busy: state.downloading, starred: favorites.has(locals.includes(track) ? 'local:' + track.id : track.id),
+      select, favorite: onFavorite, artist: onArtist, selected: player.current()?.id === track.id, busy: state.downloading, starred: favorites.has(locals.includes(track) ? 'local:' + track.id : track.id),
     }));
     if (preserveRows) {
       const retained = new Set(nextRows);
@@ -45,10 +78,6 @@ export function initAudioArchive({ onSaved, player, community, onFavorite, local
     } else results.replaceChildren(...nextRows);
     player.refresh();
     if (locals.length && !state.searching) el('count').textContent = `${rows.length} of ${state.total + locals.length} tracks`;
-    if (state.selected && player.current()?.id === state.selected.id) {
-      const index = state.tracks.findIndex(item => item.id === player.current()?.id);
-      player.navigation(index > 0 ? () => select(state.tracks[index - 1]) : undefined, index >= 0 && index < state.tracks.length - 1 ? () => select(state.tracks[index + 1]) : undefined);
-    }
     el('empty').classList.toggle('hidden', Boolean(rows.length) || state.searching);
     el('empty').textContent = state.view === 'favorites' ? 'No favorites match. Star a track in Music to keep it here.' : state.view === 'staff' ? 'No Staff picks match. Picks will appear here as the library is curated.' : 'No matching tracks. Try another filter or search.';
     update();
@@ -61,17 +90,17 @@ export function initAudioArchive({ onSaved, player, community, onFavorite, local
     el('mood').replaceChildren(all, ...(result.moods || []).map(mood => { const option = document.createElement('option'); option.value = mood.label; option.textContent = mood.label; return option; }));
     el('mood').value = state.mood;
   }
-  async function search(more = false, refresh = false) {
-    if (state.view === 'saved') return;
+  async function search(more = false, refresh = false, background = false) {
+    if (state.view === 'saved') return false;
     clearTimeout(searchTimer);
     const generation = ++state.generation, query = el('query').value.trim();
-    const signature = JSON.stringify([state.category, state.mood, state.view, query, state.shuffleSeed]);
+    const signature = JSON.stringify([state.category, state.mood, state.artist, state.view, query, state.shuffleSeed]);
     const append = more && signature === state.signature, offset = append ? state.offset + 40 : 0;
     const retain = refresh && signature === state.signature, lastOffset = retain ? state.offset : offset;
     state.searching = true; if (!append && !retain) { state.tracks = []; state.hasMore = false; render(); }
     if (!retain) el('count').textContent = 'Loading tracks…'; update();
     try {
-      const input = { query, offset, category: state.category, mood: state.mood, view: state.view, shuffleSeed: state.shuffleSeed };
+      const input = { query, offset, category: state.category, mood: state.mood, artist: state.artist, view: state.view, shuffleSeed: state.shuffleSeed, background: background || refresh };
       let result = await api.audioArchiveSearch(input), pageOffset = offset;
       if (generation !== state.generation) return;
       if (!result.success) throw new Error(result.error);
@@ -86,7 +115,8 @@ export function initAudioArchive({ onSaved, player, community, onFavorite, local
       state.tracks = append ? [...state.tracks, ...tracks.filter(track => !state.tracks.some(item => item.id === track.id))] : tracks;
       el('count').textContent = `${state.tracks.length.toLocaleString()} of ${result.total.toLocaleString()} tracks`;
       filters(result);
-    } catch (error) { if (generation === state.generation) { el('count').textContent = error.message || 'Could not load tracks. Search again to retry.'; state.hasMore = false; } }
+      return true;
+    } catch (error) { if (generation === state.generation) { el('count').textContent = error.message || 'Could not load tracks. Search again to retry.'; state.hasMore = false; } return false; }
     finally { if (generation === state.generation) { state.searching = false; render(retain); } }
   }
   async function save(premiere) {
@@ -100,16 +130,17 @@ export function initAudioArchive({ onSaved, player, community, onFavorite, local
     } catch (error) { message(error.message || 'Could not save this track. Please retry.', true); }
     finally { state.downloading = false; state.cancelable = false; update(); }
   }
-  function setView(view) {
+  function setView(view, artist = '') {
     if (state.downloading) return;
     if (view === 'all') state.shuffleSeed = freshSeed();
-    state.view = view;
+    state.view = view; state.artist = artist;
     document.querySelectorAll('[data-audio-view]').forEach(button => { const active = button.dataset.audioView === view; button.setAttribute('aria-selected', String(active)); button.tabIndex = active ? 0 : -1; });
     document.getElementById('audio-archive-panel').classList.toggle('hidden', view === 'saved'); document.getElementById('audio-saved-panel').classList.toggle('hidden', view !== 'saved');
     if (view !== 'saved') {
       document.getElementById('audio-archive-panel').setAttribute('aria-labelledby', 'audio-view-' + view);
-      state.category = 'all'; state.mood = ''; el('query').value = ''; search();
+      state.category = 'all'; state.mood = ''; el('query').value = ''; search(false, false, !artist);
     } else { state.generation++; state.searching = false; }
+    onViewChange?.(view);
   }
   const tabs = [...document.querySelectorAll('[data-audio-view]')];
   tabs.forEach((button, index) => {
@@ -124,6 +155,7 @@ export function initAudioArchive({ onSaved, player, community, onFavorite, local
   el('mood').addEventListener('change', () => { state.mood = el('mood').value; search(); });
   el('query').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => search(), 250); });
   el('more').addEventListener('click', () => search(true));
+  el('clear-artist').addEventListener('click', () => { if (!state.downloading) { state.artist = ''; search(); } });
   el('cancel').addEventListener('click', async () => {
     state.cancelable = false; update(); message('Canceling download…');
     try { await api.audioArchiveCancel(); } catch { message('Could not cancel the download. Please wait for it to finish.', true); }
@@ -136,7 +168,7 @@ export function initAudioArchive({ onSaved, player, community, onFavorite, local
   let libraryActive = false;
   document.querySelectorAll('.nav-item:not(.disabled)').forEach(nav => nav.addEventListener('click', () => {
     const entering = nav.dataset.tab === 'audio';
-    if (entering && !libraryActive && !state.downloading) { state.shuffleSeed = freshSeed(); search(); }
+    if (entering && !libraryActive && !state.downloading) { state.shuffleSeed = freshSeed(); search(false, false, true); }
     libraryActive = entering;
   }));
   update();
@@ -144,5 +176,5 @@ export function initAudioArchive({ onSaved, player, community, onFavorite, local
     const key = state.view === 'favorites' ? 'favorites' : state.view === 'staff' ? 'staffPicks' : '';
     refreshTrackCommunity(el('results'), next);
     if (key && JSON.stringify(previous[key]) !== JSON.stringify(next[key])) search(false, true);
-  }, savedView: () => setView('saved') };
+  }, savedView: () => setView('saved'), showArtist: artist => setView('all', artist.trim()), refreshNavigation, isBusy: () => state.downloading };
 }

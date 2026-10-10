@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { AudioLibrary } from './audio-library';
 import { AudioArchive } from './audio-archive';
 import { AudioFavorites } from './audio-favorites';
+import { trackTool } from './telemetry';
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'smoothy-audio', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }]);
 export async function registerAudioLibrary(deps: {
@@ -48,9 +49,16 @@ export async function registerAudioLibrary(deps: {
     if (typeof input?.id === 'string' && input.id.startsWith('local:')) {
       await library.file(input.id.slice(6));
     } else await archive.track(input?.id);
-    return community.set(input.id, input.active);
+    const changed = community.snapshot().favorites.includes(input.id) !== input.active;
+    const state = community.set(input.id, input.active);
+    if (changed) trackTool('audio_favorite');
+    return state;
   }));
-  ipcMain.handle('audio-archive-search', (_, input) => result(() => archive.search(input, community.snapshot())));
+  ipcMain.handle('audio-archive-search', (_, input) => result(async () => {
+    const results = await archive.search(input, community.snapshot());
+    if (input?.background !== true) trackTool('audio_search');
+    return results;
+  }));
   ipcMain.handle('audio-archive-download', (_, input) => result(async () => {
     if (download) throw new Error('Wait for the current audio download to finish.');
     if (input?.premiere && !deps.connected()) throw new Error('Connect Premiere before sending audio.');
@@ -66,10 +74,12 @@ export async function registerAudioLibrary(deps: {
       progress(0, 0, 'validating');
       const saved = await library.keepArchive(filePath, track.title, track.id, job.controller.signal, track);
       job.committed = true; notify();
+      trackTool('audio_save');
       if (input?.premiere) {
         progress(0, 0, 'importing');
         const imported = await deps.importToPremiere(await library.file(saved.id));
         if (!imported?.success) throw new Error('MP3 saved in your library. ' + (imported?.error || 'Premiere could not import it. You can retry from Track details.'));
+        trackTool('audio_premiere');
       }
       return { ...library.snapshot(), savedId: saved.id, imported: Boolean(input?.premiere) };
     } catch (error) {
@@ -89,6 +99,7 @@ export async function registerAudioLibrary(deps: {
     }, 2000);
     try { await shell.openExternal('https://studio.youtube.com/channel/UC/music'); }
     catch (error) { stop(); throw error; }
+    trackTool('audio_studio');
     return library.snapshot();
   }));
   ipcMain.handle('audio-library-stop', () => { stop(); notify(); return { success: true }; });
@@ -105,7 +116,7 @@ export async function registerAudioLibrary(deps: {
     if (choice.canceled) return { canceled: true };
     await library.offer(choice.filePaths); notify(); return library.snapshot();
   }));
-  ipcMain.handle('audio-library-keep', (_, options) => result(async () => { await library.keep(options?.id, options); notify(); return library.snapshot(); }));
+  ipcMain.handle('audio-library-keep', (_, options) => result(async () => { await library.keep(options?.id, options); trackTool('audio_save'); notify(); return library.snapshot(); }));
   ipcMain.handle('audio-library-update', (_, options) => result(async () => { await library.update(options?.id, options); notify(); return library.snapshot(); }));
   ipcMain.handle('audio-library-dismiss', (_, id) => { library.dismiss(id); notify(); return { success: true }; });
   ipcMain.handle('audio-library-import', (_, id) => result(async () => {
@@ -113,6 +124,7 @@ export async function registerAudioLibrary(deps: {
     const filePath = await library.file(id);
     const imported = await deps.importToPremiere(filePath);
     if (!imported?.success) throw new Error(imported?.error || 'Premiere could not import this audio.');
+    trackTool('audio_premiere');
     return { imported: true };
   }));
   ipcMain.handle('audio-library-show-folder', () => result(async () => { await shell.openPath(library.folder); return {}; }));

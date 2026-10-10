@@ -45,8 +45,8 @@ export function requestSequenceInfo() {
   wsRequestSequenceInfo();
 }
 
-export function runAutoCut(config: any) {
-  return wsRunAutoCut(config);
+export function runAutoCut(config: any, onStart?: () => void) {
+  return wsRunAutoCut(config, onStart);
 }
 
 export function runSilenceRemoval(config: any) {

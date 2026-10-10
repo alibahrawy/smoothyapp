@@ -304,10 +304,12 @@ async function handleMessage(msg: any, ws?: any) {
 }
 
 let multicamRunning = false;
-export async function runAutoCut(config: any) {
+export async function runAutoCut(config: any, onStart?: () => void) {
   if (multicamRunning) return;
   multicamRunning = true;
   try {
+    // Count accepted starts once; analytics must never block the timeline job.
+    try { onStart?.(); } catch {}
     if ((Number(currentSequenceInfo?.multicamTimelineVersion) || 0) < 7) throw new Error('Restart Premiere and reopen the SmoothyEdit panel to load the updated Multicam bridge, then refresh the sequence.');
     // The host resolves the captured sequence ID and verifies its revision.
     // Live sequence-info updates may now describe a different visible tab.

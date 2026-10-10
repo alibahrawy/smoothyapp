@@ -8,7 +8,7 @@
 import Store from 'electron-store';
 
 const isDev = process.env.NODE_ENV === 'development';
-const API_BASE = isDev ? 'http://localhost:3000' : 'https://smoothyedit.com';
+const API_BASE = process.env.SMOOTHY_API_URL || (isDev ? 'http://localhost:4321' : 'https://smoothyedit.com');
 
 interface User {
   id: string;
@@ -16,6 +16,7 @@ interface User {
   name: string | null;
   tier: 'free' | 'pro' | 'anonymous';
   isAdmin: boolean;
+  emailVerified?: boolean;
 }
 
 interface AuthState {
@@ -53,6 +54,8 @@ const LOCAL_FREE_FEATURES = ['autocut', 'silence-removal', 'sequence-info', 'cap
 const store = new Store();
 
 // Callbacks for notifying renderer of auth changes
+let authEpoch = 0;
+
 let authChangeCallback: ((state: AuthState) => void) | null = null;
 
 export function setAuthChangeCallback(callback: (state: AuthState) => void): void {
@@ -96,13 +99,16 @@ export async function login(
   password: string,
   totpCode?: string
 ): Promise<LoginResult> {
+  const stamp = ++authEpoch;
   try {
+    if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password || email.length > 254 || password.length > 256) return { success: false, error: 'Enter your email and password.' };
     const response = await fetch(`${API_BASE}/api/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ email, password, totpCode })
+      body: JSON.stringify({ email: email.trim().toLowerCase(), password, totpCode }),
+      redirect: 'error', signal: AbortSignal.timeout(20000)
     });
 
     const data = await response.json();
@@ -116,25 +122,56 @@ export async function login(
 
     // The existing endpoint returns { user: {...} }
     const user = data.user;
-    if (!user) {
+    if (!user?.id || !user.email || typeof data.sessionToken !== 'string' || !data.sessionToken) {
       return { success: false, error: 'Invalid response from server' };
     }
 
     // Store user data. The signed `sessionToken` is the verified credential for
     // API calls (sent as a Bearer header); `jwt` is kept for older code paths.
+    if (stamp !== authEpoch) return { success: false, error: 'Sign-in was canceled.' };
     store.set('user', user);
     if (data.sessionToken) {
       store.set('sessionToken', data.sessionToken);
     }
     store.set('jwt', user.id);
 
-    console.log('[Auth] Login successful:', user.email);
+    console.log('[Auth] Login successful');
+    await refreshUserData();
     notifyAuthChange();
 
-    return { success: true, user };
+    if (stamp !== authEpoch) return { success: false, error: 'Sign-in was canceled.' };
+    return { success: true, user: getAuthState().user || user };
   } catch (error) {
     console.error('[Auth] Login error:', error);
     return { success: false, error: 'Network error. Please try again.' };
+  }
+}
+
+/** Create a free account through the existing web API, then obtain a signed desktop session. */
+export async function signup(input: { name?: string; email?: string; password?: string }): Promise<LoginResult & { accountCreated?: boolean }> {
+  const stamp = ++authEpoch;
+  try {
+    const { email, password, name = '' } = input || {};
+    if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || email.length > 254) return { success: false, error: 'Enter a valid email address.' };
+    if (typeof password !== 'string' || password.length < 8 || password.length > 256) return { success: false, error: 'Use a password with 8 to 256 characters.' };
+    if (typeof name !== 'string' || name.length > 100) return { success: false, error: 'Use a name under 100 characters.' };
+    const response = await fetch(`${API_BASE}/api/auth/register`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim(), email: email.trim().toLowerCase(), password }),
+      redirect: 'error', signal: AbortSignal.timeout(20000)
+    });
+    const data = await response.json();
+    if (!response.ok || !data.user?.id) return { success: false, error: data.error || 'Could not create your account.' };
+    if (stamp !== authEpoch) return { success: false, accountCreated: true, error: 'Account created. Sign in when you are ready.' };
+    const result = await login(email, password);
+    if (!result.success) return { ...result, accountCreated: true, error: 'Your account was created. Sign in to continue and check your inbox for the verification email.' };
+    // Registration sends the verification email. A checkbox or client response cannot verify it.
+    if (getAuthState().user?.emailVerified === undefined) {
+      store.set('user', { ...getAuthState().user, emailVerified: false }); notifyAuthChange();
+    }
+    return { ...result, user: getAuthState().user || result.user, accountCreated: true };
+  } catch {
+    return { success: false, error: 'Could not reach SmoothyEdit. Please try again.' };
   }
 }
 
@@ -142,6 +179,7 @@ export async function login(
  * Logout the current user
  */
 export function logout(): void {
+  authEpoch++;
   store.delete('user');
   store.delete('jwt');
   store.delete('sessionToken');
@@ -160,11 +198,13 @@ export async function refreshUserData(): Promise<boolean> {
     return false;
   }
 
+  const stamp = authEpoch;
   try {
     const response = await fetch(`${API_BASE}/api/auth/me`, {
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(), redirect: 'error', signal: AbortSignal.timeout(20000)
     });
 
+    if (stamp !== authEpoch) return false;
     if (!response.ok) {
       // Token expired or invalid
       if (response.status === 401) {
@@ -175,6 +215,8 @@ export async function refreshUserData(): Promise<boolean> {
     }
 
     const data = await response.json();
+    if (stamp !== authEpoch) return false;
+    if (!data.user || data.user.id !== user.id) { logout(); return false; }
 
     // Update stored user data
     store.set('user', {
@@ -182,7 +224,8 @@ export async function refreshUserData(): Promise<boolean> {
       email: data.user.email,
       name: data.user.name,
       tier: data.user.tier,
-      isAdmin: data.user.isAdmin
+      isAdmin: data.user.isAdmin,
+      emailVerified: data.user.emailVerified === true
     });
 
     console.log('[Auth] User data refreshed');

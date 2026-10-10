@@ -8,7 +8,8 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        external: ['ws', '@fugood/whisper.node', /^@fugood\/node-whisper-.*/]
+        input: { index: 'src/main/index.ts', 'assets-worker': 'src/main/assets-worker.ts' },
+        external: ['unpdf', 'mammoth', 'ws', 'sharp', 'onnxruntime-node', '@fugood/whisper.node', /^@fugood\/node-whisper-.*/]
       }
     }
   },

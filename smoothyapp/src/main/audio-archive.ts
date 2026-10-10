@@ -106,9 +106,11 @@ export class AudioArchive {
     const query = input?.query ?? ''; const offset = input?.offset ?? 0;
     const category = input?.category ?? 'all'; const mood = input?.mood ?? '';
     const view = input?.view ?? 'all';
+    const artist = input?.artist ?? '';
     const shuffleSeed = input?.shuffleSeed ?? this.shuffleSeed;
     if (!['all', 'favorites', 'staff'].includes(view)) throw new Error('Choose an available library view.');
     if (typeof query !== 'string' || query.length > 200 || !Number.isInteger(offset) || offset < 0 || offset > 10000) throw new Error('Enter a title of up to 200 characters.');
+    if (typeof artist !== 'string' || artist.length > 300) throw new Error('Choose an artist from the library.');
     if (!['all', 'uncategorized', ...genres.map(([id]) => id)].includes(category) || (mood !== '' && !moods.includes(mood))) throw new Error('Choose an available audio type or mood.');
     if (!Number.isInteger(shuffleSeed) || shuffleSeed < 0 || shuffleSeed > 0xFFFFFFFF) throw new Error('Invalid library shuffle. Reopen Music to retry.');
     const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
@@ -119,7 +121,8 @@ export class AudioArchive {
     const genre = genres.find(([id]) => id === category)?.[1];
     const typed = catalog.filter(track => category === 'all' || (category === 'uncategorized' ? !track.genre : track.genre === genre));
     const favorites = new Set(community.favorites), staff = new Set(community.staffPicks);
-    const tracks = typed.filter(track => (view !== 'favorites' || favorites.has(track.id)) && (view !== 'staff' || staff.has(track.id)) && (!mood || track.mood === mood) && words.every(word => [track.title, track.artist].join(' ').toLocaleLowerCase().includes(word)));
+    const artistName = artist.trim().toLocaleLowerCase();
+    const tracks = typed.filter(track => (!artistName || track.artist?.trim().toLocaleLowerCase() === artistName) && (view !== 'favorites' || favorites.has(track.id)) && (view !== 'staff' || staff.has(track.id)) && (!mood || track.mood === mood) && words.every(word => [track.title, track.artist].join(' ').toLocaleLowerCase().includes(word)));
     return { tracks: tracks.slice(offset, offset + 40).map(track => ({ ...track, favorite: favorites.has(track.id), staffPick: staff.has(track.id), favoriteCount: community.counts[track.id] || 0, previewUrl: `smoothy-audio://archive/${track.id}` })),
       total: tracks.length, offset, hasMore: offset + 40 < tracks.length, archiveDate: AUDIO_ARCHIVE_DATE, cached: this.cached, category, mood, categories,
       moods: moods.map(label => ({ label, count: typed.filter(track => track.mood === label).length })) };
