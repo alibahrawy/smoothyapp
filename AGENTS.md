@@ -4,6 +4,10 @@ This is the **public release repo** for the SmoothyEdit desktop app
 (`alibahrawy/smoothyapp`). Source of truth / monorepo lives at
 `/Users/alibahrawy/Documents/Coding/smoothyedit`.
 
+## SmoothyApp 2.0.0 Mac release authorized — 2026-10-10
+
+The owner requested **"Push the new mac app v2"** and **"push the new site"**. This authorizes committing/pushing the accumulated desktop v2 and website work, publishing the signed/notarized **Mac 2.0.0** artifacts, and deploying the website. The signed/notarized Mac 2.0.0 build (CEP 1.5.13) is published to the **v2.0.0** release; the verified Windows 1.5.2 installer, blockmap and `latest.yml` are carried into that release so Windows downloads and updates keep working. The mandatory v2 website changelog is added in the monorepo (`web/src/content/changelog/2026-10-10-smoothyapp-v2.mdx`). Preserve the Windows direct-Pixabay key path and keep provider credentials server-side.
+
 ## Mandatory feature usage tracking — 2026-10-05
 
 The user requires usage counts for **every existing and future feature, free and paid**, like Multicam. Treat tracking as part of completing a feature, including desktop tools and Studio features. Use stable feature/action IDs, update `/Users/alibahrawy/Documents/Coding/smoothyedit/web/src/lib/feature-catalog.ts`, and expose the counts in the private Admin → Usage table. Include meaningful exports/imports/saves and previews; do not count navigation, preference reads, polling, or internal provider passes as feature runs.
@@ -12,6 +16,25 @@ Desktop tracking belongs at the main-process operation boundary, with playback s
 
 Before completing a new feature, verify its real success/start path, cancellation/failure path and admin aggregation as applicable. Add its measurement definition to [`docs/FEATURE-USAGE.md`](/Users/alibahrawy/Documents/Coding/smoothyedit/docs/FEATURE-USAGE.md). Keep tracking independent of credit billing. Existing local-only/publication restrictions still apply: **desktop v2 is local only; do not commit, push or publish the app without a new instruction.**
 
+## Windows 1.5.2 Pixabay fix published — 2026-10-05
+
+The owner reported Pixabay missing from the shipped Windows build and supplied a
+Pixabay API key, authorizing a **Windows-only 1.5.2** update. The Windows 1.5.1
+installer was built without `SMOOTHY_STOCK_SERVICE_URL`, so `stockServiceURL()`
+resolved to `""` and Pixabay stayed hidden. Builds may now instead inject
+`SMOOTHY_PIXABAY_API_KEY` (via environment or a gitignored `.env`) to query the
+Pixabay API directly; a configured service endpoint still takes precedence. The
+key is deliberately **not** committed to this public repo and is absent from
+source, Git history and `package.json`. `electron.vite.config.js` loads the key
+through `loadEnv`, and `stock-footage-pixabay.ts` sends `key` + `per_page=12`.
+Live direct search returned 12 normalized clips; malformed/missing keys keep
+Pixabay hidden and a service endpoint overrides the key. Version bumped to
+**1.5.2** (`package.json`, `package-lock.json`); the CEP extension is unchanged
+at 1.5.13. A Windows x64 installer, blockmap and `latest.yml` were published to
+the **v1.5.2** GitHub release; the signed/notarized Mac 1.5.1 DMG/ZIP and
+`latest-mac.yml` were carried into that release so Mac downloads and updates
+keep working. The required website changelog entry still needs to be added in
+the monorepo (`smoothyedit/web/src/content/changelog/`).
 
 ## 1.5.1 app and website publication authorized — 2026-10-04
 

@@ -4,7 +4,7 @@
 
 [Download for Mac](https://smoothyedit.com/api/download/mac) · [Download for Windows](https://smoothyedit.com/api/download/win) · [See the latest release](https://github.com/alibahrawy/smoothyapp/releases/latest) · [Visit the website](https://smoothyedit.com/features/smoothy-app)
 
-> **Current downloads:** macOS **1.5.1** for Apple Silicon is signed and notarized. Windows currently downloads **1.5.0** for x64 while its 1.5.1 build is prepared. Both installers remain available from the latest release.
+> **Current downloads:** macOS **1.5.1** for Apple Silicon is signed and notarized. Windows **1.5.2** for x64 adds the Pixabay stock source. The Mac 1.5.1 artifacts remain available from the latest release.
 
 ## A look inside
 
@@ -68,5 +68,7 @@ npm run build:win  # Windows x64 installer
 Build configuration is in [`smoothyapp/package.json`](smoothyapp/package.json). Published downloads and release notes are in [GitHub Releases](https://github.com/alibahrawy/smoothyapp/releases).
 
 Stock footage source builds include Commons, Internet Archive and NASA without provider credentials. Pixabay requires your own compatible search service. Set `SMOOTHY_STOCK_SERVICE_URL` to its HTTPS endpoint when running `npm run build` or a platform build command. The service accepts `q`, `page` and `size` and returns video API metadata (`totalHits`, `hits`); keep your provider key on your server. Without a configured service, Pixabay is hidden. Provider keys and the official service configuration are not included in source builds.
+
+A build can alternatively set `SMOOTHY_PIXABAY_API_KEY` to query the Pixabay API directly. The value is baked into that build only; put it in a gitignored `.env` or the environment, never in source. A configured service endpoint takes precedence over the key.
 
 The desktop app is licensed under [MIT](smoothyapp/LICENSE).
