@@ -72,3 +72,7 @@ Stock footage source builds include Commons, Internet Archive and NASA without p
 A build can alternatively set `SMOOTHY_PIXABAY_API_KEY` to query the Pixabay API directly. The value is baked into that build only; put it in a gitignored `.env` or the environment, never in source. A configured service endpoint takes precedence over the key.
 
 The desktop app is licensed under [MIT](smoothyapp/LICENSE).
+
+## Open-source credits
+
+Built with Electron, Whisper, FFmpeg, ONNX Runtime, PyTorch and many other projects. See the [open-source libraries, tools and models](docs/OPEN-SOURCE.md) and the [complete locked npm dependency inventory](docs/NPM-DEPENDENCIES.md). Thank you to their maintainers and contributors.
