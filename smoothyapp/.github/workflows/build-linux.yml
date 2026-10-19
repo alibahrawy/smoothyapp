@@ -37,15 +37,28 @@ jobs:
       - name: Install native dependencies
         run: npm ci
       - name: Build installers without publishing
-        run: npm run build:linux -- --${{ matrix.arch }} --publish never
+        run: |
+          npm run generate-icons
+          npm run build
+          npx electron-builder --linux AppImage deb --${{ matrix.arch }} --publish never --config
       - name: Verify packaged native media tools
         shell: bash
         run: |
-          root=$(find dist -maxdepth 1 -type d -name '*unpacked' -print -quit)
+          root=dist/linux-unpacked
+          if [ "${{ matrix.arch }}" = arm64 ]; then root=dist/linux-arm64-unpacked; fi
           test -n "$root"
           ffmpeg="$root/resources/app.asar.unpacked/node_modules/ffmpeg-static/ffmpeg"
           "$ffmpeg" -hide_banner -f lavfi -i sine=frequency=440:duration=1 -y /tmp/smoothy-test.wav
           "$ffmpeg" -v error -i /tmp/smoothy-test.wav -f null -
+      - name: Smoke test packaged app
+        shell: bash
+        run: |
+          root=dist/linux-unpacked
+          if [ "${{ matrix.arch }}" = arm64 ]; then root=dist/linux-arm64-unpacked; fi
+          code=0
+          timeout 12s xvfb-run -a "$root/smoothyedit" --no-sandbox > /tmp/smoothy-smoke.log 2>&1 || code=$?
+          cat /tmp/smoothy-smoke.log
+          test "$code" = 124
       - uses: actions/upload-artifact@v4
         with:
           name: smoothyedit-linux-${{ matrix.arch }}

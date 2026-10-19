@@ -158,5 +158,6 @@
       "synopsis": "Free open-source multicam, captions and audio toolkit for DaVinci Resolve",
       "description": "Free, open-source editing toolkit: speaker-based multicam, local captions, noise removal and voice/music separation for DaVinci Resolve (and Premiere Pro on Windows and macOS). Everything local, no account required. Optional cloud AI can be turned off in Settings."
     }
-  }
+  },
+  "homepage": "https://smoothyedit.com"
 }
