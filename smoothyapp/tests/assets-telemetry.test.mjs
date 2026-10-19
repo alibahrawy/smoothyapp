@@ -29,6 +29,7 @@ function fixture({ canceled = false, diskError = false, importSuccess = true } =
     getAssetsOutputFolder: () => '/fixture',
     writePngFile: folder => { const file = folder + '/private-logo.png'; write(file); return file; },
     importImageToNLE: async () => ({ success: importSuccess, error: importSuccess ? undefined : 'Premiere rejected image' }),
+    getActiveNLE: () => 'premiere',
     trackTool: event => events.push(event),
   });
   return { events, writes, save: handlers.get('assets-save-png'), send: handlers.get('assets-send-to-premiere') };

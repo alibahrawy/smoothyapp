@@ -113,7 +113,7 @@ export async function combineAudioTracks(inputPaths: string[], signal?: AbortSig
   } catch (error) { cleanupTempFile(outputPath); throw error; }
 }
 
-function readWavFile(filePath: string): Int16Array {
+export function readWavFile(filePath: string): Int16Array {
   const buffer = fs.readFileSync(filePath);
 
   const riff = buffer.toString('ascii', 0, 4);

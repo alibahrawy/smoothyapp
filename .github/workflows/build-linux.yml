@@ -1,0 +1,56 @@
+# Release-repo template: copy to .github/workflows/build-linux.yml at its root.
+# Native runners are required for the bundled FFmpeg, ONNX and Whisper binaries.
+name: Build Linux
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            arch: x64
+          - runner: ubuntu-22.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        working-directory: smoothyapp
+    env:
+      SMOOTHY_STOCK_SERVICE_URL: https://smoothyedit.com/api/stock/pixabay
+      SMOOTHY_TELEMETRY: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: smoothyapp/package-lock.json
+      - name: Install native dependencies
+        run: npm ci
+      - name: Build installers without publishing
+        run: npm run build:linux -- --${{ matrix.arch }} --publish never
+      - name: Verify packaged native media tools
+        shell: bash
+        run: |
+          root=$(find dist -maxdepth 1 -type d -name '*unpacked' -print -quit)
+          test -n "$root"
+          ffmpeg="$root/resources/app.asar.unpacked/node_modules/ffmpeg-static/ffmpeg"
+          "$ffmpeg" -hide_banner -f lavfi -i sine=frequency=440:duration=1 -y /tmp/smoothy-test.wav
+          "$ffmpeg" -v error -i /tmp/smoothy-test.wav -f null -
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smoothyedit-linux-${{ matrix.arch }}
+          path: |
+            smoothyapp/dist/*.AppImage
+            smoothyapp/dist/*.deb
+            smoothyapp/dist/latest-linux*.yml
+          if-no-files-found: error

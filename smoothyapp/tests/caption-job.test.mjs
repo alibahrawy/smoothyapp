@@ -11,7 +11,7 @@ import path from 'node:path';
 // Exercise the real registered IPC handlers. Every native dependency is mocked;
 // this never opens Premiere, starts Whisper, downloads a model or spends credits.
 const fixture = { handlers: new Map(), values: {}, sequence: null, transcriptions: 0, loading: null, mode: 'ready', cleaned: [], whisperCancels: 0, shortsSignal: null, tracked: [], extractionError: null };
-const fakeElectron = `const f = globalThis.__captionFixture; export const ipcMain = {handle:(name,fn)=>f.handlers.set(name,fn)}; export const app={getPath:()=>'/tmp',disableDomainBlockingFor3DAPIs(){},commandLine:{appendSwitch(){}},isPackaged:false,whenReady:()=>({then(){}}),on(){}}; export class BrowserWindow {} export const shell={},dialog={showSaveDialog:async()=>({canceled:f.saveCanceled,filePath:f.savePath})},Menu={},clipboard={};`;
+const fakeElectron = `const f = globalThis.__captionFixture; export const ipcMain = {handle:(name,fn)=>f.handlers.set(name,fn)}; export const app={getPath:()=>f.userData||'/tmp',disableDomainBlockingFor3DAPIs(){},commandLine:{appendSwitch(){}},isPackaged:false,whenReady:()=>({then(){}}),on(){}}; export class BrowserWindow {} export const shell={openPath:async folder=>{f.openedFolder=folder;return f.openFolderError||''}},dialog={showSaveDialog:async()=>({canceled:f.saveCanceled,filePath:f.savePath})},Menu={},clipboard={},protocol={registerSchemesAsPrivileged(){},handle(){}};`;
 const stubs = {
   './telemetry': `const f=globalThis.__captionFixture;export const initTelemetry=()=>{},trackEvent=()=>{},trackTool=id=>f.tracked.push(id),trackAssetsAction=()=>{},startHeartbeat=()=>{},stopHeartbeat=()=>{};`,
   './assets-image-ipc': 'export {};',
@@ -154,4 +154,79 @@ test('native-confirmed Resolve caption sends count separately without invented P
  fixture.importNLE='resolve';fixture.captionImportSuccess=true;fixture.tracked=[];fixture.importedPaths=[];
  try{const result=await fixture.handlers.get('import-captions-to-premiere')(null,[{index:1,startTime:0,endTime:1,text:'Hello'}]);assert.equal(result.success,true);assert.deepEqual(fixture.tracked,['captions_resolve']);}
  finally{fixture.importNLE=undefined;for(const file of fixture.importedPaths)fs.rmSync(file,{force:true});}
+});
+
+test('both Darija specialists preserve the earlier model and count only Generate', async () => {
+  const setLanguage = fixture.handlers.get('set-caption-language');
+  const setModel = fixture.handlers.get('set-selected-caption-model');
+  fixture.mode = 'ready'; fixture.tracked = [];
+  fixture.values.captionModel = 'ggml-base.en.bin'; fixture.values.captionLanguage = 'en';
+  assert.equal((await setLanguage(null, 'ary')).modelId, 'moulsot-v0.3-darija');
+  assert.equal(fixture.values.captionModelBeforeDarija, 'ggml-base.en.bin');
+  assert.equal((await setModel(null, 'ggml-small-darija-dora.bin')).language, 'ary');
+  assert.equal(fixture.values.captionModelBeforeDarija, 'ggml-base.en.bin');
+  assert.equal((await setLanguage(null, 'ary')).modelId, 'ggml-small-darija-dora.bin');
+  assert.deepEqual(fixture.tracked, []);
+  assert.equal((await generate(null, { audioPath: '/tmp/fixture.wav', settings: {} })).success, true);
+  assert.deepEqual(fixture.tracked, ['captions']);
+  assert.equal((await setLanguage(null, 'en')).modelId, 'ggml-base.en.bin');
+  assert.equal((await setModel(null, 'ggml-small-darija-dora.bin')).language, 'ary');
+  assert.equal((await setLanguage(null, 'en')).modelId, 'ggml-base.en.bin');
+  assert.deepEqual(fixture.tracked, ['captions']);
+});
+
+test('models folder opens only the app cache; refresh and custom selections add no usage, missing models fail with one start', async () => {
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'smoothy-caption-folder-'));
+  fixture.userData = profile; fixture.tracked = []; fixture.mode = 'ready';
+  const open = fixture.handlers.get('open-caption-models-folder');
+  const list = fixture.handlers.get('get-caption-models');
+  const setModel = fixture.handlers.get('set-selected-caption-model');
+  const setLanguage = fixture.handlers.get('set-caption-language');
+  try {
+    assert.equal((await open(null, '/untrusted/path')).success, true);
+    assert.equal(fixture.openedFolder, path.join(profile, 'whisper-models'));
+    assert.deepEqual(fs.readdirSync(fixture.openedFolder), []);
+    fixture.openFolderError = 'Folder access denied';
+    assert.equal((await open()).error, 'Folder access denied');
+    fixture.openFolderError = null;
+    const file = path.join(fixture.openedFolder, 'My model.bin');
+    const bytes = Buffer.alloc(64);
+    [0x67676d6c, 51865, 1500, 512, 8, 6, 448, 512, 8, 6, 80, 1].forEach((v, i) => bytes.writeInt32LE(v, i * 4));
+    fs.writeFileSync(file, bytes);
+    const id = 'local:My model.bin';
+    assert.ok(list().some(model => model.id === id && model.custom && !model.specialistLanguage));
+    fixture.values.captionModel = 'ggml-base.en.bin'; fixture.values.captionLanguage = 'en';
+    assert.equal((await setModel(null, id)).language, 'en');
+    for (const language of ['fr', 'ar', 'ary', 'en', 'auto']) {
+      assert.equal((await setLanguage(null, language)).modelId, id);
+      assert.equal(fixture.values.captionLanguage, language);
+      assert.equal((await setModel(null, id)).language, language);
+    }
+    assert.deepEqual(fixture.tracked, []);
+    assert.equal((await generate(null, { audioPath: '/tmp/fixture.wav', settings: {} })).success, true);
+    // An old named subfolder is ordinary organization, never a language hint.
+    const existingFolder = path.join(fixture.openedFolder, 'darija');
+    fs.mkdirSync(existingFolder);
+    fs.writeFileSync(path.join(existingFolder, 'Existing model.bin'), bytes);
+    assert.equal((await setModel(null, 'local:darija/Existing model.bin')).language, 'auto');
+    assert.equal((await setLanguage(null, 'fr')).modelId, 'local:darija/Existing model.bin');
+    // Detect English-only weights by header even under a multilingual-looking name.
+    const englishFile = path.join(fixture.openedFolder, 'Renamed model.bin');
+    const englishBytes = Buffer.from(bytes); englishBytes.writeInt32LE(51864, 4);
+    fs.writeFileSync(englishFile, englishBytes);
+    await setModel(null, 'local:Renamed model.bin');
+    assert.match((await generate(null, { audioPath: '/tmp/fixture.wav', settings: {} })).error, /only transcribe English/);
+    await setModel(null, id);
+    fs.rmSync(file);
+    const before = fixture.transcriptions;
+    const failed = await generate(null, { audioPath: '/tmp/fixture.wav', settings: {} });
+    assert.equal(failed.success, false);
+    assert.match(failed.error, /Selected model is missing or unsupported/);
+    assert.equal(fixture.transcriptions, before);
+    assert.deepEqual(fixture.tracked, ['captions', 'captions', 'captions']);
+  } finally {
+    fixture.userData = null; fixture.openFolderError = null;
+    fixture.values.captionModel = 'ggml-base.bin';
+    fs.rmSync(profile, { recursive: true, force: true });
+  }
 });

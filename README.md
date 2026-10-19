@@ -1,10 +1,10 @@
 # SmoothyEdit
 
-**Free local editing tools for Premiere Pro.** Switch multicam angles, cut silence, generate and edit multilingual captions, import SVGs and images, and compress video from one desktop app. The Premiere panel connects your timeline to SmoothyEdit; the core tools run on your computer.
+**Free local editing tools for Premiere Pro and DaVinci Resolve Free.** Switch multicam angles, cut silence, generate and edit multilingual captions, import SVGs and images, and compress video from one desktop app. The Premiere panel connects your timeline to SmoothyEdit; the core tools run on your computer.
 
 [Download for Mac](https://smoothyedit.com/api/download/mac) · [Download for Windows](https://smoothyedit.com/api/download/win) · [See the latest release](https://github.com/alibahrawy/smoothyapp/releases/latest) · [Visit the website](https://smoothyedit.com/features/smoothy-app)
 
-> **Current downloads:** macOS **1.5.1** for Apple Silicon is signed and notarized. Windows **1.5.2** for x64 adds the Pixabay stock source. The Mac 1.5.1 artifacts remain available from the latest release.
+> **2.1 release:** macOS **2.1.0** for Apple Silicon is signed and notarized. Windows downloads remain **2.0.0** until a Windows 2.1 build is published. Linux AppImage and .deb packages are built on native x64 and arm64 runners.
 
 ## A look inside
 
@@ -20,14 +20,15 @@ These interface mockups show the SmoothyEdit 1.4 layout.
 | --- | --- |
 | **Multicam (beta)** | Follow the active speaker on a duplicate of your source or nested timeline. The main camera stays on top, with the enabled reverse footage underneath for fine-tuning; clip effects and continuous audio are retained. |
 | **Silence removal** | Detect quiet sections and remove them from the timeline with adjustable settings. |
-| **Captions** | Transcribe a Premiere sequence or an audio/video file locally. Choose a multilingual Whisper model and language, send captions to Premiere, or export an SRT. |
+| **Captions** | Transcribe an editor timeline or an audio/video file locally. Choose multilingual Whisper, specialist Moroccan Darija models or compatible custom GGML models; send captions to your editor or save an SRT. |
+| **Audio Cleanup** | Split Speech and Music locally, enhance speech, listen with Solo/Mute and save WAVs. Automatic GPU selection falls back to CPU. |
 | **Assets** | Convert SVGs and images to PNGs, preserve transparency, export files, or send a still to Premiere. |
 | **Compressor** | Reduce video file size with hardware encoding when available. |
 | **Stock Footage** | Search Commons, Internet Archive, NASA and the configured Pixabay service, preview shots, save MP4s and import into Premiere’s Project panel. |
 | **Audio Library** | Preview an unofficial YouTube music archive, filter tracks, keep Favorites and Saved MP3s, and explore Staff picks. Verify each track’s license before publishing. |
 | **Best Shorts** | Optional Studio feature that finds short-form moments and sends markers to Premiere. |
 
-Premiere Pro connects through the bundled **CEP extension**. The desktop app installs or refreshes the panel when it starts. Premiere Pro 25.x and 26+ are supported. A DaVinci Resolve plugin is planned; you can already export an SRT from SmoothyEdit and [import it into Resolve](https://smoothyedit.com/blog/davinci-resolve-free-subtitles).
+Premiere Pro connects through the bundled **CEP extension**. The desktop app installs or refreshes the panel when it starts. Premiere Pro 25.x and 26+ are supported. DaVinci Resolve Free connects through local Lua helpers. Start **Workspace → Scripts → Smoothy Connector** once per session; see the [setup guide](https://smoothyedit.com/blog/smoothy-connector-resolve-free). Generated timelines carry cuts, source timing and selected audio channels, but do not copy grades, effects, fades, automation or mixer processing. Review the imported edit.
 
 ## Install
 
@@ -37,7 +38,7 @@ Premiere Pro connects through the bundled **CEP extension**. The desktop app ins
 
 The local tools do not require an account. Studio cloud features are optional.
 
-After updating to 1.5.1, restart Premiere and reopen its SmoothyEdit panel, then refresh the sequence in SmoothyEdit. For Multicam, start from your original timeline and review both speakers and audio sync before using the duplicate. The dismissible update notice includes Discord and social support links.
+After updating, restart Premiere and reopen its SmoothyEdit panel, then refresh the sequence in SmoothyEdit. For Multicam, start from your original timeline and review both speakers and audio sync before using the duplicate. The dismissible update notice includes Discord and social support links.
 
 Audio Library favorites stay local. Optional anonymous archive favorite sharing can be switched off in Licenses & credits; no local file names or audio are shared.
 
@@ -63,6 +64,7 @@ To make local installers on the matching platform:
 cd smoothyapp
 npm run build:mac  # macOS Apple Silicon DMG + ZIP update package; signing/notarization needs your own Apple credentials
 npm run build:win  # Windows x64 installer
+npm run build:linux  # Linux host only; native x64 or arm64 dependencies required
 ```
 
 Build configuration is in [`smoothyapp/package.json`](smoothyapp/package.json). Published downloads and release notes are in [GitHub Releases](https://github.com/alibahrawy/smoothyapp/releases).

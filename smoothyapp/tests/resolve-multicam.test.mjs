@@ -107,6 +107,21 @@ test('accepted run uses local analysis and atomic export, with one start/success
   const rejected = await service.run(configFor(info), sourcePath, () => starts++);
   assert.equal(rejected.success, false); assert.equal(starts, 1); assert.equal(exports, 1);
 });
+test('symlinked output folders cannot overwrite the loaded source or start either Resolve tool', async () => {
+  const alias = path.join(scratch, 'source-alias');
+  fs.symlinkSync(scratch, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  let starts = 0, exports = 0;
+  const service = createResolveService({ progress() {}, result() {}, exported() { exports++; } });
+  const info = service.load(sourcePath), destination = path.join(alias, path.basename(sourcePath));
+  const multicam = await service.run(configFor(info), destination, () => starts++);
+  const silence = await service.removeSilence({ options: { sequenceId: info.id } }, destination, () => starts++);
+  for (const result of [multicam, silence]) {
+    assert.equal(result.success, false);
+    assert.match(result.error, /new XML file/);
+  }
+  assert.equal(starts, 0); assert.equal(exports, 0);
+  assert.equal(fs.readFileSync(sourcePath, 'utf8'), xml);
+});
 test('busy/canceled jobs cannot export, change source, or count a second start', async () => {
   let release, started = 0, exported = 0;
   const service = createResolveService({ progress() {}, result() {}, exported() { exported++; },

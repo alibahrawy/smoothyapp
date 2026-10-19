@@ -75,16 +75,21 @@ import {
 } from './auth-service';
 import {
   getAvailableModels,
+  getModelsDir,
   getModelById,
   getDefaultModelId,
   isEnglishOnlyModel,
+  isMoulsotModel,
   ensureModelDownloaded
 } from './captions/model-manager';
 import {
   WHISPER_LANGUAGES,
   DEFAULT_CAPTION_LANGUAGE,
   isSupportedLanguage,
-  getLanguageName
+  getLanguageName,
+  getWhisperLanguageCode,
+  getPreferredModelForLanguage,
+  isDarijaModel
 } from './captions/languages';
 import {
   formatCaptions,
@@ -1053,6 +1058,17 @@ ipcMain.handle('get-always-on-top', () => {
 });
 
 // Caption generation handlers
+ipcMain.handle('open-caption-models-folder', async () => {
+  try {
+    const folder = getModelsDir();
+    const error = await shell.openPath(folder);
+    if (error) return { success: false, error };
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Could not open models folder' };
+  }
+});
+
 ipcMain.handle('get-caption-models', () => {
   try {
     const models = getAvailableModels();
@@ -1060,7 +1076,7 @@ ipcMain.handle('get-caption-models', () => {
     return models;
   } catch (error) {
     console.error('[Captions] Failed to get models:', error);
-    return [];
+    throw new Error('Could not read the caption models folder. Check folder access and try again.');
   }
 });
 
@@ -1210,6 +1226,9 @@ ipcMain.handle('generate-captions', async (_, config: {
 
     // Resolve the model: whatever the user picked in Settings, else the default.
     const selectedModel = (store.get('captionModel') as string | null) || getDefaultModelId();
+    if (!getModelById(selectedModel)) {
+      throw new Error('Selected model is missing or unsupported. Restore the file, refresh models, or select another model.');
+    }
 
     // Resolve the language: stored preference, else auto-detect.
     const selectedLanguage = (store.get('captionLanguage') as string | null) || DEFAULT_CAPTION_LANGUAGE;
@@ -1224,8 +1243,11 @@ ipcMain.handle('generate-captions', async (_, config: {
     }
 
     // An English-only model always transcribes English, so pin it rather than
-    // asking whisper to auto-detect on a model that can't detect.
-    const effectiveLanguage = isEnglishOnlyModel(selectedModel) ? 'en' : selectedLanguage;
+    // asking whisper to auto-detect on a model that can't detect. Darija is an
+    // Arabic dialect and maps to Whisper's `ar` token.
+    const effectiveLanguage = isEnglishOnlyModel(selectedModel)
+      ? 'en'
+      : getWhisperLanguageCode(selectedLanguage);
 
     // Apply the user's engine choice (auto / cuda / cpu) before preparing the engine.
     whisperService.setEnginePreference((store.get('captionEngine') as 'auto' | 'cuda' | 'cpu') || 'auto');
@@ -1245,7 +1267,10 @@ ipcMain.handle('generate-captions', async (_, config: {
         if (isEngineDownload) {
           message = `${progress.file || 'Downloading transcription engine (one-time setup)'}${pct != null ? ` — ${pct}%` : '…'}`;
         } else if (isModelDownload) {
-          message = `Downloading transcription model (one-time setup)${pct != null ? ` — ${pct}%` : '…'}`;
+          const label = isMoulsotModel(selectedModel) && progress.file
+            ? progress.file
+            : 'Downloading transcription model (one-time setup)';
+          message = `${label}${pct != null ? ` — ${pct}%` : '…'}`;
         } else {
           message = `Preparing: ${progress.status}`;
         }
@@ -1262,9 +1287,9 @@ ipcMain.handle('generate-captions', async (_, config: {
     // Transcribe
     mainWindow?.webContents.send('caption-progress', {
       status: 'transcribing',
-      message: effectiveLanguage === 'auto'
+      message: selectedLanguage === 'auto'
         ? `Detecting language and transcribing on ${whisperService.getActiveBackend().toUpperCase()}...`
-        : `Transcribing ${getLanguageName(effectiveLanguage)} on ${whisperService.getActiveBackend().toUpperCase()}...`
+        : `Transcribing ${getLanguageName(selectedLanguage)} on ${whisperService.getActiveBackend().toUpperCase()}...`
     });
 
     const transcriptionResult = await whisperService.transcribe(audioPath!, (progress) => {
@@ -1452,10 +1477,24 @@ ipcMain.handle('get-selected-caption-model', () => {
 ipcMain.handle('set-selected-caption-model', async (_, modelId: string) => {
   const model = getModelById(modelId);
   if (!model) return { success: false, error: 'Model not found' };
+
+  const currentModel = (store.get('captionModel') as string | null) || getDefaultModelId();
+  if (isDarijaModel(modelId) && !isDarijaModel(currentModel)) {
+    store.set('captionModelBeforeDarija', currentModel);
+  }
   store.set('captionModel', modelId);
+
+  // Both Darija fine-tunes select their language and share the previous-model
+  // preference, so switching between them doesn't overwrite that preference.
+  let language = (store.get('captionLanguage') as string | null) || DEFAULT_CAPTION_LANGUAGE;
+  if (isDarijaModel(modelId)) {
+    language = 'ary';
+    store.set('captionLanguage', language);
+  }
+
   // Force a reload on the next transcription so the new model is used.
   await whisperService.unloadModel();
-  return { success: true, modelId };
+  return { success: true, modelId, language };
 });
 
 ipcMain.handle('get-caption-languages', () => WHISPER_LANGUAGES);
@@ -1464,11 +1503,35 @@ ipcMain.handle('get-caption-language', () => {
   return (store.get('captionLanguage') as string | null) || DEFAULT_CAPTION_LANGUAGE;
 });
 
-ipcMain.handle('set-caption-language', (_, code: string) => {
+ipcMain.handle('set-caption-language', async (_, code: string) => {
   const language = isSupportedLanguage(code) ? code : DEFAULT_CAPTION_LANGUAGE;
+  const currentModel = (store.get('captionModel') as string | null) || getDefaultModelId();
+  const preferred = getPreferredModelForLanguage(language);
+
+  let modelId = currentModel;
+  // A user-provided model applies to any language chosen by the user, including
+  // languages with a builtin recommendation. Keep missing local selections
+  // explicit too, so changing language cannot silently replace their model.
+  if (preferred && !currentModel.startsWith('local:')) {
+    if (!isDarijaModel(currentModel)) {
+      store.set('captionModelBeforeDarija', currentModel);
+    }
+    modelId = isDarijaModel(currentModel) ? currentModel : preferred;
+  } else if (isDarijaModel(currentModel)) {
+    const previous = store.get('captionModelBeforeDarija') as string | null;
+    modelId = previous && getModelById(previous) && !isDarijaModel(previous)
+      ? previous
+      : getDefaultModelId();
+  }
+
   store.set('captionLanguage', language);
-  // Language is a per-run argument, so no model reload is needed.
-  return { success: true, language };
+  const modelChanged = modelId !== currentModel;
+  if (modelChanged) {
+    store.set('captionModel', modelId);
+    // A different engine/model must be prepared on the next run.
+    await whisperService.unloadModel();
+  }
+  return { success: true, language, modelId, modelChanged };
 });
 
 // ─── Studio (cloud) handlers ────────────────────────────────────────────────
@@ -1583,15 +1646,24 @@ async function prepareStudioAudio(input: ShortsAnalysisConfig, signal: AbortSign
         whisperService.setEnginePreference((store.get('captionEngine') as 'auto' | 'cuda' | 'cpu') || 'auto');
         if (!whisperService.isModelLoaded() || whisperService.getCurrentModelId() !== selectedModel) {
           progress('Preparing transcription engine…');
-          await whisperService.loadModel(selectedModel, (p) => progress(p.status === 'downloading'
-            ? `Downloading model: ${p.progress || 0}%` : `Preparing: ${p.status}`), signal);
+          await whisperService.loadModel(selectedModel, (p) => {
+            const pct = typeof p.progress === 'number' ? Math.round(p.progress) : 0;
+            if (p.status === 'downloading') {
+              progress(`Downloading model${p.file ? ` (${p.file})` : ''}: ${pct}%`);
+            } else if (p.status === 'downloading-bin') {
+              progress(`${p.file || 'Downloading transcription engine'}${pct ? `: ${pct}%` : '…'}`);
+            } else {
+              progress(`Preparing: ${p.status}`);
+            }
+          }, signal);
         }
         checkCancellation(signal);
+        const effectiveLanguage = isEnglishOnlyModel(selectedModel) ? 'en' : getWhisperLanguageCode(language);
         progress(language === 'auto' && !isEnglishOnlyModel(selectedModel)
           ? 'Detecting language and transcribing audio locally…'
-          : `Transcribing ${getLanguageName(isEnglishOnlyModel(selectedModel) ? 'en' : language)} locally…`);
+          : `Transcribing ${getLanguageName(language)} locally…`);
         const transcription = await whisperService.transcribe(audioPath, (p) => progress(p.status),
-          selectedModel, isEnglishOnlyModel(selectedModel) ? 'en' : language, signal);
+          selectedModel, effectiveLanguage, signal);
         checkCancellation(signal);
         const subtitleText = toSRT(formatCaptions(transcription, {}));
         if (!duration) duration = Math.max(0, ...transcription.chunks.map(chunk => chunk.timestamp[1])) || undefined;

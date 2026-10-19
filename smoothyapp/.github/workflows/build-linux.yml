@@ -1,53 +1,56 @@
-# Builds the Linux (AppImage + .deb) releases of SmoothyApp.
-#
-# Must run on a Linux host: the app bundles platform-specific binaries
-# (ffmpeg-static, ffprobe-static, onnxruntime-node, sharp, whisper.node)
-# that are resolved from the build machine's node_modules.
-#
-# - Manual runs (workflow_dispatch) upload the artifacts to the Actions run
-#   so the owner can attach/publish them with the normal release process.
-# - Tag runs (v*) build and publish with electron-builder to the GitHub
-#   release, matching the macOS/Windows publish flow.
-
+# Release-repo template: copy to .github/workflows/build-linux.yml at its root.
+# Native runners are required for the bundled FFmpeg, ONNX and Whisper binaries.
 name: Build Linux
 
 on:
   workflow_dispatch:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
+
+permissions:
+  contents: read
 
 jobs:
   build-linux:
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            arch: x64
+          - runner: ubuntu-22.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        working-directory: smoothyapp
+    env:
+      SMOOTHY_STOCK_SERVICE_URL: https://smoothyedit.com/api/stock/pixabay
+      SMOOTHY_TELEMETRY: "0"
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
-
-      - name: Install dependencies
+          cache-dependency-path: smoothyapp/package-lock.json
+      - name: Install native dependencies
         run: npm ci
-
-      - name: Build (manual run — artifacts only, no publish)
-        if: github.event_name == 'workflow_dispatch'
-        run: npm run build:linux
-
-      - name: Build + publish (tag release)
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run build:publish:linux
-
-      - name: Upload artifacts (manual run)
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v4
+      - name: Build installers without publishing
+        run: npm run build:linux -- --${{ matrix.arch }} --publish never
+      - name: Verify packaged native media tools
+        shell: bash
+        run: |
+          root=$(find dist -maxdepth 1 -type d -name '*unpacked' -print -quit)
+          test -n "$root"
+          ffmpeg="$root/resources/app.asar.unpacked/node_modules/ffmpeg-static/ffmpeg"
+          "$ffmpeg" -hide_banner -f lavfi -i sine=frequency=440:duration=1 -y /tmp/smoothy-test.wav
+          "$ffmpeg" -v error -i /tmp/smoothy-test.wav -f null -
+      - uses: actions/upload-artifact@v4
         with:
-          name: smoothyedit-linux
+          name: smoothyedit-linux-${{ matrix.arch }}
           path: |
-            dist/*AppImage
-            dist/*.deb
-            dist/latest-linux.yml
-          if-no-files-found: warn
+            smoothyapp/dist/*.AppImage
+            smoothyapp/dist/*.deb
+            smoothyapp/dist/latest-linux*.yml
+          if-no-files-found: error

@@ -20,8 +20,10 @@ import { randomUUID } from 'crypto';
 import { DEFAULT_CAPTION_LANGUAGE } from './languages';
 import {
   ensureModelDownloaded,
-  getModelFilePath
+  getModelFilePath,
+  isMoulsotModel
 } from './model-manager';
+import * as moulsotService from './moulsot-service';
 import {
   ensureBinary,
   isBinaryInstalled,
@@ -52,6 +54,7 @@ export type ProgressCallback = (progress: {
 }) => void;
 
 let currentModelId: string | null = null;
+let activeEngine: 'whisper' | 'moulsot' = 'whisper';
 let activeBackend: WhisperVariant = 'cpu';
 let activeBinary: string | null = null;
 let enginePrefSetting: 'auto' | 'cuda' | 'cpu' = 'auto';
@@ -64,7 +67,7 @@ const isMac = process.platform === 'darwin';
 const isWindows = process.platform === 'win32';
 
 export function getActiveBackend(): string {
-  return activeBackend;
+  return activeEngine === 'moulsot' ? moulsotService.getActiveBackend() : activeBackend;
 }
 
 /**
@@ -76,6 +79,7 @@ export function setEnginePreference(pref: 'auto' | 'cuda' | 'cpu'): void {
   const changed = normalized !== enginePrefSetting;
   enginePrefSetting = normalized;
   setBinEnginePreference(normalized);
+  moulsotService.setEnginePreference(normalized);
   if (changed) {
     activeBinary = null;
     console.log('[Whisper] Engine preference changed — engine will reload on next use');
@@ -96,6 +100,18 @@ export async function loadModel(
   signal?: AbortSignal
 ): Promise<void> {
   checkCancellation(signal);
+
+  if (isMoulsotModel(modelId)) {
+    activeEngine = 'moulsot';
+    activeBinary = null;
+    activeBackend = 'cpu';
+    await moulsotService.loadModel(modelId, onProgress, signal);
+    currentModelId = modelId;
+    return;
+  }
+
+  activeEngine = 'whisper';
+  await moulsotService.unloadModel();
   const modelPath = await ensureModelDownloaded(modelId, (p) => {
     if (onProgress) {
       onProgress({ status: 'downloading', progress: p.progress, file: p.file });
@@ -151,6 +167,7 @@ export async function loadModel(
 }
 
 export function isModelLoaded(): boolean {
+  if (activeEngine === 'moulsot') return moulsotService.isModelLoaded();
   return activeBinary !== null;
 }
 
@@ -265,13 +282,17 @@ export async function transcribe(
   signal?: AbortSignal
 ): Promise<TranscriptionResult> {
   checkCancellation(signal);
-  if (!activeBinary) {
-    throw new Error('No transcription engine loaded. Call loadModel() first.');
-  }
-
   const model = modelId || currentModelId;
   if (!model) {
     throw new Error('No model selected.');
+  }
+
+  if (isMoulsotModel(model)) {
+    return moulsotService.transcribe(audioPath, onProgress, model, language, signal);
+  }
+
+  if (!activeBinary) {
+    throw new Error('No transcription engine loaded. Call loadModel() first.');
   }
   const modelPath = getModelFilePath(model);
   if (!fs.existsSync(modelPath)) {
@@ -431,6 +452,7 @@ export async function transcribe(
  * TRANSCRIPTION_CANCELLED.
  */
 export async function cancelTranscription(): Promise<void> {
+  await moulsotService.cancelTranscription();
   if (activeTranscribe) {
     console.log('[Whisper] Cancelling transcription...');
     const child = activeTranscribe.process;
@@ -440,13 +462,15 @@ export async function cancelTranscription(): Promise<void> {
 }
 
 export function isTranscribing(): boolean {
-  return activeTranscribe !== null;
+  return activeTranscribe !== null || moulsotService.isTranscribing();
 }
 
 /** Release the loaded engine reference (nothing to free for the CLI). */
 export async function unloadModel(): Promise<void> {
   activeBinary = null;
+  activeEngine = 'whisper';
   currentModelId = null;
+  await moulsotService.unloadModel();
   console.log('[Whisper] Model unloaded');
 }
 

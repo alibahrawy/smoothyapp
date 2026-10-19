@@ -4,6 +4,10 @@ This is the **public release repo** for the SmoothyEdit desktop app
 (`alibahrawy/smoothyapp`). Source of truth / monorepo lives at
 `/Users/alibahrawy/Documents/Coding/smoothyedit`.
 
+## SmoothyApp 2.1 release authorized — 2026-10-19
+
+The owner requested rebuilding and publishing app 2.1 together with the new website, and supplied the saved notarization profile `smoothyedit-notary`. This authorizes the release commit/push, signed/notarized Mac 2.1.0 publication and subsequent website deployment. Preserve verified Windows 2.0.0 assets and updater metadata until a Windows 2.1 build is supplied. Linux builds use native runners and must be verified before uploading. Existing local-only restrictions are superseded for this release.
+
 ## SmoothyApp 2.0.0 Mac release authorized — 2026-10-10
 
 The owner requested **"Push the new mac app v2"** and **"push the new site"**. This authorizes committing/pushing the accumulated desktop v2 and website work, publishing the signed/notarized **Mac 2.0.0** artifacts, and deploying the website. The signed/notarized Mac 2.0.0 build (CEP 1.5.13) is published to the **v2.0.0** release; the verified Windows 1.5.2 installer, blockmap and `latest.yml` are carried into that release so Windows downloads and updates keep working. The mandatory v2 website changelog is added in the monorepo (`web/src/content/changelog/2026-10-10-smoothyapp-v2.mdx`). Preserve the Windows direct-Pixabay key path and keep provider credentials server-side.

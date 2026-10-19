@@ -708,7 +708,7 @@
         <div class="content-scroll">
           <aside id="caption-update-notice" class="caption-update-notice hidden" role="note" aria-labelledby="caption-update-title">
             <div class="caption-notice-heading"><strong id="caption-update-title">Arabic captions</strong><button id="caption-update-dismiss" type="button" class="caption-notice-close" aria-label="Dismiss Arabic captions notice">×</button></div>
-            <p>Arabic captions from Tiny or Base can miss words or repeat text, especially with dialects. For better results, choose <strong>Arabic</strong> and <strong>Large v3 Turbo</strong>. Review names and wording before exporting.</p>
+            <p>Arabic captions from Tiny or Base can miss words or repeat text, especially with dialects. For Moroccan Darija, choose <strong>Moroccan Darija</strong> — SmoothyEdit selects the <strong>MoulSot v0.3</strong> model automatically. For other Arabic, choose <strong>Arabic</strong> and <strong>Large v3 Turbo</strong>. Review names and wording before exporting.</p>
             <p>If the result still looks wrong, message me on <a href="https://discord.gg/KmJRqUZzDe" data-caption-support>Discord</a> or my socials: <a href="https://x.com/alibahrawy34" data-caption-support>X</a> / <a href="https://www.instagram.com/alibahrawy34/" data-caption-support>Instagram</a>. Sorry for that.</p>
           </aside>
           <!-- Source: sequence or local file -->
@@ -740,7 +740,7 @@
               <select id="caption-language-select" class="select-input">
                 <option value="auto">Auto-detect</option>
               </select>
-              <p class="help-text" id="caption-language-status">Auto-detect works for any spoken language. Non-English languages need a multilingual model.</p>
+              <p class="help-text" id="caption-language-status">Auto-detect works for any spoken language. Moroccan Darija automatically selects the local MoulSot v0.3 model.</p>
               <button type="button" id="caption-recommended-model" class="btn btn-secondary btn-small hidden">Use Large v3 Turbo</button>
             </div>
 
@@ -1515,6 +1515,13 @@
           <p id="chat-writing-help" class="help-text">Optional. Saved on this device.</p>
           <div class="settings-actions"><button type="button" id="chat-writing-save" class="btn btn-primary">Save</button><button type="button" id="chat-writing-reset" class="btn btn-secondary">Clear</button></div>
         <p id="chat-writing-status" class="help-text" role="status" aria-live="polite"></p>
+      </div>
+      <div class="settings-section">
+        <h4>Caption models</h4>
+        <p class="help-text">Open the folder containing your downloaded models. Add compatible whisper.cpp GGML <code>.bin</code> files for any language, then refresh to select them in Captions.</p>
+        <p class="help-text">Choose the spoken language in Captions and use a model that supports it. PyTorch, Safetensors and other GGUF models need conversion or a different engine.</p>
+        <div class="settings-actions"><button type="button" id="open-caption-models-folder-btn" class="btn btn-secondary">Open models folder</button><button type="button" id="refresh-caption-models-btn" class="btn btn-secondary">Refresh models</button></div>
+        <p id="caption-models-settings-status" class="help-text" role="status" aria-live="polite"></p>
       </div>
       <!-- Active NLE Selector -->
       <div class="settings-section">

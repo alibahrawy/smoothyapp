@@ -9,6 +9,19 @@
 export interface WhisperLanguage {
   code: string;
   name: string;
+  /** Language code passed to whisper.cpp when it differs from the UI code. */
+  whisperCode?: string;
+  /** Model that should be selected automatically for this language. */
+  preferredModel?: string;
+}
+
+/** MoulSot v0.3, a Qwen3-ASR model fine-tuned for Moroccan Darija. */
+export const MOULSOT_MODEL_ID = 'moulsot-v0.3-darija';
+/** Whisper Small with a Moroccan Darija DoRA fine-tune. */
+export const DARIJA_WHISPER_MODEL_ID = 'ggml-small-darija-dora.bin';
+
+export function isDarijaModel(modelId: string): boolean {
+  return modelId === MOULSOT_MODEL_ID || modelId === DARIJA_WHISPER_MODEL_ID;
 }
 
 export const DEFAULT_CAPTION_LANGUAGE = 'auto';
@@ -29,6 +42,7 @@ export const WHISPER_LANGUAGES: WhisperLanguage[] = [
   { code: 'ca', name: 'Catalan' },
   { code: 'nl', name: 'Dutch' },
   { code: 'ar', name: 'Arabic' },
+  { code: 'ary', name: 'Moroccan Darija', whisperCode: 'ar', preferredModel: MOULSOT_MODEL_ID },
   { code: 'sv', name: 'Swedish' },
   { code: 'it', name: 'Italian' },
   { code: 'id', name: 'Indonesian' },
@@ -124,4 +138,15 @@ export function isSupportedLanguage(code: string): boolean {
 export function getLanguageName(code: string): string {
   const found = WHISPER_LANGUAGES.find((lang) => lang.code === code);
   return found ? found.name : code;
+}
+
+/** whisper.cpp only understands Whisper language codes (Darija uses Arabic). */
+export function getWhisperLanguageCode(code: string): string {
+  const found = WHISPER_LANGUAGES.find((lang) => lang.code === code);
+  return found?.whisperCode || code;
+}
+
+/** Model that should be auto-selected when a language is chosen. */
+export function getPreferredModelForLanguage(code: string): string | undefined {
+  return WHISPER_LANGUAGES.find((lang) => lang.code === code)?.preferredModel;
 }

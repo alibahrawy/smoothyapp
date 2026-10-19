@@ -10,6 +10,13 @@ import { createMulticamPlan } from '../autocut/multicam-plan';
 import { generateShotDecisions } from '../autocut/decision-engine';
 import { runVad } from '../autocut/vad-runner';
 
+function canonicalOutputPath(file: string): string {
+  const absolute = path.resolve(file);
+  return fs.existsSync(absolute)
+    ? fs.realpathSync(absolute)
+    : path.join(fs.realpathSync(path.dirname(absolute)), path.basename(absolute));
+}
+
 export function createResolveService(deps: {
   progress: (percent: number, message: string) => void;
   result: (result: any) => void;
@@ -40,7 +47,7 @@ export function createResolveService(deps: {
       const timeline=loaded;controller=new AbortController();const signal=controller.signal;let audio:string|undefined,temp:string|undefined;
       try {
         if(!timeline || config.options?.sequenceId!==timeline.id)throw new Error('Load the Resolve timeline again.');
-        if(path.resolve(destination).toLowerCase()===sourcePath?.toLowerCase())throw new Error('Save a new XML file; keep your source export.');
+        if(canonicalOutputPath(destination).toLowerCase()===sourcePath?.toLowerCase())throw new Error('Save a new XML file; keep your source export.');
         for(const track of [...timeline.videoTracks,...timeline.audioTracks])if(track.issues.length)throw new Error(track.issues.join('\n'));
         if(!Array.isArray(config.sources)||!config.sources.length||config.sources.some((source:any)=>!Number.isInteger(source.trackIndex)||!timeline.audioTracks[source.trackIndex]?.enabled))throw new Error('Select enabled Resolve microphone tracks.');
         if(![config.options.thresholdDb,config.options.minSilenceDuration,config.options.padding].every(Number.isFinite)||config.options.thresholdDb>0||config.options.thresholdDb< -100||config.options.minSilenceDuration<=0||config.options.padding<0)throw new Error('Use valid silence detection settings.');
@@ -66,7 +73,7 @@ export function createResolveService(deps: {
         const timeline = loaded;
         const { sources, options } = config || {};
         if (!timeline || options?.sequenceId !== timeline.id || options?.timelineRevision !== timeline.id) throw new Error('Load your Resolve XML again before running Multicam.');
-        if (path.resolve(destination).toLowerCase() === sourcePath?.toLowerCase()) throw new Error('Save the result to a new XML file. Keep your original export.');
+        if (canonicalOutputPath(destination).toLowerCase() === sourcePath?.toLowerCase()) throw new Error('Save the result to a new XML file. Keep your original export.');
         const cameras: number[] = options?.videoTracks?.map((track: any) => track.index) || [];
         if (cameras.length < 2 || new Set(cameras).size !== cameras.length || cameras.some(index => !Number.isInteger(index) || !timeline.videoTracks[index])) throw new Error('Select at least two different camera tracks.');
         if (!Array.isArray(sources) || !sources.length || new Set(sources.map(s => s.index)).size !== sources.length || sources.some(s => !Number.isInteger(s.index) || !timeline.audioTracks[s.index] || !Number.isInteger(s.camera) || s.camera < 0 || s.camera >= cameras.length)) throw new Error('Choose valid microphone tracks and camera mappings.');

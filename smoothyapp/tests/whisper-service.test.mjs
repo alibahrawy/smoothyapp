@@ -11,7 +11,8 @@ import { EventEmitter } from 'node:events';
 const output = await build({ entryPoints: [new URL('../src/main/captions/whisper-service.ts', import.meta.url).pathname], bundle: true,
   format: 'cjs', platform: 'node', packages: 'external', write: false, plugins: [{ name: 'native-fixture', setup(builder) {
     const stubs = {
-      './model-manager': `export const ensureModelDownloaded=async()=>globalThis.fixture.model,getModelFilePath=()=>globalThis.fixture.model;`,
+      './model-manager': `export const ensureModelDownloaded=async()=>globalThis.fixture.model,getModelFilePath=()=>globalThis.fixture.model,isMoulsotModel=()=>false;`,
+      './moulsot-service': `export const getActiveBackend=()=>null,setEnginePreference=()=>{},loadModel=()=>{throw Error('Unexpected Darija engine call')},unloadModel=async()=>{},isModelLoaded=()=>false,transcribe=()=>{throw Error('Unexpected Darija engine call')},cancelTranscription=async()=>{},isTranscribing=()=>false;`,
       './whisper-bin-manager': `export const ensureBinary=async v=>v,isBinaryInstalled=()=>true,getVariantOrder=()=>[globalThis.fixture.backend],clearBinary=()=>{},setEnginePreference=()=>{},getEnginePreference=()=> 'auto';`,
       child_process: `export const spawn=(...args)=>globalThis.fixture.spawn(...args);`
     };

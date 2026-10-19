@@ -77,6 +77,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Captions
   getCaptionModels: () => ipcRenderer.invoke('get-caption-models'),
+  openCaptionModelsFolder: () => ipcRenderer.invoke('open-caption-models-folder'),
   getCaptionModelStatus: () => ipcRenderer.invoke('get-caption-model-status'),
   downloadCaptionModel: (modelId: string) => ipcRenderer.invoke('download-caption-model', modelId),
   generateCaptions: (config: { audioPath?: string; settings: any; trackIndices?: number[] }) =>

@@ -131,6 +131,9 @@ const settingsBtn = document.getElementById('settings-btn');
 const settingsModal = document.getElementById('settings-modal');
 const settingsBody = document.getElementById('settings-body');
 const settingsCloseBtn = document.getElementById('settings-close-btn');
+const openCaptionModelsFolderBtn = document.getElementById('open-caption-models-folder-btn');
+const refreshCaptionModelsBtn = document.getElementById('refresh-caption-models-btn');
+const captionModelsSettingsStatus = document.getElementById('caption-models-settings-status');
 const connectionTokenInput = document.getElementById('connection-token');
 const saveTokenBtn = document.getElementById('save-token-btn');
 const connectWebsiteBtn = document.getElementById('connect-website-btn');
@@ -236,8 +239,7 @@ async function init() {
   try { applyUpdateState(await window.electronAPI.getUpdateState()); } catch {}
 
   // Caption model list + engine status
-  loadCaptionModels();
-  loadCaptionLanguages();
+  loadCaptionLanguages().then(loadCaptionModels);
   loadCaptionEnginePreference();
 
   // Assets (SVG / image -> PNG) tab
@@ -338,7 +340,7 @@ function applyStudioPreference(enabled, changed) {
 
 function setupCaptionUpdateNotice() {
   const notice = document.getElementById('caption-update-notice');
-  const dismissedKey = 'smoothyedit:arabic-captions:2026-10-09:dismissed';
+  const dismissedKey = 'smoothyedit:arabic-captions:2026-10-19:dismissed';
   let dismissed = false;
   try { dismissed = localStorage.getItem(dismissedKey) === 'true'; } catch {}
   notice.classList.toggle('hidden', dismissed);
@@ -577,6 +579,7 @@ function setupEventListeners() {
       }
       if (tab === 'captions') {
         if (state.sequenceInfo) displayCaptionsSequenceInfo(state.sequenceInfo);
+        if (!state.isProcessing && !state.isTranscribing) loadCaptionModels();
       }
     });
   });
@@ -656,7 +659,9 @@ function setupEventListeners() {
   });
   captionRecommendedModel?.addEventListener('click', async () => {
     if (state.isProcessing || state.isTranscribing) return;
-    captionModelSelect.value = 'ggml-large-v3-turbo.bin';
+    captionModelSelect.value = captionLanguageSelect?.value === 'ary'
+      ? 'moulsot-v0.3-darija'
+      : 'ggml-large-v3-turbo.bin';
     await onCaptionModelChange();
   });
   if (progressCancelBtn) progressCancelBtn.addEventListener('click', cancelProgressOperation);
@@ -694,6 +699,35 @@ function setupEventListeners() {
 
   // Settings Modal
   settingsBtn.addEventListener('click', openSettings);
+  openCaptionModelsFolderBtn?.addEventListener('click', async () => {
+    openCaptionModelsFolderBtn.disabled = true;
+    try {
+      const result = await window.electronAPI.openCaptionModelsFolder();
+      if (!result?.success) throw new Error(result?.error || 'Could not open models folder');
+      captionModelsSettingsStatus.textContent = 'Folder opened. Add your compatible models, then click Refresh models.';
+    } catch (error) {
+      captionModelsSettingsStatus.textContent = error.message || 'Could not open models folder';
+    } finally {
+      openCaptionModelsFolderBtn.disabled = false;
+    }
+  });
+  refreshCaptionModelsBtn?.addEventListener('click', async () => {
+    if (state.isProcessing || state.isTranscribing) {
+      captionModelsSettingsStatus.textContent = 'Finish or cancel the current job before refreshing models.';
+      return;
+    }
+    refreshCaptionModelsBtn.disabled = true;
+    try {
+      const models = await loadCaptionModels();
+      if (!models) throw new Error('Could not refresh models. Check folder access and try again.');
+      const count = models.filter(model => model.custom).length;
+      captionModelsSettingsStatus.textContent = `Models refreshed. ${count} custom ${count === 1 ? 'model' : 'models'} available in Captions.`;
+    } catch (error) {
+      captionModelsSettingsStatus.textContent = error.message || 'Could not refresh models';
+    } finally {
+      refreshCaptionModelsBtn.disabled = false;
+    }
+  });
   document.getElementById('settings-account-btn').addEventListener('click', () => { closeSettings(); if (state.authState?.user) window.electronAPI.openExternal('https://smoothyedit.com/settings'); else openLoginModal(); });
   document.querySelectorAll('[data-account-page]').forEach(button => button.addEventListener('click', () => {
     closeSettings(); if (state.authState?.user) window.electronAPI.openExternal(`https://smoothyedit.com/${button.dataset.accountPage}`); else openLoginModal();
@@ -2527,26 +2561,52 @@ function updateGenerateCaptionsButton() {
 }
 
 async function loadCaptionModels() {
-  if (!captionModelSelect) return;
+  if (!captionModelSelect) return null;
+  let loadedModels = null;
   try {
     const [models, selected] = await Promise.all([
       window.electronAPI.getCaptionModels(),
       window.electronAPI.getSelectedCaptionModel()
     ]);
+    const isDarija = captionLanguageSelect?.value === 'ary';
+    const visibleModels = (models || []).filter((model) => !isDarija || model.custom || model.specialistLanguage === 'ary');
+    let selectedModel = selected;
+    // Repair older Darija preferences that selected a model now hidden here,
+    // so Generate uses the same model the picker displays.
+    if (isDarija && !selectedModel?.startsWith('local:') && !visibleModels.some((model) => model.id === selectedModel)) {
+      const result = await window.electronAPI.setCaptionLanguage('ary');
+      if (!result?.success) throw new Error(result?.error || 'Could not select the Darija model');
+      selectedModel = result.modelId;
+    }
     captionModelSelect.innerHTML = '';
-    (models || []).forEach((m) => {
+    visibleModels.forEach((m) => {
       const opt = document.createElement('option');
       opt.value = m.id;
       opt.textContent = `${m.name} — ${m.size}`;
-      if (m.id === selected) opt.selected = true;
+      if (m.specialistLanguage) opt.dataset.specialistLanguage = m.specialistLanguage;
+      if (m.custom) opt.dataset.custom = 'true';
+      if (m.englishOnly) opt.dataset.englishOnly = 'true';
+      if (m.id === selectedModel) opt.selected = true;
       captionModelSelect.appendChild(opt);
     });
-    if (!captionModelSelect.value && selected) captionModelSelect.value = selected;
+    // Preserve a removed/invalid custom selection visibly instead of displaying
+    // a different model while Generate still uses the stored one.
+    if (selectedModel && !visibleModels.some(model => model.id === selectedModel)) {
+      const missing = document.createElement('option');
+      missing.value = selectedModel;
+      missing.textContent = 'Selected model unavailable — restore it or choose another';
+      missing.disabled = true;
+      missing.dataset.missing = 'true';
+      captionModelSelect.appendChild(missing);
+    }
+    captionModelSelect.value = selectedModel;
+    loadedModels = models;
   } catch (error) {
     console.warn('Failed to load caption models', error);
   }
   updateCaptionLanguageHint();
   refreshCaptionEngineStatus();
+  return loadedModels;
 }
 
 async function refreshCaptionEngineStatus() {
@@ -2571,7 +2631,12 @@ async function refreshCaptionEngineStatus() {
 async function onCaptionModelChange() {
   if (!captionModelSelect) return;
   try {
-    await window.electronAPI.setSelectedCaptionModel(captionModelSelect.value);
+    const result = await window.electronAPI.setSelectedCaptionModel(captionModelSelect.value);
+    if (!result?.success) throw new Error(result?.error || 'Could not change the model');
+    if (result?.language && captionLanguageSelect) {
+      captionLanguageSelect.value = result.language;
+    }
+    await loadCaptionModels();
     captionEngineStatus.textContent = 'Model set — applies to your next transcription';
     updateCaptionLanguageHint();
   } catch (error) {
@@ -2604,7 +2669,13 @@ async function loadCaptionLanguages() {
 async function onCaptionLanguageChange() {
   if (!captionLanguageSelect) return;
   try {
-    await window.electronAPI.setCaptionLanguage(captionLanguageSelect.value);
+    const result = await window.electronAPI.setCaptionLanguage(captionLanguageSelect.value);
+    if (!result?.success) throw new Error(result?.error || 'Could not change the language');
+    if (result.language) captionLanguageSelect.value = result.language;
+    await loadCaptionModels();
+    if (result?.modelChanged) {
+      captionEngineStatus.textContent = 'Model set — applies to your next transcription';
+    }
     updateCaptionLanguageHint();
   } catch (error) {
     showError(error.message || 'Could not change the language');
@@ -2620,12 +2691,48 @@ function updateCaptionLanguageHint() {
   if (!captionLanguageStatus || !captionLanguageSelect) return;
   const code = captionLanguageSelect.value;
   const modelId = captionModelSelect ? captionModelSelect.value : '';
+  const selectedOption = captionModelSelect?.selectedOptions[0];
+  if (selectedOption?.dataset.missing) {
+    captionRecommendedModel?.classList.add('hidden');
+    captionLanguageStatus.textContent = 'Selected model is missing or unsupported. Restore its file and refresh, or choose another model.';
+    return;
+  }
+  const isDarija = code === 'ary';
+  const isMoulsot = /^moulsot-v0\.3-darija$/i.test(modelId);
+  const isDarijaWhisper = modelId === 'ggml-small-darija-dora.bin';
   const lowAccuracyArabic = code === 'ar' && /^ggml-(tiny|base)\.bin$/i.test(modelId);
   const lowAccuracyAuto = code === 'auto' && /^ggml-(tiny|base)\.bin$/i.test(modelId);
-  captionRecommendedModel?.classList.toggle('hidden', !lowAccuracyArabic && !lowAccuracyAuto);
-  if (/\.en\.bin$/i.test(modelId) && code !== 'auto' && code !== 'en') {
+  const needsDarijaModel = isDarija && selectedOption?.dataset.custom !== 'true' && selectedOption?.dataset.specialistLanguage !== 'ary';
+  captionRecommendedModel?.classList.toggle(
+    'hidden',
+    !lowAccuracyArabic && !lowAccuracyAuto && !needsDarijaModel
+  );
+  if (captionRecommendedModel && !captionRecommendedModel.classList.contains('hidden')) {
+    captionRecommendedModel.textContent = needsDarijaModel ? 'Use MoulSot v0.3' : 'Use Large v3 Turbo';
+  }
+  if (needsDarijaModel) {
+    captionLanguageStatus.textContent = 'Choose a Darija-trained model. MoulSot v0.3 is recommended for Moroccan Darija.';
+    return;
+  }
+  if (isMoulsot && !isDarija) {
+    captionLanguageStatus.textContent = 'MoulSot v0.3 is tuned for Moroccan Darija. Choose Moroccan Darija or a multilingual Whisper model.';
+    return;
+  }
+  if (isDarija && isMoulsot) {
+    captionLanguageStatus.textContent = 'MoulSot v0.3 — recommended for Moroccan Darija. Downloads once (~1.6 GB); caption timing follows speech pauses.';
+    return;
+  }
+  if (isDarija && isDarijaWhisper) {
+    captionLanguageStatus.textContent = 'Whisper Small Darija — fine-tuned for Moroccan Darija with DoRA. Smaller download (~488 MB); runs locally.';
+    return;
+  }
+  if (selectedOption?.dataset.englishOnly === 'true' && code !== 'auto' && code !== 'en') {
     const label = captionLanguageSelect.options[captionLanguageSelect.selectedIndex]?.textContent || code;
     captionLanguageStatus.textContent = `${label} needs a multilingual model — choose one above (e.g. Large v3 Turbo).`;
+    return;
+  }
+  if (selectedOption?.dataset.custom === 'true') {
+    captionLanguageStatus.textContent = 'Your local Whisper model — runs on this device. Applies to your next transcription.';
     return;
   }
   if (lowAccuracyArabic) {
@@ -2633,7 +2740,7 @@ function updateCaptionLanguageHint() {
     return;
   }
   if (lowAccuracyAuto) {
-    captionLanguageStatus.textContent = 'Tiny and Base favor speed over accuracy. For Arabic or other non-English speech, select the language and use Large v3 Turbo (1.6 GB, downloaded once).';
+    captionLanguageStatus.textContent = 'Tiny and Base favor speed over accuracy. For Arabic or other non-English speech, use Large v3 Turbo or MoulSot (1.6 GB, downloaded once).';
     return;
   }
   captionLanguageStatus.textContent = code === 'auto'
