@@ -34,7 +34,6 @@
   "devDependencies": {
     "electron": "^41.1.0",
     "electron-builder": "^24.9.1",
-    "electron-icon-builder": "^2.0.1",
     "electron-vite": "^2.0.0",
     "fengari": "0.1.5",
     "vite": "^5.0.0"
