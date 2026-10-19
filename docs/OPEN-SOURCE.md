@@ -30,7 +30,11 @@ SmoothyApp builds on the work of these projects and their contributors. This pag
 | Project | Role / source |
 | --- | --- |
 | [Whisper](https://github.com/openai/whisper) | Multilingual speech recognition models. |
+| [Whisper Small Darija (DoRA)](https://huggingface.co/ehyoussef/whisper-small-darija-ext) | Moroccan Darija fine-tune, downloaded in the author's native GGML format from a pinned revision and SHA-256 verified. The author identifies the Whisper Small base and Moroccan Darija DoRA adapter; consult that repository for weight-specific terms. |
 | [whisper.cpp](https://github.com/ggml-org/whisper.cpp) | Local transcription engine; [binary distribution used by the app](https://github.com/sjoerdteunisse/whisper.cpp). |
+| [MoulSot v0.3](https://huggingface.co/atlasia/moulsot.v0.3) | Moroccan Darija ASR model (Apache-2.0), downloaded on first Darija use. The app uses the [mradermacher Q5_K_M GGUF](https://huggingface.co/mradermacher/moulsot.v0.3-GGUF) conversion and its mmproj. |
+| [Qwen3-ASR](https://github.com/QwenLM/Qwen3-ASR) | Base speech-recognition architecture and model family for MoulSot. |
+| [llama.cpp](https://github.com/ggml-org/llama.cpp) | Local GGUF multimodal inference engine for MoulSot; official per-platform `llama-mtmd-cli` builds are downloaded and checksum-verified. |
 | [audio-separator](https://github.com/nomadkaraoke/python-audio-separator) | Audio Cleanup separation engine, pinned to 0.30.2. |
 | [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) | Audio model ecosystem used through audio-separator: `UVR-MDX-NET-Inst_HQ_3.onnx` and `UVR-DeNoise-Lite.pth`. Refer to each model distributor for model-specific terms. |
 | [PyTorch](https://github.com/pytorch/pytorch), [torchaudio](https://github.com/pytorch/audio), [torchvision](https://github.com/pytorch/vision) | Local audio model runtime; selected packages depend on hardware. |

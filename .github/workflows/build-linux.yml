@@ -27,6 +27,7 @@ jobs:
     env:
       SMOOTHY_STOCK_SERVICE_URL: https://smoothyedit.com/api/stock/pixabay
       SMOOTHY_TELEMETRY: "0"
+      USE_SYSTEM_FPM: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,6 +37,8 @@ jobs:
           cache-dependency-path: smoothyapp/package-lock.json
       - name: Install native dependencies
         run: npm ci
+      - name: Install native Debian packager
+        run: sudo gem install fpm -v 1.17.0 --no-document
       - name: Build installers without publishing
         run: |
           npm run generate-icons
