@@ -1,10 +1,11 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-const output = await build({ entryPoints: [new URL('../src/main/audio-archive.ts', import.meta.url).pathname], bundle: true, platform: 'node', format: 'esm', write: false });
+const output = await build({ entryPoints: [fileURLToPath(new URL('../src/main/audio-archive.ts', import.meta.url))], bundle: true, platform: 'node', format: 'esm', write: false });
 const { AudioArchive, normalizeArchive, enrichArchive, AUDIO_ARCHIVE_URL } = await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
 const id = '1KAk_m-PLFD8oT5EJ2JDBqx_Q0TqCeSEx';
 const catalog = { all: [{ id, name: 'Sky_Skating.mp3', mimeType: 'audio/mpeg' }] };

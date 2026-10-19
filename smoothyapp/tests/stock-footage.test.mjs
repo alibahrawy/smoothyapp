@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
@@ -5,7 +6,7 @@ import { mkdtemp, readFile, readdir, rm, copyFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
-const output = await build({ entryPoints: [new URL('../src/main/stock-footage.ts', import.meta.url).pathname], bundle: true, platform: 'node', format: 'esm', write: false });
+const output = await build({ entryPoints: [fileURLToPath(new URL('../src/main/stock-footage.ts', import.meta.url))], bundle: true, platform: 'node', format: 'esm', write: false });
 const { StockFootageService, normalizeStockVideo } = await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
 export const raw = { pageid: 100, index: 1, title: 'File:Ocean.webm', videoinfo: [{ width: 1920, height: 1080, duration: 15,
  descriptionurl: 'https://commons.wikimedia.org/wiki/File:Ocean.webm', thumburl: 'https://thumb.wikimedia.org/ocean.jpg',

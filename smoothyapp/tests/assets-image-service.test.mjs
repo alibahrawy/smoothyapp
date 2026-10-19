@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import fs from 'node:fs/promises';
@@ -9,7 +10,7 @@ import { build } from 'esbuild';
 import sharp from 'sharp';
 
 async function load(source) {
-  const result = await build({ entryPoints: [new URL('../src/main/' + source, import.meta.url).pathname], bundle: true, platform: 'node', format: 'cjs', write: false, external: ['sharp'] });
+  const result = await build({ entryPoints: [fileURLToPath(new URL('../src/main/' + source, import.meta.url))], bundle: true, platform: 'node', format: 'cjs', write: false, external: ['sharp'] });
   const module = { exports: {} };
   new Function('require', 'module', 'exports', result.outputFiles[0].text)(createRequire(import.meta.url), module, module.exports);
   return module.exports;

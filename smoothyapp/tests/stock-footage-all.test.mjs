@@ -1,10 +1,11 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
 import { mkdtemp, readFile, rm, copyFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-const output = await build({ entryPoints: [new URL('../src/main/stock-footage.ts', import.meta.url).pathname], bundle: true, platform: 'node', format: 'esm', write: false });
+const output = await build({ entryPoints: [fileURLToPath(new URL('../src/main/stock-footage.ts', import.meta.url))], bundle: true, platform: 'node', format: 'esm', write: false });
 const { StockFootageService } = await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
 const providers = ['commons', 'archive', 'nasa'];
 const mp4 = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.alloc(60)]);

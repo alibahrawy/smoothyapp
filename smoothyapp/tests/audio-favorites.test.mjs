@@ -1,7 +1,8 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
-const bundle = await build({entryPoints:[new URL('../src/main/audio-favorites.ts',import.meta.url).pathname],bundle:true,platform:'node',format:'esm',write:false});
+const bundle = await build({entryPoints:[fileURLToPath(new URL('../src/main/audio-favorites.ts', import.meta.url))],bundle:true,platform:'node',format:'esm',write:false});
 const { AudioFavorites } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 const id='1KAk_m-PLFD8oT5EJ2JDBqx_Q0TqCeSEx', second='track'.padEnd(30,'b'), local='local:00000000-0000-4000-8000-000000000000';
 const store = () => {const values=new Map();return {get:k=>structuredClone(values.get(k)),set:(k,v)=>values.set(k,structuredClone(v))};};

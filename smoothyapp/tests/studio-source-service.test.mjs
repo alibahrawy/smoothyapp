@@ -1,7 +1,8 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
-const bundle = await build({ entryPoints: [new URL('../src/main/studio-source-service.ts', import.meta.url).pathname], bundle: true, format: 'esm', platform: 'node', write: false });
+const bundle = await build({ entryPoints: [fileURLToPath(new URL('../src/main/studio-source-service.ts', import.meta.url))], bundle: true, format: 'esm', platform: 'node', write: false });
 const { createStudioSourceService } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 function fixture(overrides = {}) {
   const f = { owner: 'a', enabled: true, busy: false, events: [], reads: [], prepares: [], stop: 0, ...overrides };

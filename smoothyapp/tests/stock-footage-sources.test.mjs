@@ -1,10 +1,11 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
 import { mkdtemp, readFile, rm, copyFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-const output = await build({ stdin: { contents: "export * from './src/main/stock-footage'; export * from './src/main/stock-footage-sources';", resolveDir: new URL('..', import.meta.url).pathname }, bundle: true, platform: 'node', format: 'esm', write: false });
+const output = await build({ stdin: { contents: "export * from './src/main/stock-footage'; export * from './src/main/stock-footage-sources';", resolveDir: fileURLToPath(new URL('..', import.meta.url)) }, bundle: true, platform: 'node', format: 'esm', write: false });
 const { StockFootageService, normalizeArchiveVideos, normalizeNasaVideo, archiveMediaUrl } = await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
 const archive = { metadata: { identifier: 'ocean', mediatype: 'movies', collection: ['stock_footage'], title: 'Ocean <b>shot</b>', creator: 'Director', licenseurl: 'http://creativecommons.org/publicdomain/zero/1.0/' },
   files: [{ name: 'ocean.mp4', source: 'original', width: '1920', height: '1080', length: '30.5', size: '64' }, { name: 'ocean-small.mp4', original: 'ocean.mp4', width: '640', height: '360', length: '30.5' }, { name: 'waves.mp4', width: '1280', height: '720', length: '12' }] };

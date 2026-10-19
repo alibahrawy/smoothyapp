@@ -1,16 +1,18 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {build} from 'esbuild';
 import {mkdtemp,writeFile,readFile,readdir,rm,mkdir,symlink} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-const output=await build({entryPoints:[new URL('../src/main/audio-library.ts',import.meta.url).pathname],bundle:true,platform:'node',format:'esm',write:false});
+async function symlinkOrSkip(t,target,link){try{await symlink(target,link);return true;}catch(error){if(error?.code==='EPERM'||error?.code==='EACCES'){t.skip('Windows symlink privileges are unavailable');return false;}throw error;}}
+const output=await build({entryPoints:[fileURLToPath(new URL('../src/main/audio-library.ts', import.meta.url))],bundle:true,platform:'node',format:'esm',write:false});
 const {AudioLibrary}=await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
 const bytes=Buffer.alloc(512,1);
 async function fixture(action){const dir=await mkdtemp(path.join(os.tmpdir(),'smoothy-audio-'));const downloads=path.join(dir,'downloads');await mkdir(downloads);let now=0;const library=new AudioLibrary(path.join(dir,'library'),async()=>{},()=>now);await library.load();try{await action({library,downloads,dir,tick:()=>{now+=4000;}});}finally{await rm(dir,{recursive:true,force:true});}}
-test('download sessions ignore existing, partial, changing, nonMP3 and symlink files',async()=>fixture(async f=>{
+test('download sessions ignore existing, partial, changing, nonMP3 and symlink files',async t=>fixture(async f=>{
  await writeFile(path.join(f.downloads,'existing.mp3'),bytes);await f.library.start(f.downloads);
- await writeFile(path.join(f.downloads,'new.mp3'),bytes);await writeFile(path.join(f.downloads,'new.mp3.crdownload'),bytes);await writeFile(path.join(f.downloads,'other.txt'),bytes);await symlink(path.join(f.downloads,'existing.mp3'),path.join(f.downloads,'link.mp3'));
+ await writeFile(path.join(f.downloads,'new.mp3'),bytes);await writeFile(path.join(f.downloads,'new.mp3.crdownload'),bytes);await writeFile(path.join(f.downloads,'other.txt'),bytes);if(!await symlinkOrSkip(t,path.join(f.downloads,'existing.mp3'),path.join(f.downloads,'link.mp3')))return;
  await f.library.poll();f.tick();await f.library.poll();assert.equal(f.library.snapshot().candidates.length,0);
  await rm(path.join(f.downloads,'new.mp3.crdownload'));await f.library.poll();f.tick();assert.equal(await f.library.poll(),true);assert.deepEqual(f.library.snapshot().candidates.map(x=>x.name),['new.mp3']);
  assert.equal(JSON.stringify(f.library.snapshot().candidates).includes(f.downloads),false);
@@ -33,6 +35,6 @@ test('changed candidates and invalid MP3s leave no copied media or catalog entri
  const file=path.join(f.downloads,'song.mp3');await writeFile(file,bytes);await f.library.offer([file]);const id=f.library.snapshot().candidates[0].id;await writeFile(file,Buffer.alloc(700));await assert.rejects(f.library.keep(id,{title:'Song'}),/changed/);assert.deepEqual(await readdir(f.library.folder),[]);
  const bad=new AudioLibrary(path.join(f.dir,'bad'),async()=>{throw Error('not MP3');});await bad.load();await bad.offer([file]);await assert.rejects(bad.keep(bad.snapshot().candidates[0].id,{title:'Song'}),/not MP3/);assert.deepEqual(await readdir(bad.folder),[]);
 }));
-test('manual add excludes symlinks and dismissing a candidate never deletes the download',async()=>fixture(async f=>{
- const file=path.join(f.downloads,'song.mp3');await writeFile(file,bytes);const link=path.join(f.downloads,'link.mp3');await symlink(file,link);await assert.rejects(f.library.offer([link]),/complete MP3/);await f.library.offer([file]);f.library.dismiss(f.library.snapshot().candidates[0].id);assert.deepEqual(await readFile(file),bytes);
+test('manual add excludes symlinks and dismissing a candidate never deletes the download',async t=>fixture(async f=>{
+ const file=path.join(f.downloads,'song.mp3');await writeFile(file,bytes);const link=path.join(f.downloads,'link.mp3');if(!await symlinkOrSkip(t,file,link))return;await assert.rejects(f.library.offer([link]),/complete MP3/);await f.library.offer([file]);f.library.dismiss(f.library.snapshot().candidates[0].id);assert.deepEqual(await readFile(file),bytes);
 }));

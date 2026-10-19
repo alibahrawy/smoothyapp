@@ -1,8 +1,9 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { EventEmitter } from 'node:events';
 import { build } from 'esbuild';
-const bundle = await build({ entryPoints: [new URL('../src/main/update-service.ts', import.meta.url).pathname], bundle: true, format: 'esm', platform: 'node', write: false });
+const bundle = await build({ entryPoints: [fileURLToPath(new URL('../src/main/update-service.ts', import.meta.url))], bundle: true, format: 'esm', platform: 'node', write: false });
 const { createUpdateService } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 function fixture({ saved = new Map(), packaged = true, configured = packaged, fetchNotes = async () => '## Fixed\n- Camera clips preserved\n## New\n- Update choices' } = {}) {
   const updater = new EventEmitter(), calls = { checks: 0, downloads: 0, installs: [] }, events = [];

@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
@@ -7,7 +8,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import sharp from 'sharp';
 import AdmZip from 'adm-zip';
-const root=new URL('..',import.meta.url).pathname,scratch=await fs.mkdtemp(path.join(os.tmpdir(),'smoothy-chat-files-'));
+const root=fileURLToPath(new URL('..', import.meta.url)),scratch=await fs.mkdtemp(path.join(os.tmpdir(),'smoothy-chat-files-'));
 const bundle=await build({entryPoints:[path.join(root,'src/main/chat-attachments.ts')],bundle:true,platform:'node',format:'cjs',write:false,external:['sharp','unpdf','mammoth','adm-zip']});
 const module={exports:{}};new Function('module','exports','require',bundle.outputFiles[0].text)(module,module.exports,createRequire(import.meta.url));const {readChatAttachment}=module.exports;
 async function write(name,bytes){const file=path.join(scratch,name);await fs.writeFile(file,bytes);return file;}

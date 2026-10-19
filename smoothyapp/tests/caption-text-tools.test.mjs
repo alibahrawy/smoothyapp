@@ -1,8 +1,9 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
 
-const output = await build({ entryPoints: [new URL('../src/renderer/caption-text-tools.js', import.meta.url).pathname], bundle: true, platform: 'node', format: 'esm', write: false });
+const output = await build({ entryPoints: [fileURLToPath(new URL('../src/renderer/caption-text-tools.js', import.meta.url))], bundle: true, platform: 'node', format: 'esm', write: false });
 const { findCaptionMatches, replaceCaptionMatches } = await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
 const caption = (text, index = 1) => ({ index, text, startTime: (index - 1) * 3, endTime: index * 3 });
 

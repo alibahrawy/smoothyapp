@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFile } from 'node:fs/promises';
@@ -79,7 +80,7 @@ test('a successful Premiere import counts once without counting its temporary PN
 
 async function telemetry(disabled = false) {
   const bundle = await build({
-    entryPoints: [new URL('../src/main/telemetry.ts', import.meta.url).pathname],
+    entryPoints: [fileURLToPath(new URL('../src/main/telemetry.ts', import.meta.url))],
     bundle: true, format: 'esm', platform: 'node', write: false,
     define: { 'process.env.SMOOTHY_TELEMETRY': JSON.stringify(disabled ? '0' : '1') },
     plugins: [{ name: 'fixture-electron', setup(builder) {

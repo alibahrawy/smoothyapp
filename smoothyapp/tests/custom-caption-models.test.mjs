@@ -44,7 +44,8 @@ test('custom catalog rescans native GGML, keeps builtin downloads unique and ide
     fs.writeFileSync(path.join(directory, 'copy.bin.part'), header());
     fs.writeFileSync(path.join(directory, 'other.gguf'), header());
     fs.writeFileSync(path.join(directory, 'ggml-silero-v6.2.0.bin'), header());
-    fs.symlinkSync(path.join(directory, 'My model.bin'), path.join(directory, 'symlink.bin'));
+    try { fs.symlinkSync(path.join(directory, 'My model.bin'), path.join(directory, 'symlink.bin')); }
+    catch (error) { if (error?.code !== 'EPERM' && error?.code !== 'EACCES') throw error; }
     fs.mkdirSync(path.join(directory, 'nested'));
     fs.writeFileSync(path.join(directory, 'nested', 'French model.bin'), header());
     fs.mkdirSync(path.join(directory, 'nested', 'deeper'));

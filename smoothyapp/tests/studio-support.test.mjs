@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
@@ -5,7 +6,7 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 
 async function load(relative) {
-  const result = await build({ entryPoints: [new URL(relative, import.meta.url).pathname], bundle: true, format: 'esm', platform: 'node', write: false });
+  const result = await build({ entryPoints: [fileURLToPath(new URL(relative, import.meta.url))], bundle: true, format: 'esm', platform: 'node', write: false });
   return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`);
 }
 const pref = await load('../src/main/app-preferences.ts');
@@ -138,7 +139,7 @@ test('drafts render every JSON structure as readable text, keeping HTML inert an
 });
 
 test('desktop labels/descriptions stay identical to the web Pick a Tool catalog when its source is present', async t => {
-  const source = process.env.SMOOTHY_STUDIO_WEB_SOURCE || new URL('../../web/src/components/dashboard/toolPrefs.ts', import.meta.url).pathname;
+  const source = process.env.SMOOTHY_STUDIO_WEB_SOURCE || fileURLToPath(new URL('../../web/src/components/dashboard/toolPrefs.ts', import.meta.url));
   let text; try { text = await fs.readFile(source, 'utf8'); } catch { t.skip('Standalone app checkout; web source not bundled'); return; }
   const { transform } = await import('esbuild'); const ctx = { module: { exports: {} } };
   vm.runInNewContext((await transform(text, { loader: 'ts', format: 'cjs' })).code, ctx);

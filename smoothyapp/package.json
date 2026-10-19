@@ -18,7 +18,6 @@
     "build:publish:win": "npm run generate-icons && npm run build && electron-builder --win --publish always --config"
   },
   "dependencies": {
-    "@fugood/whisper.node": "^1.0.15",
     "@xmldom/xmldom": "0.9.12",
     "adm-zip": "0.5.16",
     "electron-store": "^8.1.0",
@@ -56,8 +55,6 @@
       "package.json",
       "node_modules/ffmpeg-static/**/*",
       "node_modules/ffprobe-static/**/*",
-      "node_modules/@fugood/whisper.node/**/*",
-      "node_modules/@fugood/node-whisper-*/**/*",
       "node_modules/onnxruntime-node/**/*",
       "node_modules/sharp/**/*",
       "node_modules/@img/**/*"
@@ -65,8 +62,6 @@
     "asarUnpack": [
       "node_modules/ffmpeg-static/**/*",
       "node_modules/ffprobe-static/**/*",
-      "node_modules/@fugood/whisper.node/**/*",
-      "node_modules/@fugood/node-whisper-*/**/*",
       "node_modules/onnxruntime-node/**/*",
       "node_modules/sharp/**/*",
       "node_modules/@img/**/*"

@@ -1,10 +1,11 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
 import { mkdtemp, readFile, readdir, rm, copyFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-const output = await build({ stdin: { contents: "export * from './src/main/stock-footage'; export * from './src/main/stock-footage-pixabay';", resolveDir: new URL('..', import.meta.url).pathname }, bundle: true, platform: 'node', format: 'esm', write: false });
+const output = await build({ stdin: { contents: "export * from './src/main/stock-footage'; export * from './src/main/stock-footage-pixabay';", resolveDir: fileURLToPath(new URL('..', import.meta.url)) }, bundle: true, platform: 'node', format: 'esm', write: false });
 const { StockFootageService, normalizePixabayVideo } = await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
 const endpoint = 'https://stock.example/api/stock/pixabay';
 const hit = { id: 12, type: 'film', tags: 'ocean, <b>waves</b>', duration: 10, user: 'Creator', pageURL: 'https://pixabay.com/videos/id-12/', videos: {

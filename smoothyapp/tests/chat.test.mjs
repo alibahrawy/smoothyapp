@@ -1,9 +1,10 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
-const serviceBundle = await build({entryPoints:[new URL('../src/main/chat-service.ts',import.meta.url).pathname],bundle:true,platform:'node',format:'esm',write:false});
+const serviceBundle = await build({entryPoints:[fileURLToPath(new URL('../src/main/chat-service.ts', import.meta.url))],bundle:true,platform:'node',format:'esm',write:false});
 const {createChatService,validateChatInput} = await import(`data:text/javascript;base64,${Buffer.from(serviceBundle.outputFiles[0].text).toString('base64')}`);
 const input = {model:'openai/gpt-6-luna',messages:[{role:'user',content:'Help with my edit'}]};
 function fixture() {const f={owner:'a',enabled:true,events:[],calls:[],reply:'A useful reply'};const service=createChatService({owner:()=>f.owner,enabled:()=>f.enabled,writingStyle:()=>f.writingStyle,track:id=>{if(f.analyticsFailure)throw Error('Offline');f.events.push(id);},request:async(...args)=>{f.calls.push(args);if(f.request)return f.request(...args);if(f.fail)throw Error(f.fail);return f.reply;}});return {f,service};}
@@ -60,7 +61,7 @@ const stubs={electron:`export const app={getPath:()=>'/fixture'};export const ip
 'node:fs/promises':`export default {writeFile:async(...args)=>{if(globalThis.fixture.writeFail)throw Error('Disk full');globalThis.fixture.writes.push(args);}};`,
 './chat-attachments':`export const chatFileExtensions=['txt','pdf','docx','png'];export const readChatAttachment=async file=>{if(globalThis.fixture.readFail)throw Error('Unreadable document');if(globalThis.fixture.readHold)await globalThis.fixture.readHold();return {type:'text',name:'fixture.txt',text:'Document text'};};`,
 './auth-service':`export const getStoredUserId=()=>globalThis.fixture.owner;`, './web-api':`export const requestChatHistory=async body=>{globalThis.fixture.historyBody=body;if(globalThis.fixture.historyFail)throw Error('History unavailable');return body?.action==='load'?{conversation:{id:body.conversationId,turns:[{prompt:'q',reply:'a'}]}}:body?.action==='save'?{id:body.conversationId}:body?.action==='delete'?{deleted:true}:{items:[]};};export const requestStudioText=async(_route,body,_signal,emit)=> {globalThis.fixture.providerBody=body;emit('Reply');return 'Reply';};`, './telemetry':`export const trackTool=id=>globalThis.fixture.events.push(id);`, './app-preferences':`export const assertStudioEnabled=()=>{if(!globalThis.fixture.enabled)throw Error('AI off');};`};
-const ipcBundle=await build({entryPoints:[new URL('../src/main/chat-ipc.ts',import.meta.url).pathname],bundle:true,platform:'node',format:'cjs',write:false,plugins:[{name:'adapters',setup(b){b.onResolve({filter:/.*/},a=>a.path in stubs?{path:a.path,namespace:'fixture'}:undefined);b.onLoad({filter:/.*/,namespace:'fixture'},a=>({contents:stubs[a.path]}));}}]});
+const ipcBundle=await build({entryPoints:[fileURLToPath(new URL('../src/main/chat-ipc.ts', import.meta.url))],bundle:true,platform:'node',format:'cjs',write:false,plugins:[{name:'adapters',setup(b){b.onResolve({filter:/.*/},a=>a.path in stubs?{path:a.path,namespace:'fixture'}:undefined);b.onLoad({filter:/.*/,namespace:'fixture'},a=>({contents:stubs[a.path]}));}}]});
 test('native IPC sends correlated chunks only to the current window and strips the renderer request ID from provider input', async () => {
  const f={handlers:{},owner:'a',enabled:true,events:[]},module={exports:{}},chunks=[];
  const sender={isDestroyed:()=>false,send:(...args)=>chunks.push(args)};
