@@ -7,7 +7,7 @@
 import { runVad } from './autocut/vad-runner';
 import { generateShotDecisions } from './autocut/decision-engine';
 import { runPremiereMulticam } from './autocut/premiere-multicam';
-import { extractAudioTrack, stitchTimelineAudio, cleanupTempFile, resetAudioExtractionCancel } from './autocut/audio-extractor';
+import { extractAudioTrack, stitchTimelineAudio, cleanupTempFile, resetAudioExtractionCancel, cancelAudioExtraction } from './autocut/audio-extractor';
 import type { TimelineAudioClip } from './autocut/audio-extractor';
 import { combineAudioTracks, analyzeSilence, cleanupTempFile as cleanupSilenceTemp, alignSegmentsToFrames } from './autocut/silence-detector';
 import { generateSilenceRemovalXML } from './autocut/silence-xml-generator';
@@ -47,7 +47,7 @@ let currentSequenceInfo: any = null;
 let callbacks = {
   onConnectionChange: (connected: boolean) => {},
   onSequenceInfo: (info: any) => {},
-  onProgress: (progress: number, message: string) => {},
+  onProgress: (progress: number, message: string, cancelable?: boolean) => {},
   onResult: (result: any) => {}
 };
 
@@ -304,9 +304,21 @@ async function handleMessage(msg: any, ws?: any) {
 }
 
 let multicamRunning = false;
+let timelineController: AbortController | null = null;
+let timelineCommitting = false;
+export function cancelTimelineOperation() {
+  if (!timelineController) return { success: false, error: 'No timeline job is running.' };
+  if (timelineCommitting) return { success: false, error: 'Premiere is applying the edit. Wait for it to finish; use Undo in Premiere afterward if needed.' };
+  timelineController.abort(new Error('Canceled. No timeline edit was submitted.'));
+  cancelAudioExtraction();
+  return { success: true };
+}
+
 export async function runAutoCut(config: any, onStart?: () => void) {
-  if (multicamRunning) return;
+  if (timelineController) return { success: false, error: 'Wait for the current timeline job to finish.' };
   multicamRunning = true;
+  const controller = timelineController = new AbortController();
+  timelineCommitting = false;
   try {
     // Count accepted starts once; analytics must never block the timeline job.
     try { onStart?.(); } catch {}
@@ -315,177 +327,89 @@ export async function runAutoCut(config: any, onStart?: () => void) {
     // Live sequence-info updates may now describe a different visible tab.
     resetAudioExtractionCancel();
     const result = await runPremiereMulticam(config, {
+      signal: controller.signal,
       request: (type, response, payload, timeout) => bridgeRequests.request(type, response, payload, timeout),
       normalizeAudio: (file, speaker) => extractAudioTrack(file, speaker, 0),
-      detectSpeech: (file, speaker) => runVad([{ path: file, speaker }], 3, true),
+      detectSpeech: (file, speaker) => runVad([{ path: file, speaker }], 3, true, controller.signal),
       decideShots: generateShotDecisions,
       cleanup: cleanupTempFile,
-      progress: callbacks.onProgress
+      progress: (percent, message) => {
+        if (percent >= 85) timelineCommitting = true;
+        callbacks.onProgress(percent, message, !timelineCommitting);
+      }
     });
     callbacks.onResult(result);
   } catch (error) {
     console.error('[Multicam] Error:', error);
-    callbacks.onResult({ success: false, error: error instanceof Error ? error.message : 'Multicam failed' });
-  } finally { multicamRunning = false; }
+    callbacks.onResult({ success: false, canceled: controller.signal.aborted, operation: 'multicam', error: error instanceof Error ? error.message : 'Multicam failed' });
+  } finally { multicamRunning = false; timelineController = null; timelineCommitting = false; }
 }
 
-export async function runSilenceRemoval(config: any) {
-  const { sources, options } = config;
-
+export async function runSilenceRemoval(config: any, onStart?: () => void) {
+  if (timelineController) return { success: false, error: 'Wait for the current timeline job to finish.' };
+  const controller = timelineController = new AbortController();
+  const signal = controller.signal;
+  timelineCommitting = false;
+  const temporaryFiles: string[] = [];
+  const result = (value: any) => { const output = { ...value, operation: 'silence' }; callbacks.onResult(output); return output; };
   try {
-    resetAudioExtractionCancel();
+    const { sources, options } = config;
     const sequenceId = options.sequenceId;
     if (!sequenceId || String(currentSequenceInfo?.id) !== String(sequenceId)) throw new Error('The active sequence changed. Refresh and analyze it again.');
     validateTimelineTracks([...(options.videoTracks || []), ...sources], options.fps || 23.976);
-    callbacks.onProgress(5, 'Starting silence analysis...');
-
-    // Build one timeline-accurate WAV from every clip on the selected tracks.
-    // The old code extracted only the first clip of each track from the start
-    // of the media file, which mis-timed synced audio and ignored later clips.
-    const timelineClips: TimelineAudioClip[] = [];
-    for (const source of sources) {
-      timelineClips.push(...sourceTimelineClips(source));
-    }
-
+    try { onStart?.(); } catch {}
+    resetAudioExtractionCancel();
+    callbacks.onProgress(5, 'Starting silence analysis...', true);
+    const timelineClips: TimelineAudioClip[] = sources.flatMap(sourceTimelineClips);
     let combinedPath: string;
-
-    if (timelineClips.length > 0) {
-      callbacks.onProgress(20, `Preparing timeline audio (${timelineClips.length} clip${timelineClips.length === 1 ? '' : 's'})...`);
-      try {
-        const stitched = await stitchTimelineAudio(timelineClips, `silence_timeline_${Date.now()}`);
-        combinedPath = stitched.path;
-        console.log(`[SilenceRemoval] Timeline audio ${stitched.durationSeconds.toFixed(1)}s from ${stitched.clipCount} clip(s)`);
-      } catch (err) {
-        console.error('[SilenceRemoval] Failed to prepare timeline audio:', err);
-        callbacks.onResult({ success: false, error: 'Failed to extract audio' });
-        return;
-      }
+    if (timelineClips.length) {
+      callbacks.onProgress(20, 'Preparing timeline audio...', true);
+      combinedPath = (await stitchTimelineAudio(timelineClips, `silence_timeline_${Date.now()}`)).path;
+      temporaryFiles.push(combinedPath);
     } else {
-      // Fallback for callers that only send a single path per track.
       const audioPaths: string[] = [];
-
       for (let i = 0; i < sources.length; i++) {
-        const source = sources[i];
-        callbacks.onProgress(10 + (i / sources.length) * 20, `Extracting audio ${i + 1}/${sources.length}`);
-
-        try {
-          const tempWav = await extractAudioTrack(source.path, `track_${i}`, 0);
-          audioPaths.push(tempWav);
-        } catch (err) {
-          console.warn(`Failed to extract audio from ${source.path}:`, err);
-        }
+        signal.throwIfAborted();
+        callbacks.onProgress(10 + i / sources.length * 20, `Extracting audio ${i + 1}/${sources.length}`, true);
+        const wav = await extractAudioTrack(sources[i].path, `silence_${Date.now()}_${i}`, 0);
+        audioPaths.push(wav); temporaryFiles.push(wav);
       }
-
-      if (audioPaths.length === 0) {
-        callbacks.onResult({ success: false, error: 'Failed to extract audio' });
-        return;
-      }
-
-      callbacks.onProgress(35, 'Combining audio tracks...');
-      try {
-        combinedPath = await combineAudioTracks(audioPaths);
-      } catch (err) {
-        audioPaths.forEach(p => cleanupTempFile(p));
-        callbacks.onResult({ success: false, error: 'Failed to combine audio tracks' });
-        return;
-      }
-      audioPaths.forEach(p => cleanupTempFile(p));
+      signal.throwIfAborted();
+      combinedPath = await combineAudioTracks(audioPaths, signal);
+      temporaryFiles.push(combinedPath);
     }
-
-    callbacks.onProgress(50, 'Detecting silence...');
-
-    // Analyze for silence
-    const analysis = await analyzeSilence(
-      combinedPath,
-      options.thresholdDb || -40,
-      options.minSilenceDuration || 0.5,
-      options.padding ?? 0.1
-    );
-
-    // Cleanup combined file
-    cleanupSilenceTemp(combinedPath);
-
-    console.log(`[SilenceRemoval] Found ${analysis.speechSegments.length} speech segments`);
-    console.log(`[SilenceRemoval] Removing ${analysis.silenceRemoved.toFixed(1)}s of silence`);
-
-    if (analysis.speechSegments.length === 0) {
-      callbacks.onResult({ success: false, error: 'No speech detected - entire audio is silence' });
-      return;
-    }
-
-    // Check if we should edit in place or create new sequence
-    if (options.editInPlace) {
-      callbacks.onProgress(75, 'Removing silence from current sequence...');
-
-      console.log(`[SilenceRemoval] Sending ${analysis.silenceSegments.length} segments to Premiere for removal`);
-
-      // CEP edits the active sequence with ExtendScript/QE. Wait for it to
-      // finish before telling the user the edit is done.
-      const editResult = await removeSilenceInPremiere(analysis.silenceSegments, sequenceId);
-      if (!editResult.success) {
-        callbacks.onResult({ success: false, error: editResult.error || 'Premiere could not remove the silence' });
-        return;
-      }
-
-      callbacks.onProgress(100, 'Done!');
-      callbacks.onResult({
-        success: true,
-        stats: {
-          originalDuration: analysis.originalDuration,
-          silenceRemoved: analysis.silenceRemoved,
-          newDuration: analysis.newDuration,
-          cuts: analysis.silenceSegments.length
-        },
-        editedInPlace: true
+    signal.throwIfAborted();
+    callbacks.onProgress(50, 'Detecting silence...', true);
+    const analysis = await analyzeSilence(combinedPath, options.thresholdDb ?? -40, options.minSilenceDuration ?? 0.5, options.padding ?? 0.1, signal);
+    signal.throwIfAborted();
+    if (!analysis.speechSegments.length) throw new Error('No speech detected - entire audio is silence');
+    let xmlPath: string | undefined;
+    if (!options.editInPlace) {
+      callbacks.onProgress(75, 'Generating XML...', true);
+      const xml = generateSilenceRemovalXML(options.videoTracks || [], analysis.speechSegments, {
+        sequenceName: options.sequenceName || 'Silence Removed', audioTracks: sources,
+        fps: options.fps || 23.976, width: options.width || 1920, height: options.height || 1080
       });
-
-    } else {
-      callbacks.onProgress(75, 'Generating XML...');
-
-      // Generate XML for new sequence
-      const clips = options.videoTracks || [];
-
-      const xml = generateSilenceRemovalXML(clips, analysis.speechSegments, {
-        sequenceName: options.sequenceName || 'Silence Removed',
-        audioTracks: sources,
-        fps: options.fps || 23.976,
-        width: options.width || 1920,
-        height: options.height || 1080
-      });
-
-      // Save XML
-      const xmlPath = path.join(os.tmpdir(), `SmoothyEdit_SilenceRemoved_${Date.now()}.xml`);
+      xmlPath = path.join(os.tmpdir(), `SmoothyEdit_SilenceRemoved_${Date.now()}.xml`);
       fs.writeFileSync(xmlPath, xml, 'utf-8');
-      console.log(`[SilenceRemoval] XML saved: ${xmlPath}`);
-
-      callbacks.onProgress(90, 'Importing into Premiere...');
-
-      // Wait for Premiere to confirm the import before reporting success.
-      const importResult = await importXMLToPremiere(xmlPath);
-      if (!importResult.success) {
-        callbacks.onResult({ success: false, error: importResult.error || 'Premiere could not import the sequence' });
-        return;
-      }
-
-      callbacks.onProgress(100, 'Done!');
-      callbacks.onResult({
-        success: true,
-        stats: {
-          originalDuration: analysis.originalDuration,
-          silenceRemoved: analysis.silenceRemoved,
-          newDuration: analysis.newDuration,
-          cuts: analysis.cutsCount
-        },
-        xmlPath
-      });
     }
-
+    // Drain a queued Cancel before submitting any irreversible editor operation.
+    await new Promise<void>(resolve => setImmediate(resolve));
+    try { signal.throwIfAborted(); }
+    catch (error) { if (xmlPath) cleanupTempFile(xmlPath); throw error; }
+    timelineCommitting = true;
+    callbacks.onProgress(90, options.editInPlace ? 'Premiere is applying cuts. Finishing this edit safely...' : 'Premiere is importing the timeline. Finishing safely...', false);
+    const edited = options.editInPlace ? await removeSilenceInPremiere(analysis.silenceSegments, sequenceId) : await importXMLToPremiere(xmlPath!);
+    if (!edited.success) throw new Error(edited.error || 'Premiere could not complete the edit');
+    callbacks.onProgress(100, 'Done!', false);
+    return result({ success: true, stats: { originalDuration: analysis.originalDuration, silenceRemoved: analysis.silenceRemoved,
+      newDuration: analysis.newDuration, cuts: options.editInPlace ? analysis.silenceSegments.length : analysis.cutsCount },
+      ...(options.editInPlace ? { editedInPlace: true } : { xmlPath }) });
   } catch (error) {
-    console.error('[SilenceRemoval] Error:', error);
-    callbacks.onResult({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+    return result({ success: false, canceled: signal.aborted, error: signal.aborted ? 'Canceled. No timeline edit was submitted.' : error instanceof Error ? error.message : 'Silence removal failed' });
+  } finally {
+    temporaryFiles.forEach(cleanupTempFile);
+    timelineController = null; timelineCommitting = false;
   }
 }
 

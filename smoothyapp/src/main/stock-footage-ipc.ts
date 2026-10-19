@@ -8,7 +8,7 @@ export function registerStockFootage(deps: {
   store: { get(key: string): unknown; set(key: string, value: unknown): void; delete(key: string): void };
   window: () => BrowserWindow | null;
   connected: () => boolean;
-  importToPremiere: (filePath: string) => Promise<any>;
+  editor?:()=> 'premiere'|'resolve'|null; importToPremiere: (filePath: string,editor?:'premiere'|'resolve'|null) => Promise<any>;
 }) {
   const service = new StockFootageService();
   let searchController: AbortController | null = null;
@@ -44,6 +44,7 @@ export function registerStockFootage(deps: {
   ipcMain.handle('stock-download', async (_, options: { videoId: number | string; fileId: number; premiere?: boolean }) => {
     if (downloadController) return failure(new Error('Wait for the current stock footage action to finish.'));
     if (options?.premiere && !deps.connected()) return failure(new Error('Connect Premiere before sending stock footage.'));
+    const editor=deps.editor?.();
     const controller = new AbortController(); downloadController = controller;
     let lastProgress = 0;
     try {
@@ -56,10 +57,10 @@ export function registerStockFootage(deps: {
       trackTool('stock_download');
       if (options.premiere) {
         deps.window()?.webContents.send('stock-download-progress', { importing: true });
-        const result = await deps.importToPremiere(filePath);
+        const result = await deps.importToPremiere(filePath,editor);
         if (!result.success) return { ...failure(new Error(result.error || 'Premiere could not import this video.')), path: filePath };
-        trackTool('stock_premiere');
-        return { success: true, path: filePath, imported: true };
+        trackTool(result.nle==='resolve'?'stock_resolve':'stock_premiere');
+        return { success: true, nle:result.nle || editor, path: filePath, imported: true };
       }
       return { success: true, path: filePath };
     } catch (error) { return controller.signal.aborted ? { canceled: true } : failure(error); }

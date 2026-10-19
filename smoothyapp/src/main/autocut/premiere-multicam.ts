@@ -6,6 +6,7 @@ import type { ShotDecision } from './decision-engine';
 import { createMulticamPlan } from './multicam-plan';
 
 interface Dependencies {
+  signal?: AbortSignal;
   request: (type: string, response: string, payload: any, timeout: number) => Promise<any>;
   normalizeAudio: (file: string, speaker: string) => Promise<string>;
   detectSpeech: (file: string, speaker: string) => Promise<any[]>;
@@ -26,10 +27,12 @@ export async function runPremiereMulticam(config: any, deps: Dependencies) {
   let completed = false;
   let prepared = false;
   const response = (result: any) => {
+    deps.signal?.throwIfAborted();
     if (!result?.success) throw new Error(result?.error || 'Premiere could not complete the multicam operation.');
     return result;
   };
   try {
+    deps.signal?.throwIfAborted();
     deps.progress(5, 'Duplicating your Premiere sequence…');
     // Discard also runs after an ambiguous timeout: Premiere may have cloned it.
     prepared = true;
@@ -47,6 +50,7 @@ export async function runPremiereMulticam(config: any, deps: Dependencies) {
     const warnings: string[] = [];
     const mapping: Record<string, number> = {};
     for (let i = 0; i < sources.length; i++) {
+      deps.signal?.throwIfAborted();
       const source = sources[i];
       // Independent IDs prevent two speakers with identical labels from colliding.
       const speaker = `microphone_${source.index}`;
@@ -62,8 +66,10 @@ export async function runPremiereMulticam(config: any, deps: Dependencies) {
         const rendered = fs.lstatSync(renderedAudioPath);
         if (!rendered.isFile() || rendered.size <= 44 || rendered.size !== audio.fileSize) throw new Error('Premiere did not pass a complete microphone audio file to SmoothyEdit.');
         wav = await deps.normalizeAudio(renderedAudioPath, `${jobId}_${speaker}`);
+        deps.signal?.throwIfAborted();
         deps.progress(20 + i / sources.length * 55, `Analysing A${source.index + 1}…`);
         const speech = await deps.detectSpeech(wav, speaker);
+        deps.signal?.throwIfAborted();
         if (!speech.length) warnings.push(`No speech detected on A${source.index + 1}. Check that microphone and its camera mapping.`);
         segments.push(...speech);
       } finally {
@@ -81,6 +87,8 @@ export async function runPremiereMulticam(config: any, deps: Dependencies) {
     const ranges = createMulticamPlan(cameraTracks, mainShots, wideShots, snapshot.fps, snapshot.duration, options.jcutOffset ?? 0);
     const emptyFrames = ranges.filter(range => range.trackIndex < 0).reduce((total, range) => total + range.endFrame - range.startFrame, 0);
     if (emptyFrames) warnings.push(`${(emptyFrames / snapshot.fps).toFixed(1)}s has no footage on any selected camera. Review those existing timeline gaps.`);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    deps.signal?.throwIfAborted();
     deps.progress(85, 'Cutting the duplicate in Premiere…');
     const edited = response(await deps.request('applyMulticamCuts', 'multicamCutsApplied', { jobId, ranges }, 1200000));
     if (edited.verifiedRanges !== ranges.length) throw new Error('Premiere did not verify every camera range. Reopen the updated panel and retry from the original sequence.');

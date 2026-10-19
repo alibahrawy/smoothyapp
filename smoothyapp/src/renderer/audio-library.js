@@ -1,3 +1,4 @@
+import { editorName,editorText } from './editor-context';
 import { initAudioArchive } from './audio-archive.js';
 import { initAudioPlayer, trackRow, favoriteId, refreshTrackCommunity } from './audio-player.js';
 
@@ -105,7 +106,7 @@ export function initAudioLibrary({ isConnected }) {
   }
   function preview(track, autoplay = true, queue) {
     if (!track || state.busy) return;
-    player.show(track, { send: () => action(() => api.audioLibraryImport(track.id), 'Audio imported into Premiere’s Project panel.'), details: () => select(track, 'track'), ...(queue || navigation(track)), error: () => message('Could not preview this MP3. Check the library folder.', true) }, autoplay);
+    player.show(track, { send: () => action(() => api.audioLibraryImport(track.id), editorText('Audio imported into Premiere’s Project panel.')), details: () => select(track, 'track'), ...(queue || navigation(track)), error: () => message('Could not preview this MP3. Check the library folder.', true) }, autoplay);
     if (!savedViewActive) archive?.refreshNavigation();
     update();
   }
@@ -129,7 +130,7 @@ export function initAudioLibrary({ isConnected }) {
       if (!result.success) throw new Error(result.error);
       if (result.tracks) accept(result);
       else if (success === 'Download dismissed.') accept(await api.audioLibraryState());
-      if (success) message(success);
+      if (success) message(result.imported?(result.nle==='resolve'?'Audio imported into Resolve’s Media Pool. Drag it onto your timeline.':'Audio imported into Premiere’s Project panel. Drag it onto your timeline.'):success);
       return result;
     } catch (error) { message(error.message || 'The audio action failed. Please retry.', true); }
     finally { state.busy = false; render(); }
@@ -149,7 +150,7 @@ export function initAudioLibrary({ isConnected }) {
     const result = await action(() => kind === 'track' ? api.audioLibraryUpdate(options) : api.audioLibraryKeep(options), kind === 'track' ? 'Track details saved.' : 'MP3 saved permanently in your audio library.');
     if (result && kind === 'candidate') { el('editor').classList.add('hidden'); state.selected = null; state.kind = ''; update(); }
   });
-  el('send').addEventListener('click', () => action(() => api.audioLibraryImport(state.selected), 'Audio imported into Premiere’s Project panel. Drag it onto your timeline.'));
+  el('send').addEventListener('click', () => action(() => api.audioLibraryImport(state.selected), editorText('Audio imported into Premiere’s Project panel. Drag it onto your timeline.')));
   el('copy-credit').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(el('credit').value); message('Attribution copied.'); }
     catch { message('Select the attribution text and copy it.', true); }

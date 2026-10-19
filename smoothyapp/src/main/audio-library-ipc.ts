@@ -10,7 +10,7 @@ import { trackTool } from './telemetry';
 protocol.registerSchemesAsPrivileged([{ scheme: 'smoothy-audio', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }]);
 export async function registerAudioLibrary(deps: {
   store: { get(key: string): unknown; set(key: string, value: unknown): void };
-  window: () => BrowserWindow | null; connected: () => boolean; importToPremiere: (filePath: string) => Promise<any>;
+  window: () => BrowserWindow | null; connected: () => boolean; editor?:()=> 'premiere'|'resolve'|null; importToPremiere: (filePath: string,editor?:'premiere'|'resolve'|null) => Promise<any>;
   archive?: AudioArchive;
 }) {
   const library = new AudioLibrary(path.join(app.getPath('music'), 'SmoothyEdit Audio Library'));
@@ -61,7 +61,8 @@ export async function registerAudioLibrary(deps: {
   }));
   ipcMain.handle('audio-archive-download', (_, input) => result(async () => {
     if (download) throw new Error('Wait for the current audio download to finish.');
-    if (input?.premiere && !deps.connected()) throw new Error('Connect Premiere before sending audio.');
+    const editor=deps.editor?.();
+    if (input?.premiere && !deps.connected()) throw new Error('Connect the selected editor before sending audio.');
     const job = { controller: new AbortController(), committed: false }; download = job;
     let temporary = '';
     try {
@@ -77,11 +78,11 @@ export async function registerAudioLibrary(deps: {
       trackTool('audio_save');
       if (input?.premiere) {
         progress(0, 0, 'importing');
-        const imported = await deps.importToPremiere(await library.file(saved.id));
-        if (!imported?.success) throw new Error('MP3 saved in your library. ' + (imported?.error || 'Premiere could not import it. You can retry from Track details.'));
-        trackTool('audio_premiere');
+        const imported = await deps.importToPremiere(await library.file(saved.id),editor);
+        if (!imported?.success) throw new Error('MP3 saved in your library. ' + (imported?.error || 'The selected editor could not import it. You can retry from Track details.'));
+        trackTool(imported.nle==='resolve'?'audio_resolve':'audio_premiere');
       }
-      return { ...library.snapshot(), savedId: saved.id, imported: Boolean(input?.premiere) };
+      return { ...library.snapshot(), savedId: saved.id, nle:editor, imported: Boolean(input?.premiere) };
     } catch (error) {
       if (job.controller.signal.aborted) return { canceled: true };
       throw error;
@@ -120,12 +121,13 @@ export async function registerAudioLibrary(deps: {
   ipcMain.handle('audio-library-update', (_, options) => result(async () => { await library.update(options?.id, options); notify(); return library.snapshot(); }));
   ipcMain.handle('audio-library-dismiss', (_, id) => { library.dismiss(id); notify(); return { success: true }; });
   ipcMain.handle('audio-library-import', (_, id) => result(async () => {
-    if (!deps.connected()) throw new Error('Connect Premiere before sending audio.');
+    const editor=deps.editor?.();
+    if (!deps.connected()) throw new Error('Connect the selected editor before sending audio.');
     const filePath = await library.file(id);
-    const imported = await deps.importToPremiere(filePath);
-    if (!imported?.success) throw new Error(imported?.error || 'Premiere could not import this audio.');
-    trackTool('audio_premiere');
-    return { imported: true };
+    const imported = await deps.importToPremiere(filePath,editor);
+    if (!imported?.success) throw new Error(imported?.error || 'The selected editor could not import this audio.');
+    trackTool(imported.nle==='resolve'?'audio_resolve':'audio_premiere');
+    return { imported: true, nle:imported.nle || editor };
   }));
   ipcMain.handle('audio-library-show-folder', () => result(async () => { await shell.openPath(library.folder); return {}; }));
   app.on('before-quit', () => { stop(); clearInterval(communityTimer); download?.controller.abort(); });

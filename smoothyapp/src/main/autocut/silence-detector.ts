@@ -41,9 +41,13 @@ function getTempDir(): string {
   return tempDir;
 }
 
-function runFFmpeg(args: string[]): Promise<{ stdout: string; stderr: string }> {
+function runFFmpeg(args: string[], signal?: AbortSignal): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
+    signal?.throwIfAborted();
     const ffmpeg = spawn(getFFmpegPath(), args);
+    const abort = () => { try { ffmpeg.kill('SIGTERM'); } catch {} };
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) abort();
     let stdout = '';
     let stderr = '';
 
@@ -51,6 +55,8 @@ function runFFmpeg(args: string[]): Promise<{ stdout: string; stderr: string }> 
     ffmpeg.stderr.on('data', (data) => { stderr += data.toString(); });
 
     ffmpeg.on('close', (code) => {
+      signal?.removeEventListener('abort', abort);
+      if (signal?.aborted) { reject(signal.reason); return; }
       if (code === 0) {
         resolve({ stdout, stderr });
       } else {
@@ -59,6 +65,7 @@ function runFFmpeg(args: string[]): Promise<{ stdout: string; stderr: string }> 
     });
 
     ffmpeg.on('error', (err) => {
+      signal?.removeEventListener('abort', abort);
       reject(new Error(`Failed to start ffmpeg: ${err.message}`));
     });
   });
@@ -67,41 +74,43 @@ function runFFmpeg(args: string[]): Promise<{ stdout: string; stderr: string }> 
 /**
  * Combine multiple audio files into a single WAV for analysis
  */
-export async function combineAudioTracks(inputPaths: string[]): Promise<string> {
+export async function combineAudioTracks(inputPaths: string[], signal?: AbortSignal): Promise<string> {
   const tempDir = getTempDir();
   const outputPath = path.join(tempDir, `combined_${Date.now()}.wav`);
 
-  if (inputPaths.length === 1) {
-    // Single file - just convert to WAV
-    await runFFmpeg([
-      '-y',
-      '-i', inputPaths[0],
-      '-ac', '1',
-      '-ar', SAMPLE_RATE.toString(),
-      '-sample_fmt', 's16',
-      '-f', 'wav',
-      outputPath
-    ]);
-  } else {
-    // Multiple files - mix together
-    const inputs = inputPaths.flatMap(p => ['-i', p]);
-    const filterComplex = inputPaths.map((_, i) => `[${i}:a]`).join('') +
-      `amix=inputs=${inputPaths.length}:duration=longest:normalize=0[aout]`;
+  try {
+    if (inputPaths.length === 1) {
+      // Single file - just convert to WAV
+      await runFFmpeg([
+        '-y',
+        '-i', inputPaths[0],
+        '-ac', '1',
+        '-ar', SAMPLE_RATE.toString(),
+        '-sample_fmt', 's16',
+        '-f', 'wav',
+        outputPath
+      ], signal);
+    } else {
+      // Multiple files - mix together
+      const inputs = inputPaths.flatMap(p => ['-i', p]);
+      const filterComplex = inputPaths.map((_, i) => `[${i}:a]`).join('') +
+        `amix=inputs=${inputPaths.length}:duration=longest:normalize=0[aout]`;
 
-    await runFFmpeg([
-      '-y',
-      ...inputs,
-      '-filter_complex', filterComplex,
-      '-map', '[aout]',
-      '-ac', '1',
-      '-ar', SAMPLE_RATE.toString(),
-      '-sample_fmt', 's16',
-      '-f', 'wav',
-      outputPath
-    ]);
-  }
+      await runFFmpeg([
+        '-y',
+        ...inputs,
+        '-filter_complex', filterComplex,
+        '-map', '[aout]',
+        '-ac', '1',
+        '-ar', SAMPLE_RATE.toString(),
+        '-sample_fmt', 's16',
+        '-f', 'wav',
+        outputPath
+      ], signal);
+    }
 
-  return outputPath;
+    return outputPath;
+  } catch (error) { cleanupTempFile(outputPath); throw error; }
 }
 
 function readWavFile(filePath: string): Int16Array {
@@ -167,12 +176,12 @@ function dbToRms(db: number): number {
 /**
  * Detect silence segments based on dB threshold
  */
-export function detectSilence(
+function* detectSilenceSteps(
   samples: Int16Array,
   thresholdDb: number = -40,
   minSilenceDuration: number = 0.5,
   padding: number = 0.1
-): { silenceSegments: SilenceSegment[]; speechSegments: SpeechSegment[] } {
+): Generator<void, { silenceSegments: SilenceSegment[]; speechSegments: SpeechSegment[] }, unknown> {
   const threshold = dbToRms(thresholdDb);
   const silenceSegments: SilenceSegment[] = [];
   const speechSegments: SpeechSegment[] = [];
@@ -185,6 +194,7 @@ export function detectSilence(
 
   // First pass: detect raw silence regions
   for (let i = 0; i < samples.length; i += FRAME_SIZE) {
+    if (i % (FRAME_SIZE * 1024) === 0) yield;
     const rms = calculateRMS(samples, i, FRAME_SIZE);
     const isSilent = rms < threshold;
     const currentTime = i / SAMPLE_RATE;
@@ -269,6 +279,23 @@ export function detectSilence(
   return { silenceSegments: paddedSilences, speechSegments };
 }
 
+export function detectSilence(samples: Int16Array, thresholdDb = -40, minSilenceDuration = 0.5, padding = 0.1) {
+  const steps = detectSilenceSteps(samples, thresholdDb, minSilenceDuration, padding);
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
+export async function detectSilenceCancelable(samples: Int16Array, thresholdDb = -40, minSilenceDuration = 0.5, padding = 0.1, signal?: AbortSignal) {
+  const steps = detectSilenceSteps(samples, thresholdDb, minSilenceDuration, padding);
+  while (true) {
+    signal?.throwIfAborted();
+    const step = steps.next();
+    if (step.done) return step.value;
+    await new Promise<void>(resolve => setImmediate(resolve));
+  }
+}
+
 /**
  * Analyze audio for silence and return statistics
  */
@@ -276,21 +303,23 @@ export async function analyzeSilence(
   audioPath: string,
   thresholdDb: number = -40,
   minSilenceDuration: number = 0.5,
-  padding: number = 0.1
+  padding: number = 0.1,
+  signal?: AbortSignal
 ): Promise<SilenceAnalysisResult> {
   console.log('Analyzing audio for silence...');
   console.log(`  Threshold: ${thresholdDb} dB`);
   console.log(`  Min silence duration: ${minSilenceDuration}s`);
   console.log(`  Padding: ${padding}s`);
 
+  signal?.throwIfAborted();
   const samples = readWavFile(audioPath);
   const originalDuration = samples.length / SAMPLE_RATE;
 
-  const { silenceSegments, speechSegments } = detectSilence(
+  const { silenceSegments, speechSegments } = await detectSilenceCancelable(
     samples,
     thresholdDb,
     minSilenceDuration,
-    padding
+    padding, signal
   );
 
   const silenceRemoved = silenceSegments.reduce((sum, seg) => sum + seg.duration, 0);

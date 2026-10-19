@@ -1,8 +1,9 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
 
-const serviceBundle = await build({ entryPoints: [new URL('../src/main/shorts-service.ts', import.meta.url).pathname], bundle: true, format: 'esm', platform: 'node', write: false });
+const serviceBundle = await build({ entryPoints: [fileURLToPath(new URL('../src/main/shorts-service.ts', import.meta.url))], bundle: true, format: 'esm', platform: 'node', write: false });
 const { runShortsAnalysis } = await import(`data:text/javascript;base64,${Buffer.from(serviceBundle.outputFiles[0].text).toString('base64')}`);
 const shorts = [{ title: 'A useful moment', description: 'One clear idea.', startTime: '00:00:10', endTime: '00:00:55' }];
 function fixture(overrides = {}) {
@@ -72,11 +73,11 @@ test('empty AI results never create an empty history run', async () => {
 // Bundle only the API client, replacing the local credential store with dummy
 // credentials. All fetch calls below are intercepted; no cloud credits are used.
 const bundle = await build({
-  entryPoints: [new URL('../src/main/web-api.ts', import.meta.url).pathname],
+  entryPoints: [fileURLToPath(new URL('../src/main/web-api.ts', import.meta.url))],
   bundle: true, format: 'esm', platform: 'node', write: false,
   plugins: [{ name: 'fixture-auth', setup(builder) {
     builder.onResolve({ filter: /^\.\/auth-service$/ }, () => ({ path: 'fixture-auth', namespace: 'fixture' }));
-    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: 'export const getStoredUserId = () => "test-user"; export const getAuthHeaders = () => ({"Content-Type":"application/json",Authorization:"Bearer test-session"});' }));
+    builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: 'export const getAuthState=()=>({user:{tier:"pro"}}); export const getStoredUserId = () => "test-user"; export const getAuthHeaders = () => ({"Content-Type":"application/json",Authorization:"Bearer test-session"});' }));
   } }]
 });
 const api = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);

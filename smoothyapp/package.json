@@ -1,21 +1,25 @@
 {
   "name": "smoothyedit",
-  "version": "2.0.0",
-  "description": "SmoothyEdit - AI-powered multicam editing for Premiere Pro",
+  "version": "2.1.0-dev.1",
+  "description": "SmoothyEdit - local multicam editing for Premiere Pro and Resolve Free",
   "main": "out/main/index.js",
   "author": "SmoothyEdit",
   "scripts": {
     "dev": "electron-vite dev",
+    "dev:resolve": "npm run build && node scripts/open-resolve-dev.cjs",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "generate-icons": "node scripts/generate-icons.js",
     "build:win": "npm run generate-icons && npm run build && electron-builder --win --config",
     "build:mac": "npm run generate-icons && npm run build && electron-builder --mac --config",
+    "build:linux": "npm run generate-icons && npm run build && electron-builder --linux --config",
+    "build:publish:linux": "npm run generate-icons && npm run build && electron-builder --linux --publish always --config",
     "build:publish:mac": "npm run generate-icons && npm run build && electron-builder --mac --publish always --config",
     "build:publish:win": "npm run generate-icons && npm run build && electron-builder --win --publish always --config"
   },
   "dependencies": {
     "@fugood/whisper.node": "^1.0.15",
+    "@xmldom/xmldom": "0.9.12",
     "adm-zip": "0.5.16",
     "electron-store": "^8.1.0",
     "electron-updater": "^6.7.3",
@@ -32,6 +36,7 @@
     "electron-builder": "^24.9.1",
     "electron-icon-builder": "^2.0.1",
     "electron-vite": "^2.0.0",
+    "fengari": "0.1.5",
     "vite": "^5.0.0"
   },
   "build": {
@@ -129,6 +134,30 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
       "notarize": true
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "appimage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Video",
+      "artifactName": "SmoothyEdit-${version}-linux-${arch}.${ext}",
+      "maintainer": "SmoothyEdit <support@smoothyedit.com>",
+      "synopsis": "Free open-source multicam, captions and audio toolkit for DaVinci Resolve",
+      "description": "Free, open-source editing toolkit: speaker-based multicam, local captions, noise removal and voice/music separation for DaVinci Resolve (and Premiere Pro on Windows and macOS). Everything local, no account required. Optional cloud AI can be turned off in Settings."
     }
   }
 }

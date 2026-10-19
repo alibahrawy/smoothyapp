@@ -1,11 +1,12 @@
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
 import vm from 'node:vm';
-const bundle = await build({ stdin: { contents: `export { requestChatHistory } from './src/main/web-api'; export { configureStudioPreference, studioPreferenceChanged } from './src/main/app-preferences';`, resolveDir: new URL('..', import.meta.url).pathname }, bundle: true, platform: 'node', format: 'cjs', write: false, plugins: [{ name: 'auth', setup(builder) {
+const bundle = await build({ stdin: { contents: `export { requestChatHistory } from './src/main/web-api'; export { configureStudioPreference, studioPreferenceChanged } from './src/main/app-preferences';`, resolveDir: fileURLToPath(new URL('..', import.meta.url)) }, bundle: true, platform: 'node', format: 'cjs', write: false, plugins: [{ name: 'auth', setup(builder) {
  builder.onResolve({ filter: /^\.\/auth-service$/ }, () => ({ path: 'auth', namespace: 'fixture' }));
- builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: `export const getStoredUserId=()=>globalThis.fixture.user,getAuthHeaders=()=>({'Content-Type':'application/json',Authorization:'Bearer fixture-session'});` }));
+ builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: `export const getAuthState=()=>({user:{tier:globalThis.fixture.tier || 'pro'}}); export const getStoredUserId=()=>globalThis.fixture.user,getAuthHeaders=()=>({'Content-Type':'application/json',Authorization:'Bearer fixture-session'});` }));
 } }] });
 function fixture(env = {}) {
  const f = { user: 'account-a', calls: [], response: () => Promise.resolve(new Response(JSON.stringify({ items: [] }), { status: 200 })) }, module = { exports: {} };

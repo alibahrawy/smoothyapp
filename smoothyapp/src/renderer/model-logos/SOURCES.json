@@ -28,5 +28,30 @@
     "domain": "sourceful.com",
     "source": "https://t0.gstatic.com/faviconV2?client=SOCIAL&fallback_opts=TYPE%2CSIZE%2CURL&size=128&type=FAVICON&url=https%3A%2F%2Fsourceful.com",
     "bytes": 1188
+  },
+  "microsoft": {
+    "domain": "microsoft.com",
+    "source": "https://t0.gstatic.com/faviconV2?client=SOCIAL&fallback_opts=TYPE%2CSIZE%2CURL&size=128&type=FAVICON&url=https%3A%2F%2Fmicrosoft.com",
+    "bytes": 426
+  },
+  "qwen": {
+    "domain": "qwen.ai",
+    "source": "https://t0.gstatic.com/faviconV2?client=SOCIAL&fallback_opts=TYPE%2CSIZE%2CURL&size=128&type=FAVICON&url=https%3A%2F%2Fqwen.ai",
+    "bytes": 1607
+  },
+  "krea": {
+    "domain": "krea.ai",
+    "source": "https://t0.gstatic.com/faviconV2?client=SOCIAL&fallback_opts=TYPE%2CSIZE%2CURL&size=128&type=FAVICON&url=https%3A%2F%2Fkrea.ai",
+    "bytes": 495
+  },
+  "recraft": {
+    "domain": "recraft.ai",
+    "source": "https://t0.gstatic.com/faviconV2?client=SOCIAL&fallback_opts=TYPE%2CSIZE%2CURL&size=128&type=FAVICON&url=https%3A%2F%2Frecraft.ai",
+    "bytes": 940
+  },
+  "tencent": {
+    "domain": "www.tencent.com",
+    "source": "https://t0.gstatic.com/faviconV2?client=SOCIAL&fallback_opts=TYPE%2CSIZE%2CURL&size=128&type=FAVICON&url=https%3A%2F%2Fwww.tencent.com",
+    "bytes": 795
   }
 }

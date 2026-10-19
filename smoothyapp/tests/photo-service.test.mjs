@@ -1,10 +1,11 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build, transform } from 'esbuild';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { pathToFileURL } from 'node:url';
-const bundle = await build({ entryPoints: [new URL('../src/main/photo-service.ts', import.meta.url).pathname], bundle: true, format: 'esm', platform: 'node', write: false });
+const bundle = await build({ entryPoints: [fileURLToPath(new URL('../src/main/photo-service.ts', import.meta.url))], bundle: true, format: 'esm', platform: 'node', write: false });
 const { PhotoService, validatePhotoReferences } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
 const imageUrl = `data:image/png;base64,${png.toString('base64')}`;

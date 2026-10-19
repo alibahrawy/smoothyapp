@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
@@ -10,7 +11,7 @@ import path from 'node:path';
 // Exercise the real registered IPC handlers. Every native dependency is mocked;
 // this never opens Premiere, starts Whisper, downloads a model or spends credits.
 const fixture = { handlers: new Map(), values: {}, sequence: null, transcriptions: 0, loading: null, mode: 'ready', cleaned: [], whisperCancels: 0, shortsSignal: null, tracked: [], extractionError: null };
-const fakeElectron = `const f = globalThis.__captionFixture; export const ipcMain = {handle:(name,fn)=>f.handlers.set(name,fn)}; export const app={getPath:()=>'/tmp',isPackaged:false,whenReady:()=>({then(){}}),on(){}}; export class BrowserWindow {} export const shell={},dialog={showSaveDialog:async()=>({canceled:f.saveCanceled,filePath:f.savePath})},Menu={},clipboard={};`;
+const fakeElectron = `const f = globalThis.__captionFixture; export const ipcMain = {handle:(name,fn)=>f.handlers.set(name,fn)}; export const app={getPath:()=>'/tmp',disableDomainBlockingFor3DAPIs(){},commandLine:{appendSwitch(){}},isPackaged:false,whenReady:()=>({then(){}}),on(){}}; export class BrowserWindow {} export const shell={},dialog={showSaveDialog:async()=>({canceled:f.saveCanceled,filePath:f.savePath})},Menu={},clipboard={};`;
 const stubs = {
   './telemetry': `const f=globalThis.__captionFixture;export const initTelemetry=()=>{},trackEvent=()=>{},trackTool=id=>f.tracked.push(id),trackAssetsAction=()=>{},startHeartbeat=()=>{},stopHeartbeat=()=>{};`,
   './assets-image-ipc': 'export {};',
@@ -19,18 +20,18 @@ const stubs = {
   './photo-ipc': 'export function registerPhotos() {}',
   './stock-footage-ipc': 'export const registerStockFootage=()=>{};',
   'electron-store': `const f=globalThis.__captionFixture;export default class Store {get(key){return f.values[key]}set(key,value){f.values[key]=value}delete(key){delete f.values[key]}}`,
-  './nle-router': `const f=globalThis.__captionFixture;export const getSequenceInfo=()=>f.sequence; export const startNLEServers=()=>{}, stopNLEServers=()=>{},setCallbacks=()=>{},requestSequenceInfo=()=>{},runAutoCut=()=>{},runSilenceRemoval=()=>{},getConnectionStatus=()=>true,getActiveNLE=()=>null,setActiveNLE=()=>{},exportAudio=()=>f.exportedAudioPromise||Promise.resolve({success:true,audioBase64:'fixture'}),addMarkersToSequence=()=>{},clearMarkersFromSequence=()=>{},exportSubtitles=()=>{},sendCaptionsToNLE=async file=>{f.importedPaths.push(file);return {success:f.captionImportSuccess};},importImageToNLE=()=>{},importAudioLibraryToNLE=()=>{},importStockFootageToNLE=()=>{};`,
+  './nle-router': `const f=globalThis.__captionFixture;export const getSequenceInfo=()=>f.sequence; export const startNLEServers=()=>{}, stopNLEServers=()=>{},setCallbacks=()=>{},requestSequenceInfo=()=>{},runAutoCut=()=>{},runSilenceRemoval=()=>{},getConnectionStatus=()=>true,getActiveNLE=()=>f.editor||null,setActiveNLE=()=>{},loadResolveTimeline=()=>{},getResolveOutput=()=>{},cancelResolveMulticam=()=>{},cancelTimelineJob=()=>{},configureResolveReceiver=()=>{},prepareResolveAudio=async(indices,signal)=>{f.resolveAudio={indices,signal};return {path:"/tmp/resolve.wav",durationSeconds:10,clipCount:2};},exportAudio=()=>f.exportedAudioPromise||Promise.resolve({success:true,audioBase64:'fixture'}),addMarkersToSequence=()=>{},clearMarkersFromSequence=()=>{},exportSubtitles=()=>{},sendCaptionsToNLE=async file=>{f.importedPaths.push(file);return {success:f.captionImportSuccess,nle:f.importNLE};},importImageToNLE=()=>{},importAudioLibraryToNLE=()=>{},importStockFootageToNLE=()=>{};`,
   './captions/whisper-service': `const f=globalThis.__captionFixture;export const setEnginePreference=()=>{},isModelLoaded=()=>f.mode==='ready',getCurrentModelId=()=>f.values.captionModel||'ggml-base.bin',getActiveBackend=()=> 'cpu',cancelTranscription=async()=>{f.whisperCancels++},unloadModel=async()=>{},getEnginePreference=()=> 'auto'; export const loadModel=async(id,progress,signal)=> {f.loading=signal;if(signal.aborted)throw Error('TRANSCRIPTION_CANCELLED');await new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(Error('TRANSCRIPTION_CANCELLED')),{once:true}));};export const transcribe=async()=>{f.transcriptions++;return {text:'hello',chunks:[{text:'hello',timestamp:[0,1]}]}};`,
   './auth-service': `export const getAuthState=()=>({user:{id:'fixture-user'}}),initializeTrial=()=>{},login=()=>{},signup=()=>{},logout=()=>{},refreshUserData=()=>{},getTrialStatus=()=>{},canUseFeature=()=>{},setAuthChangeCallback=()=>{},generateConnectionToken=()=>{},getStoredUserId=()=>null,getAuthHeaders=()=>({});`,
   './shorts-service': `const f=globalThis.__captionFixture;export const runShortsAnalysis=async(config,deps)=>{f.shortsSignal=deps.signal;await new Promise((resolve,reject)=>deps.signal.addEventListener('abort',()=>reject(Error('Cancelled')),{once:true}));};`,
   './autocut/audio-extractor': `const f=globalThis.__captionFixture;export const resetAudioExtractionCancel=()=>{},cancelAudioExtraction=()=>{},cleanupTempFile=file=>f.cleaned.push(file),extractAudioTrack=async()=>{if(f.extractionError)throw Error(f.extractionError);return '/tmp/fixture-normalized.wav';},stitchTimelineAudio=async()=>({path:'/tmp/fixture-timeline.wav',durationSeconds:10});`
 };
-const output = await build({ entryPoints: [new URL('../src/main/index.ts', import.meta.url).pathname], bundle: true, platform: 'node', format: 'cjs', write: false, packages: 'external', plugins: [{ name:'fixture', setup(builder) {
+const output = await build({ entryPoints: [fileURLToPath(new URL('../src/main/index.ts', import.meta.url))], bundle: true, platform: 'node', format: 'cjs', write: false, packages: 'external', plugins: [{ name:'fixture', setup(builder) {
   builder.onResolve({filter:/.*/}, args => args.path in stubs ? {path:args.path,namespace:'fixture'} : undefined);
   builder.onLoad({filter:/.*/,namespace:'fixture'}, args => ({contents:stubs[args.path]}));
 }}] });
 const require = createRequire(import.meta.url);
-const context = { require, module:{exports:{}}, exports:{}, __dirname:new URL('../src/main',import.meta.url).pathname, __filename:new URL('../src/main/index.ts',import.meta.url).pathname, process, Buffer, console, setTimeout, clearTimeout, setInterval, clearInterval, AbortController, fetch, __captionFixture:fixture };
+const context = { require, module:{exports:{}}, exports:{}, __dirname:fileURLToPath(new URL('../src/main',import.meta.url)), __filename:fileURLToPath(new URL('../src/main/index.ts',import.meta.url)), process, Buffer, console, setTimeout, clearTimeout, setImmediate, AbortController, setInterval, clearInterval, fetch, __captionFixture:fixture };
 vm.createContext(context); vm.runInContext(output.outputFiles[0].text, context, { importModuleDynamically: vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER });
 const generate = fixture.handlers.get('generate-captions');
 const cancel = fixture.handlers.get('cancel-generate-captions');
@@ -141,4 +142,16 @@ test('Arabic caption saves/imports count native successes only; canceled/failed 
     fs.rmSync(dir, { recursive: true, force: true });
     for (const file of fixture.importedPaths) fs.rmSync(file, { force: true });
   }
+});
+
+test('Resolve sequence captions use isolated source-audio preparation, clean it and keep the normal start count',async()=>{
+ fixture.editor='resolve';fixture.mode='ready';fixture.tracked=[];fixture.cleaned=[];
+ fixture.sequence={hasSequence:true,audioTracks:[{index:1,clips:[{path:'/fixture.wav',start:0,end:10,inPoint:0,outPoint:10}]}]};
+ try{const result=await generate(null,{settings:{},trackIndices:[1]});assert.equal(result.success,true,result.error);assert.deepEqual(Array.from(fixture.resolveAudio.indices),[1]);assert.equal(fixture.resolveAudio.signal.aborted,false);assert.ok(fixture.cleaned.includes('/tmp/resolve.wav'));assert.deepEqual(fixture.tracked,['captions']);}
+ finally{fixture.editor=null;fixture.sequence=null;}
+});
+test('native-confirmed Resolve caption sends count separately without invented Premiere successes',async()=>{
+ fixture.importNLE='resolve';fixture.captionImportSuccess=true;fixture.tracked=[];fixture.importedPaths=[];
+ try{const result=await fixture.handlers.get('import-captions-to-premiere')(null,[{index:1,startTime:0,endTime:1,text:'Hello'}]);assert.equal(result.success,true);assert.deepEqual(fixture.tracked,['captions_resolve']);}
+ finally{fixture.importNLE=undefined;for(const file of fixture.importedPaths)fs.rmSync(file,{force:true});}
 });

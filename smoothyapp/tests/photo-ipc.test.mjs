@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
@@ -13,15 +14,15 @@ const stubs = {
   './web-api': `const f=globalThis.fixture;export const requestPhotoRoute=async()=>({imageUrl:'data:image/png;base64,'+f.png.toString('base64'),savedReactionId:'history-id'}),fetchPhotoBytes=async()=>f.png;`,
   './telemetry': `export const trackTool=id=>globalThis.fixture.usage.push(id);`,
 };
-const bundle = await build({ entryPoints: [new URL('../src/main/photo-ipc.ts', import.meta.url).pathname], bundle: true, platform: 'node', format: 'cjs', write: false, plugins: [{ name: 'adapters', setup(builder) {
+const bundle = await build({ entryPoints: [fileURLToPath(new URL('../src/main/photo-ipc.ts', import.meta.url))], bundle: true, platform: 'node', format: 'cjs', write: false, plugins: [{ name: 'adapters', setup(builder) {
   builder.onResolve({ filter: /.*/ }, args => args.path in stubs ? { path: args.path, namespace: 'fixture' } : undefined);
   builder.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ contents: stubs[args.path] }));
 } }] });
-async function fixture(run) {
+async function fixture(run, editor) {
   const folder = await mkdtemp(path.join(os.tmpdir(), 'smoothy-photo-ipc-'));
   const f = { folder, png, user: 'account-a', usage: [], handlers: new Map(), copied: [], invalidImage: false, dialog: { canceled: true }, connected: true, imports: [], importResult: { success: true } };
-  const module = { exports: {} }; vm.runInNewContext(bundle.outputFiles[0].text, { module, exports: module.exports, require: createRequire(import.meta.url), Buffer, Response, URL, fixture: f });
-  module.exports.registerPhotos({ window: () => ({}), connected: () => f.connected, importToPremiere: async file => { f.imports.push(file); return f.importResult; } });
+  const module = { exports: {} }; vm.runInNewContext(bundle.outputFiles[0].text, { module, exports: module.exports, require: createRequire(import.meta.url), Buffer, Response, URL, AbortController, fixture: f });
+  module.exports.registerPhotos({ window: () => ({}), connected: () => f.connected, editor:()=>editor, importToPremiere: async file => { f.imports.push(file); return f.importResult; } });
   const invoke = (name, input) => f.handlers.get(`photos-${name}`)(null, input);
   try { const result = await invoke('run', { action: 'generate', aspectRatio: '1:1', prompt: 'A sky' }); assert.equal(result.success, true); f.id = result.photo.id; f.usage = []; await run(f, invoke); }
   finally { await rm(folder, { recursive: true, force: true }); }
@@ -54,3 +55,8 @@ test('copy and explicit preview validate issued image IDs; protocol reads remain
   assert.deepEqual(f.usage, ['photos_copy', 'photos_preview']);
   f.user = null; assert.equal((await f.preview({ url: `smoothy-photo://image/${f.id}` })).status, 404); assert.equal((await invoke('copy', f.id)).success, false);
 }));
+
+test('confirmed Resolve image imports use their own counter; canceled sends count zero',async()=>fixture(async(f,invoke)=>{
+  f.importResult={success:true,nle:'resolve'};assert.equal((await invoke('premiere',f.id)).success,true);assert.deepEqual(f.usage,['photos_resolve']);
+  f.importResult={success:false,canceled:true,nle:'resolve'};assert.equal((await invoke('premiere',f.id)).canceled,true);assert.deepEqual(f.usage,['photos_resolve']);
+},'resolve'));

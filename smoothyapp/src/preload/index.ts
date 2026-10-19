@@ -5,6 +5,15 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  setWindowTitlebarColor: (color: string) => ipcRenderer.invoke('set-window-titlebar-color', color),
+  localAudioState: () => ipcRenderer.invoke('local-audio-state'),
+  localAudioPick: () => ipcRenderer.invoke('local-audio-pick'),
+  localAudioSetup: () => ipcRenderer.invoke('local-audio-setup'),
+  localAudioRun: (input: unknown) => ipcRenderer.invoke('local-audio-run', input),
+  localAudioCancel: () => ipcRenderer.invoke('local-audio-cancel'),
+  localAudioSave: (id: string) => ipcRenderer.invoke('local-audio-save', id),
+  localAudioPreview: (id: string) => ipcRenderer.invoke('local-audio-preview', id),
+  onLocalAudioProgress: (callback: (data: { message: string }) => void) => ipcRenderer.on('local-audio-progress', (_, data) => callback(data)),
   getAppPreferences: () => ipcRenderer.invoke('get-app-preferences'),
   setStudioEnabled: (value: boolean) => ipcRenderer.invoke('set-studio-enabled', value),
   saveChatWritingPrompt: (value: string) => ipcRenderer.invoke('save-chat-writing-prompt', value),
@@ -18,6 +27,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   studioToolsHistory: (input: { mode: string; page: number }) => ipcRenderer.invoke('studio-tools-history', input),
   studioToolsCopy: (text: string) => ipcRenderer.invoke('studio-tools-copy', text),
   studioToolsSave: (input: { mode: string; text: string }) => ipcRenderer.invoke('studio-tools-save', input),
+  photosCancel: () => ipcRenderer.invoke('photos-cancel'),
   photosRun: (input: unknown) => ipcRenderer.invoke('photos-run', input),
   photosHistory: (input: { page?: number; favorites?: boolean }) => ipcRenderer.invoke('photos-history', input),
   photosFavorite: (input: { id: string; active: boolean }) => ipcRenderer.invoke('photos-favorite', input),
@@ -38,6 +48,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startAutoCut: (config: any) => ipcRenderer.invoke('start-autocut', config),
 
   // Start Silence Removal processing
+  cancelTimelineJob: () => ipcRenderer.invoke('cancel-timeline-job'),
   startSilenceRemoval: (config: any) => ipcRenderer.invoke('start-silence-removal', config),
 
   // Website connection
@@ -121,7 +132,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // NLE Bridge
   getActiveNLE: () => ipcRenderer.invoke('get-active-nle'),
-  setActiveNLE: (nle: 'premiere' | null) => ipcRenderer.invoke('set-active-nle', nle),
+  setActiveNLE: (nle: 'premiere' | 'resolve' | null) => ipcRenderer.invoke('set-active-nle', nle),
+  resolveLoadTimeline: (manual=false,automatic=false) => ipcRenderer.invoke('resolve-load-timeline',manual,automatic),
+  resolveCancelMulticam: () => ipcRenderer.invoke('resolve-cancel-multicam'),
+  resolveReceiveStatus: () => ipcRenderer.invoke('resolve-receive-status'),
+  onResolveReceiveStatus: (callback:any) => ipcRenderer.on('resolve-receive-status',(_,value)=>callback(value)),
+  resolveReceiveCancel: () => ipcRenderer.invoke('resolve-receive-cancel'),
+  resolveReceiveCopyCommand: () => ipcRenderer.invoke('resolve-receive-copy-command'),
+  resolveReceiveShowFile: () => ipcRenderer.invoke('resolve-receive-show-file'),
+  resolveSendResult: () => ipcRenderer.invoke('resolve-send-result'),
+  resolveShowResult: () => ipcRenderer.invoke('resolve-show-result'),
+  resolveHandoffStatus: () => ipcRenderer.invoke('resolve-handoff-status'),
+  resolveCheckHandoff: () => ipcRenderer.invoke('resolve-check-handoff'),
+  resolveInstallHandoff: () => ipcRenderer.invoke('resolve-install-handoff'),
+  resolveCopyHelperCommand: () => ipcRenderer.invoke('resolve-copy-helper-command'),
+  onResolveHandoffStatus: (callback: (data: any) => void) => ipcRenderer.on('resolve-handoff-status', (_, data) => callback(data)),
 
   // Premiere Bridge
   getBridgeStatus: () => ipcRenderer.invoke('get-bridge-status'),
@@ -153,7 +178,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   assetsSelectOutputFolder: (defaultPath?: string) => ipcRenderer.invoke('assets-select-output-folder', defaultPath),
   assetsSavePng: (options: { fileName: string; bytes: Uint8Array; saveAs?: boolean }) =>
     ipcRenderer.invoke('assets-save-png', options),
-  assetsSendToPremiere: (options: { fileName: string; bytes: Uint8Array; durationSeconds?: number }) =>
+  assetsSendToPremiere: (options: { fileName: string; bytes: Uint8Array; durationSeconds?: number;editor?:'premiere'|'resolve'|null }) =>
     ipcRenderer.invoke('assets-send-to-premiere', options),
   assetsReadClipboard: () => ipcRenderer.invoke('assets-read-clipboard'),
   assetsProcessImage: (options: { operation: 'remove-background' | 'upscale'; bytes: Uint8Array; factor?: number }) => ipcRenderer.invoke('assets-process-image', options),

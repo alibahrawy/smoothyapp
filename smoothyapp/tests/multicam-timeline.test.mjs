@@ -7,10 +7,11 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import vm from 'node:vm';
+import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 async function moduleAt(relative) {
-  const output = await build({ entryPoints: [new URL(relative, import.meta.url).pathname], bundle: true, platform: 'node', format: 'esm', write: false });
+  const output = await build({ entryPoints: [fileURLToPath(new URL(relative, import.meta.url))], bundle: true, platform: 'node', format: 'esm', write: false });
   return import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
 }
 const { createMulticamPlan } = await moduleAt('../src/main/autocut/multicam-plan.ts');
@@ -407,7 +408,7 @@ test('a job continues with no active sequence but rejects a changed or closed wo
   }
 });
 test('desktop routing accepts the captured Multicam sequence after live sequence info switches tabs', async () => {
-  const file = new URL('../src/main/websocket-server.ts', import.meta.url).pathname;
+  const file = fileURLToPath(new URL('../src/main/websocket-server.ts', import.meta.url));
   const source = await readFile(file, 'utf8');
   const state = { received: [], results: [] };
   const output = await build({ entryPoints: [file], bundle: true, platform: 'node', format: 'cjs', packages: 'external', write: false,
@@ -417,7 +418,7 @@ test('desktop routing accepts the captured Multicam sequence after live sequence
       builder.onLoad({ filter: /websocket-server\.ts$/ }, () => ({ contents: source + '\nexport { handleMessage as fixtureMessage };', loader: 'ts' }));
     } }] });
   const context = { require: createRequire(import.meta.url), module: { exports: {} }, exports: {}, process, Buffer, console,
-    setTimeout, clearTimeout, setInterval, clearInterval, __multicamRouting: state };
+    setTimeout, clearTimeout, setImmediate, AbortController, setInterval, clearInterval, __multicamRouting: state };
   vm.createContext(context); vm.runInContext(output.outputFiles[0].text, context);
   const route = context.module.exports;
   route.setCallbacks({ onResult: result => state.results.push(result) });
@@ -530,7 +531,7 @@ test('strict microphone analysis rejects unreadable audio instead of silently lo
 test('real microphone turns survive FFmpeg, VAD, camera decisions and native-cut verification', async () => {
   const nodeRequire = createRequire(import.meta.url);
   const ffmpeg = nodeRequire('ffmpeg-static');
-  const entry = new URL('../src/main/autocut/audio-extractor.ts', import.meta.url).pathname;
+  const entry = fileURLToPath(new URL('../src/main/autocut/audio-extractor.ts', import.meta.url));
   const output = await build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'cjs', write: false });
   const module = { exports: {} };
   vm.runInNewContext(output.outputFiles[0].text, { module, exports: module.exports, require: nodeRequire, __dirname: path.dirname(entry), process, console });

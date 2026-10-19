@@ -7,6 +7,7 @@ export function initAccount({ getUser, enabled, onSignedIn }) {
   function render() {
     const verification = view === 'verification', signup = view === 'signup';
     $('account-heading').textContent = verification ? 'Verify your email' : signup ? 'Create your SmoothyEdit account' : 'Sign in to SmoothyEdit';
+    $('account-signup-credits').classList.toggle('hidden', !signup);
     $('login-form').classList.toggle('hidden', verification);
     $('account-form-footer').classList.toggle('hidden', verification);
     $('account-verification').classList.toggle('hidden', !verification);
@@ -37,11 +38,11 @@ export function initAccount({ getUser, enabled, onSignedIn }) {
     verificationStatus('Check your inbox and spam folder for the verification link.'); render();
     $('account-inbox-provider').focus();
   }
-  function open() {
+  function open(requestedView = 'login') {
     if (!enabled()) return;
     previousFocus = document.activeElement;
     $('login-modal').classList.remove('hidden'); $('login-form').reset(); $('totp-group').classList.add('hidden'); error('');
-    view = 'login'; busy = false; epoch++;
+    view = requestedView === 'signup' ? 'signup' : 'login'; busy = false; epoch++;
     if (getUser()?.emailVerified === false) verifyView();
     else { render(); $('login-email').focus(); }
   }

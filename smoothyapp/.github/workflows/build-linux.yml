@@ -1,0 +1,53 @@
+# Builds the Linux (AppImage + .deb) releases of SmoothyApp.
+#
+# Must run on a Linux host: the app bundles platform-specific binaries
+# (ffmpeg-static, ffprobe-static, onnxruntime-node, sharp, whisper.node)
+# that are resolved from the build machine's node_modules.
+#
+# - Manual runs (workflow_dispatch) upload the artifacts to the Actions run
+#   so the owner can attach/publish them with the normal release process.
+# - Tag runs (v*) build and publish with electron-builder to the GitHub
+#   release, matching the macOS/Windows publish flow.
+
+name: Build Linux
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (manual run — artifacts only, no publish)
+        if: github.event_name == 'workflow_dispatch'
+        run: npm run build:linux
+
+      - name: Build + publish (tag release)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build:publish:linux
+
+      - name: Upload artifacts (manual run)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoothyedit-linux
+          path: |
+            dist/*AppImage
+            dist/*.deb
+            dist/latest-linux.yml
+          if-no-files-found: warn

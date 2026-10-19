@@ -1,3 +1,4 @@
+import { editorName,editorText } from './editor-context';
 export function initStockFootage({ isConnected }) {
   const api = window.electronAPI;
   const el = id => document.getElementById('stock-' + id);
@@ -25,7 +26,7 @@ export function initStockFootage({ isConnected }) {
     el('results').querySelectorAll('.stock-thumbnail').forEach(button => { button.disabled = data.downloading; });
     el('change-folder').disabled = data.downloading;
     el('cancel-btn').classList.toggle('hidden', !data.downloading || data.importing);
-    message('premiere-note', isConnected() ? 'Send to Premiere imports the MP4 into your Project panel. Drag it onto your timeline.' : 'Connect Premiere to import the video into your Project panel.');
+    message('premiere-note', isConnected() ? editorText('Send to Premiere imports the MP4 into your Project panel. Drag it onto your timeline.') : editorText('Connect Premiere to import the video into your Project panel.'));
   }
   function refreshSource() {
     sources.all.note = `Search ${data.pixabayEnabled ? 'Pixabay, ' : ''}Commons, Internet Archive, and NASA together. Check each clip’s usage terms. Quality and orientation filters require known dimensions.`;
@@ -117,7 +118,7 @@ export function initStockFootage({ isConnected }) {
       const result = await api.stockDownload({ videoId: video.id, fileId: Number(el('resolution').value), premiere });
       if (result.canceled) { message('action-status', 'Download canceled.'); return; }
       if (!result.success) throw new Error(result.error + (result.path ? ` The MP4 is saved at ${result.path}.` : ''));
-      message('action-status', result.imported ? `Imported into Premiere’s Project panel. Saved at ${result.path}` : `MP4 saved at ${result.path}`);
+      message('action-status', result.imported ? `Imported into ${result.nle==='resolve'?'DaVinci Resolve’s Media Pool':'Premiere’s Project panel'}. Saved at ${result.path}` : `MP4 saved at ${result.path}`);
     } catch (error) { message('action-status', error.message || 'Download failed. Please retry.', true); }
     finally { data.downloading = false; data.importing = false; update(); }
   }
@@ -160,7 +161,7 @@ export function initStockFootage({ isConnected }) {
   api.onStockDownloadProgress(progress => {
     if (!data.downloading) return;
     data.importing = Boolean(progress.importing);
-    message('action-status', progress.phase === 'converting' ? 'Converting to Premiere-ready MP4…' : progress.importing ? 'Importing into Premiere’s Project panel…' : progress.total ? `Downloading MP4… ${Math.min(100, Math.round(progress.received / progress.total * 100))}%` : `Downloading MP4… ${(progress.received / 1048576).toFixed(1)} MB`); update();
+    message('action-status', progress.phase === 'converting' ? editorText('Converting to Premiere-ready MP4…') : progress.importing ? editorText('Importing into Premiere’s Project panel…') : progress.total ? `Downloading MP4… ${Math.min(100, Math.round(progress.received / progress.total * 100))}%` : `Downloading MP4… ${(progress.received / 1048576).toFixed(1)} MB`); update();
   });
   api.stockGetSettings().then(settings => {
     data.pixabayEnabled = Boolean(settings.pixabayEnabled);

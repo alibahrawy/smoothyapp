@@ -1,10 +1,15 @@
+import { createResolveReceiver } from './resolve/receiver';
 /**
  * SmoothyEdit Electron App - Main Process
  */
 
+import './development-profile';
+import { createResolveHandoff, resolveScriptDirectory, sendToSmoothyScript } from './resolve/handoff';
 import { app, BrowserWindow, ipcMain, shell, dialog, Menu, clipboard } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import './assets-image-ipc';
+import { registerLocalAudio } from './local-audio-ipc';
+import { windowChromeOptions, setWindowTitlebarColor } from './window-chrome';
 import { createUpdateService } from './update-service';
 import Store from 'electron-store';
 import { initTelemetry, trackEvent, trackTool, startHeartbeat } from './telemetry';
@@ -31,7 +36,13 @@ import {
   sendCaptionsToNLE,
   importImageToNLE,
   importStockFootageToNLE,
-  importAudioLibraryToNLE
+  importAudioLibraryToNLE,
+  loadResolveTimeline,
+  getResolveOutput,
+  cancelResolveMulticam,
+  cancelTimelineJob,
+  configureResolveReceiver,
+  prepareResolveAudio
 } from './nle-router';
 import {
   getConnectionStatus as getPremiereConnectionStatus,
@@ -120,9 +131,33 @@ function swallowStdIOMaybeEpipe() {
 swallowStdIOMaybeEpipe();
 
 let mainWindow: BrowserWindow | null = null;
+let resolveSourceIsPreparation=false;
 const isMac = process.platform === 'darwin';
 const isWindows = process.platform === 'win32';
+const isLinux = process.platform === 'linux';
 const store = new Store();
+const resolveHandoff = createResolveHandoff({
+  directory: path.join(app.getPath('userData'), 'resolve-handoff'),
+  scriptDirectory: resolveScriptDirectory(process.platform, app.getPath('appData'), os.homedir()),
+  receive: (file, source) => {
+    if (multicamRequestActive || captionsJobActive || shortsJobController || studioSourceService?.isBusy()) return false;
+    loadResolveTimeline(file, source || 'script',!resolveSourceIsPreparation); return true;
+  },
+  changed: status => mainWindow?.webContents.send('resolve-handoff-status', status)
+});
+const resolveReceive = createResolveReceiver({
+  sourceScript:()=>sendToSmoothyScript(path.join(app.getPath('userData'),'resolve-handoff','timeline.xml')),
+  scriptDirectory: resolveScriptDirectory(process.platform,app.getPath('appData'),os.homedir()),
+  profiles: path.resolve(resolveScriptDirectory(process.platform,app.getPath('appData'),os.homedir()),'..','..','Profiles'),
+  changed: value=>mainWindow?.webContents.send('resolve-receive-status',value)
+});
+configureResolveReceiver(job=>resolveReceive.send(job),()=>resolveReceive.isBusy());
+ipcMain.handle('resolve-receive-status',()=>resolveReceive.snapshot());
+ipcMain.handle('resolve-receive-cancel',()=>resolveReceive.cancel());
+ipcMain.handle('resolve-receive-copy-command',()=>{const script=resolveReceive.snapshot().connectorPath;if(script)shell.showItemInFolder(script);return {success:!!script};});
+ipcMain.handle('resolve-receive-show-file',()=>{const file=resolveReceive.snapshot().file;if(file && fs.existsSync(file))shell.showItemInFolder(file);return {success:!!file};});
+ipcMain.handle('resolve-send-result',async()=>{const file=getResolveOutput();if(!file)return {success:false,error:'Export a Resolve timeline first.'};const result=await resolveReceive.send({kind:'timeline',file});if(result.success)trackTool('resolve_timeline_send');return result;});
+app.on('before-quit',()=>resolveReceive.close());
 const appPreferences = createAppPreferences(store, () => mainWindow?.webContents.send('app-preferences-changed', appPreferences.snapshot()), trackTool);
 configureStudioPreference(() => appPreferences.snapshot().studioEnabled);
 let studioToolsService: ReturnType<typeof registerStudioTools> | null = null;
@@ -146,7 +181,8 @@ ipcMain.handle('set-studio-enabled', (_, value) => {
     return { success: true, ...result };
   } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not save preferences.' }; }
 });
-registerStockFootage({ store, window: () => mainWindow, connected: getConnectionStatus, importToPremiere: importStockFootageToNLE });
+const liveEditorConnected = () => getActiveNLE() === 'resolve' || getConnectionStatus();
+registerStockFootage({ store, window: () => mainWindow, connected: liveEditorConnected, editor: getActiveNLE, importToPremiere: importStockFootageToNLE });
 let compressorEventsBound = false;
 
 let updateService: ReturnType<typeof createUpdateService> | null = null;
@@ -463,24 +499,14 @@ function createWindow() {
     icon: path.join(__dirname, '../../build/icon.png')
   };
 
-  // macOS: keep native traffic lights visible inside the compact shared bar.
-  if (isMac) {
-    windowOptions.titleBarStyle = 'hidden';
-    windowOptions.trafficLightPosition = { x: 16, y: 12 };
-  }
-
-  // Windows-specific: native frame with no menu bar
-  if (isWindows) {
-    windowOptions.frame = true;
-    windowOptions.titleBarStyle = 'default';
-    windowOptions.autoHideMenuBar = true;
-  }
+  // One shared row with native window controls on macOS and Windows.
+  Object.assign(windowOptions, windowChromeOptions(process.platform));
 
   mainWindow = new BrowserWindow(windowOptions);
 
   // Keep compact library columns in sync with the native window state.
   const sendPlatformInfo = () => mainWindow?.webContents.send('platform-info', {
-    isMac, isWindows, isExpanded: mainWindow.isFullScreen() || mainWindow.isMaximized()
+    isMac, isWindows, isLinux, isExpanded: mainWindow.isFullScreen() || mainWindow.isMaximized()
   });
   mainWindow.webContents.on('did-finish-load', sendPlatformInfo);
   for (const event of ['enter-full-screen', 'leave-full-screen', 'maximize', 'unmaximize'] as const) {
@@ -511,14 +537,15 @@ if (isWindows) {
 app.whenReady().then(async () => {
   // Register the media protocol before loading the renderer. A window loaded
   // earlier keeps a URL loader without this scheme and every preview fails.
-  await registerAudioLibrary({ store, window: () => mainWindow, connected: getConnectionStatus, importToPremiere: importAudioLibraryToNLE }).catch(error => console.error('[Audio Library]', error));
-  registerPhotos({ window: () => mainWindow, connected: getConnectionStatus, importToPremiere: file => importImageToNLE(file, 5) });
+  await registerAudioLibrary({ store, window: () => mainWindow, connected: liveEditorConnected, editor: getActiveNLE, importToPremiere: importAudioLibraryToNLE }).catch(error => console.error('[Audio Library]', error));
+  registerLocalAudio(() => mainWindow);
+  registerPhotos({ window: () => mainWindow, connected: liveEditorConnected, editor: getActiveNLE, importToPremiere: (file,editor) => importImageToNLE(file, 5,editor) });
   studioToolsService = registerStudioTools(() => mainWindow, () => appPreferences.snapshot().studioEnabled);
   chatService = registerChat(() => mainWindow, () => appPreferences.snapshot().studioEnabled, () => appPreferences.snapshot().chatWritingPrompt || undefined, store);
   console.log('[App] Starting SmoothyEdit...');
 
-  // Remove the default menu bar on Windows (File, Edit, View, etc.)
-  if (isWindows) {
+  // Remove the default menu bar on Windows and Linux (File, Edit, View, etc.)
+  if (isWindows || isLinux) {
     Menu.setApplicationMenu(null);
   }
 
@@ -547,14 +574,14 @@ app.whenReady().then(async () => {
   setCallbacks({
     onConnectionChange: (connected) => {
       const nle = getActiveNLE();
-      sendLog('info', `Premiere Pro bridge ${connected ? 'connected' : 'disconnected'}`);
+      sendLog('info', nle === 'resolve' ? `Resolve XML ${connected ? 'loaded' : 'not loaded'}` : `Premiere Pro bridge ${connected ? 'connected' : 'disconnected'}`);
       mainWindow?.webContents.send('connection-change', { connected, nle });
     },
     onSequenceInfo: (info) => {
       mainWindow?.webContents.send('sequence-info', info);
     },
-    onProgress: (progress, message) => {
-      mainWindow?.webContents.send('progress', { progress, message });
+    onProgress: (progress, message, cancelable) => {
+      mainWindow?.webContents.send('progress', { progress, message, cancelable });
     },
     onResult: (result) => {
       sendLog(result.success ? 'success' : 'error', result.message || result.error || 'Operation complete');
@@ -563,6 +590,7 @@ app.whenReady().then(async () => {
   });
 
   // Set up website connection callbacks
+  try { resolveReceive.install(); resolveHandoff.start(); } catch (error) { console.warn('[Resolve handoff] Could not watch the incoming timeline folder:', error); }
   setWebsiteCallbacks({
     onConnectionChange: (connected) => {
       sendLog('info', `Website ${connected ? 'connected' : 'disconnected'}`);
@@ -657,27 +685,32 @@ app.whenReady().then(async () => {
   // Keep the Premiere Pro CEP panel in sync with the app. On macOS the panel
   // only reaches users via this install path; on Windows the NSIS installer
   // also copies it, but this guarantees updates when the app updates.
-  const bundledPanelVersion = getBundledPanelVersion();
-  const installedPanelVersion = getInstalledPanelVersion();
-  const panelNeedsInstall = !isBridgeInstalled().installed || installedPanelVersion !== bundledPanelVersion;
-
-  if (panelNeedsInstall) {
-    console.log(
-      `[CEP] Panel ${bundledPanelVersion || '?'} needed (installed: ${installedPanelVersion || 'none'}), installing...`
-    );
-    const result = installBridge();
-    if (result.success) {
-      console.log(`[CEP] Panel ${result.version || ''} installed at ${result.path}`);
-    } else {
-      console.warn('[CEP] Panel install failed:', result.error);
-    }
+  // Premiere Pro does not run on Linux, so skip the panel entirely there.
+  if (isLinux) {
+    console.log('[CEP] Skipping Premiere panel install: Premiere Pro is not available on Linux. Resolve Free is the supported editor.');
   } else {
-    console.log(`[CEP] Panel ${installedPanelVersion} is up to date at ${getInstalledPanelPath()}`);
-  }
+    const bundledPanelVersion = getBundledPanelVersion();
+    const installedPanelVersion = getInstalledPanelVersion();
+    const panelNeedsInstall = !isBridgeInstalled().installed || installedPanelVersion !== bundledPanelVersion;
 
-  // Make sure the installed panel can present the current bridge secret, even
-  // when the panel itself did not need reinstalling.
-  writeCepBridgeConfig(getInstalledPanelPath(), bridgeToken);
+    if (panelNeedsInstall && process.env.SMOOTHY_RESOLVE_DEV !== '1') {
+      console.log(
+        `[CEP] Panel ${bundledPanelVersion || '?'} needed (installed: ${installedPanelVersion || 'none'}), installing...`
+      );
+      const result = installBridge();
+      if (result.success) {
+        console.log(`[CEP] Panel ${result.version || ''} installed at ${result.path}`);
+      } else {
+        console.warn('[CEP] Panel install failed:', result.error);
+      }
+    } else {
+      console.log(`[CEP] Panel ${installedPanelVersion} is up to date at ${getInstalledPanelPath()}`);
+    }
+
+    // Make sure the installed panel can present the current bridge secret, even
+    // when the panel itself did not need reinstalling.
+    if (process.env.SMOOTHY_RESOLVE_DEV !== '1') writeCepBridgeConfig(getInstalledPanelPath(), bridgeToken);
+  }
 
   autoUpdater.logger = {
     info: (msg?: any) => console.log('[Updater]', msg),
@@ -699,6 +732,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+  resolveHandoff.close();
   stopNLEServers();
   if (process.platform !== 'darwin') {
     app.quit();
@@ -707,11 +741,17 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (mainWindow === null) {
+    resolveHandoff.start();
     createWindow();
   }
 });
 
 // IPC handlers
+ipcMain.handle('set-window-titlebar-color', (event, color) => {
+  if (event.sender !== mainWindow?.webContents) return false;
+  return setWindowTitlebarColor(mainWindow, color);
+});
+
 ipcMain.handle('get-status', () => {
   return {
     connected: getConnectionStatus(),
@@ -720,17 +760,95 @@ ipcMain.handle('get-status', () => {
   };
 });
 
-ipcMain.handle('refresh-sequence', () => {
+ipcMain.handle('refresh-sequence', async () => {
+  if(getActiveNLE()==='resolve')return loadCurrentResolveSource();
   requestSequenceInfo();
 });
 
+function resolveAutoDestination(tool:string){
+  const folder=path.join(getAssetsOutputFolder(),'Resolve');fs.mkdirSync(folder,{recursive:true});
+  return path.join(folder,tool+'-'+Date.now()+'-'+randomBytes(4).toString('hex')+'.xml');
+}
+let multicamRequestActive = false;
 ipcMain.handle('start-autocut', async (_, config) => {
-  return runAutoCut(config, () => trackTool('multicam'));
+  if (multicamRequestActive) return { success: false, error: 'Multicam is already running.' };
+  multicamRequestActive = true;
+  try {
+    const editor = getActiveNLE();
+    let destination: string | undefined;
+    if(editor==='resolve')destination=resolveAutoDestination('Multicam');
+    if (getActiveNLE() !== editor) throw new Error('The selected editor changed. Run Multicam again.');
+    return await runAutoCut(config, () => trackTool('multicam'), destination);
+  } catch (error) {
+    const result = { success: false, error: error instanceof Error ? error.message : 'Multicam failed.' };
+    mainWindow?.webContents.send('autocut-result', result); return result;
+  } finally { multicamRequestActive = false; }
 });
 
+let resolveSourceLoading=false;
+let resolveSourceCancelRequested=false;
+async function loadCurrentResolveSource(automatic=false) {
+    if(resolveSourceLoading || resolveReceive.isBusy() || multicamRequestActive || captionsJobActive || shortsJobController || studioSourceService?.isBusy())return {success:false,error:'Finish or cancel the current job before loading a timeline.'};
+    resolveSourceLoading=true;resolveSourceCancelRequested=false;resolveSourceIsPreparation=automatic;
+    try {
+      resolveHandoff.start();resolveHandoff.waitForHelper();
+      const result=await resolveReceive.send({kind:'source'});
+      if(!result.success)return result;
+      const deadline=Date.now()+10000;
+      while(Date.now()<deadline){
+        const status=resolveHandoff.snapshot();
+        if(status.error)return {success:false,error:status.error};
+        if(status.phase==='received')return resolveSourceCancelRequested ? {success:false,canceled:true} : {success:true,sequenceInfo:getSequenceInfo()};
+        await new Promise(resolve=>setTimeout(resolve,100));
+      }
+      return {success:false,error:'Resolve did not provide a fresh source timeline. Check the helper status or load a manual XML export.'};
+    } catch(error){return {success:false,error:error instanceof Error?error.message:'Could not load the Resolve timeline.'};}
+    finally {resolveSourceLoading=false;resolveSourceIsPreparation=false;}
+}
+ipcMain.handle('resolve-load-timeline', async (_, manual=false,automatic=false) => {
+  if(!manual)return loadCurrentResolveSource(automatic);
+  try {
+    const picked = await dialog.showOpenDialog({ title: 'Load a Resolve timeline export', properties: ['openFile'],
+      filters: [{ name: 'Final Cut Pro 7 XML', extensions: ['xml'] }] });
+    if (picked.canceled || !picked.filePaths[0]) return { canceled: true };
+    return { success: true, sequenceInfo: loadResolveTimeline(picked.filePaths[0]) };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not load this timeline.' }; }
+});
+ipcMain.handle('resolve-cancel-multicam',cancelResolveApply);
+ipcMain.handle('resolve-show-result', () => {
+  const output = getResolveOutput();
+  if (output && fs.existsSync(output)) { shell.showItemInFolder(output); return { success: true }; }
+  return { success: false, error: 'Export a Resolve Multicam timeline first.' };
+});
+ipcMain.handle('resolve-handoff-status', () => resolveHandoff.snapshot());
+ipcMain.handle('resolve-check-handoff', () => resolveHandoff.waitForHelper());
+ipcMain.handle('resolve-install-handoff', () => {
+  try { resolveHandoff.start(); resolveReceive.install(); return { success: true, ...resolveHandoff.install() }; }
+  catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not install the Resolve helper.' }; }
+});
+ipcMain.handle('resolve-copy-helper-command', () => {
+  const status = resolveHandoff.snapshot();
+  if (!status.installed) return { success: false, error: 'Install Send to Smoothy first.' };
+  // Lua dofile is an alternative when Resolve has not refreshed its Scripts menu.
+  const script = status.scriptPath.replace(/\\/g, '/');
+  let delimiter = ''; while (script.includes(`]${delimiter}]`)) delimiter += '=';
+  clipboard.writeText(`dofile([${delimiter}[${script}]${delimiter}])`);
+  resolveHandoff.waitForHelper();
+  return { success: true };
+});
+
+function cancelResolveApply(){
+  if(resolveSourceLoading)resolveSourceCancelRequested=true;
+  if(getActiveNLE()==='resolve' && resolveReceive.isBusy())return resolveReceive.cancel();
+  return cancelTimelineJob();
+}
+ipcMain.handle('cancel-timeline-job',cancelResolveApply);
 ipcMain.handle('start-silence-removal', async (_, config) => {
-  trackTool('silence');
-  return runSilenceRemoval(config);
+  let destination:string|undefined;
+  if(getActiveNLE()==='resolve')destination=resolveAutoDestination('Silence-Removed');
+  const result=await runSilenceRemoval(config,()=>trackTool('silence'),destination);
+  if((result?.success || result?.exported) && result.nle==='resolve')trackTool('resolve_silence_export');
+  return result;
 });
 
 // Website connection handlers
@@ -788,7 +906,7 @@ ipcMain.handle('export-audio-to-website', async () => {
 ipcMain.handle('clear-markers', async (_, options = {}) => {
   try {
     const result = await clearMarkersFromSequence(options.scope === 'all' ? 'all' : 'smoothy', options.sequenceId);
-    if (result.success) trackTool('markers_clear');
+    if (result.success) trackTool(result.nle==='resolve'?'resolve_markers_clear':'markers_clear');
     return result;
   } catch (error) {
     console.error('[Main] Clear markers error:', error);
@@ -1080,7 +1198,7 @@ ipcMain.handle('generate-captions', async (_, config: {
         message: `Preparing timeline audio (${timelineClips.length} clip${timelineClips.length === 1 ? '' : 's'})...`
       });
 
-      const stitched = await stitchTimelineAudio(timelineClips, `caption_timeline_${Date.now()}`);
+      const stitched = getActiveNLE()==='resolve' ? await prepareResolveAudio(config.trackIndices,controller.signal) : await stitchTimelineAudio(timelineClips, `caption_timeline_${Date.now()}`);
       tempAudioFiles.push(stitched.path);
       audioPath = stitched.path;
       console.log(`[Captions] Timeline audio ready: ${stitched.durationSeconds.toFixed(1)}s from ${stitched.clipCount} clip(s)`);
@@ -1287,11 +1405,12 @@ ipcMain.handle('import-captions-to-premiere', async (_, captions: FormattedCapti
     // Windows paths and produced files Premiere rejected as malformed.
     const seqInfo = getSequenceInfo();
     const safeName = (seqInfo?.name || 'captions').replace(/[\\/:*?"<>|]/g, '_');
-    const srtPath = path.join(os.tmpdir(), `${safeName}_captions_${Date.now()}.srt`);
+    const folder=getActiveNLE()==='resolve'?path.join(app.getPath('documents'),'SmoothyEdit Resolve'):os.tmpdir();fs.mkdirSync(folder,{recursive:true});
+    const srtPath = path.join(folder, `${safeName}_captions_${Date.now()}.srt`);
     fs.writeFileSync(srtPath, toSRT(captions), 'utf-8');
 
     const result = await sendCaptionsToNLE(srtPath);
-    if (result.success) trackTool('captions_premiere');
+    if (result.success) trackTool(result.nle==='resolve'?'captions_resolve':'captions_premiere');
 
     return result;
   } catch (error) {
@@ -1394,7 +1513,7 @@ ipcMain.handle('add-shorts-markers', async (_, shorts: StudioShort[]) => {
       comment: short.description || short.reason || ''
     }));
     const result = await addMarkersToSequence(markers);
-    if (result.success) trackTool('shorts_markers');
+    if (result.success) trackTool(result.nle==='resolve'?'resolve_shorts_markers':'shorts_markers');
     return result;
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Failed to add markers' };
@@ -1435,7 +1554,7 @@ async function prepareStudioAudio(input: ShortsAnalysisConfig, signal: AbortSign
           tempAudioFiles.push(audioPath);
         } else {
           const seqInfo = getSequenceInfo();
-          if (!seqInfo?.hasSequence) throw new Error('Open a sequence in Premiere first.');
+          if (!seqInfo?.hasSequence) throw new Error('Load a sequence from the selected editor first.');
           const selectedTracks = Array.isArray(input.trackIndices) && input.trackIndices.length > 0
             ? new Set(input.trackIndices) : null;
           const clips: TimelineAudioClip[] = [];
@@ -1449,7 +1568,7 @@ async function prepareStudioAudio(input: ShortsAnalysisConfig, signal: AbortSign
           }
           if (!clips.length) throw new Error('No audio clips found on the selected tracks.');
           progress(`Preparing timeline audio (${clips.length} clips)…`);
-          const stitched = await stitchTimelineAudio(clips, `shorts_timeline_${Date.now()}`);
+          const stitched = getActiveNLE()==='resolve' ? await prepareResolveAudio(input.trackIndices,signal) : await stitchTimelineAudio(clips, `shorts_timeline_${Date.now()}`);
           audioPath = stitched.path;
           tempAudioFiles.push(audioPath);
           duration = stitched.durationSeconds;
@@ -1744,7 +1863,7 @@ ipcMain.handle('assets-save-png', async (_, options: { fileName: string; bytes: 
   }
 });
 
-ipcMain.handle('assets-send-to-premiere', async (_, options: { fileName: string; bytes: Uint8Array; durationSeconds?: number }) => {
+ipcMain.handle('assets-send-to-premiere', async (_, options: { fileName: string; bytes: Uint8Array; durationSeconds?: number; editor?:'premiere'|'resolve'|null }) => {
   try {
     const bytes = options?.bytes;
     if (!bytes || !bytes.length) {
@@ -1756,12 +1875,13 @@ ipcMain.handle('assets-send-to-premiere', async (_, options: { fileName: string;
     const fileName = sanitizePngName(options.fileName);
     const filePath = writePngFile(getAssetsOutputFolder(), fileName, bytes);
 
-    const result = await importImageToNLE(filePath, options.durationSeconds || 5);
+    const result = await importImageToNLE(filePath, options.durationSeconds || 5, options.editor==='resolve'||options.editor==='premiere'?options.editor:getActiveNLE());
+    if(result.canceled)return result;
     if (!result.success) {
-      return { success: false, error: result.error || 'Premiere could not import the image' };
+      return { success: false, error: result.error || 'The selected editor could not import the image' };
     }
-    trackTool('assets_premiere');
-    return { success: true, path: filePath };
+    trackTool(result.nle==='resolve'?'assets_resolve':'assets_premiere');
+    return { success: true, nle:result.nle, path: filePath };
   } catch (error) {
     console.error('[Assets] Send to Premiere failed:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Send failed' };
@@ -1820,9 +1940,9 @@ ipcMain.handle('get-active-nle', () => {
   };
 });
 
-ipcMain.handle('set-active-nle', (_, nle: 'premiere' | null) => {
-  setActiveNLE(nle);
-  return { success: true, activeNLE: getActiveNLE() };
+ipcMain.handle('set-active-nle', (_, nle: 'premiere' | 'resolve' | null) => {
+  try { if(resolveSourceLoading || captionsJobActive || shortsJobController || studioSourceService.isBusy())throw new Error('Wait for the source operation to finish before switching editors.');setActiveNLE(nle); return { success: true, activeNLE: getActiveNLE() }; }
+  catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not switch editor.' }; }
 });
 
 // Video Compression Handlers

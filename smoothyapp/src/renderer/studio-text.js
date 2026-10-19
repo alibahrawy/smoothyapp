@@ -1,7 +1,7 @@
 import catalog from '../shared/studio-catalog.json';
+import { canGenerateStudio, studioAccessNotice, studioProModes } from './studio-access.js';
 import { renderStudioResult, formatStudioResult } from './studio-results.js';
 import { createPhotoPicker } from './photo-picker.js';
-const proModes = ['thumbnail', 'broll', 'twitter', 'blog', 'sfx'];
 const screens = {
   condense: { result: 'Your condense plan', run: 'Suggest edit ranges', help: 'Review the suggested ranges, then arrange and cut the footage in your editor.' },
   hook: { result: 'Your hook ideas', run: 'Suggest openings', help: 'Choose an opening that fits your video, then build it in your editor.' },
@@ -33,6 +33,7 @@ export function readableDraft(raw) {
 
 export function initStudioText({ getUser, enabled, signIn, refreshCredits, getInputConfig, getWorkspace, onSource, runShorts, selectChannel, onStateChange }) {
   const $ = id => document.getElementById(id), api = window.electronAPI;
+  const syncAccess = studioAccessNotice($('studio-text-composer'), getUser, signIn);
   $('studio-text-empty').querySelector('span:last-child')?.remove();
   let mode = catalog[0].id, busy = false, loading = false, historyView = false, page = 1, pages = 1;
   let editAsText = false;
@@ -48,24 +49,24 @@ export function initStudioText({ getUser, enabled, signIn, refreshCredits, getIn
   }
   function availability() {
     const signedIn = Boolean(getUser()) && enabled(), workspace = getWorkspace(), shorts = workspace.mode === 'shorts', hiddenComposer = shorts ? workspace.history : historyView, working = busy || loading || workspace.busy;
-    $('studio-compose-footer').classList.toggle('hidden', !signedIn || hiddenComposer);
+    syncAccess();
+    $('studio-compose-footer').classList.toggle('hidden', !enabled() || hiddenComposer);
     $('studio-text-status').classList.toggle('hidden', shorts && !loading && !$('studio-text-status').classList.contains('photo-error'));
     $('studio-text-status').classList.toggle('studio-status-visible', $('studio-text-status').classList.contains('photo-error') || busy || loading);
     $('studio-shorts-options').classList.toggle('hidden', !shorts);
     $('analyze-shorts-btn').classList.toggle('hidden', !shorts);
-    $('studio-text-source-heading').textContent = 'Input';
-    $('studio-text-signin').classList.toggle('hidden', signedIn);
-    $('studio-text-workspace').classList.toggle('hidden', !signedIn || historyView);
+    $('studio-text-signin').classList.add('hidden');
+    $('studio-text-workspace').classList.toggle('hidden', !enabled() || historyView);
     $('studio-text-history').classList.toggle('hidden', !signedIn || !historyView);
-    $('studio-text-composer').classList.toggle('hidden', !signedIn || hiddenComposer);
+    $('studio-text-composer').classList.toggle('hidden', !enabled() || hiddenComposer);
     $('studio-text-empty').classList.toggle('hidden', !$('studio-text-result-section').classList.contains('hidden'));
-    $('studio-text-run').classList.toggle('hidden', shorts || historyView || !signedIn);
-    const locked = proModes.includes(mode) && getUser()?.tier !== 'pro';
-    $('studio-text-pro').classList.toggle('hidden', !locked);
+    $('studio-text-run').classList.toggle('hidden', shorts || historyView || !enabled());
+    const locked = !canGenerateStudio(getUser(), mode);
+    $('studio-text-pro').classList.toggle('hidden', !getUser() || getUser().tier === 'pro' || !studioProModes.includes(mode));
     const config = getInputConfig();
     const ready = config.source === 'sequence' ? Boolean(preparedMedia?.source === 'sequence') || workspace.connected : config.source === 'audio' ? Boolean(config.audioPath) : Boolean(config.subtitleText?.trim());
     $('studio-text-run').disabled = working || locked || !ready;
-    $('analyze-shorts-btn').disabled = working || !signedIn || !ready;
+    $('analyze-shorts-btn').disabled = working || !canGenerateStudio(getUser()) || !ready;
     $('studio-text-options').classList.toggle('hidden', !shorts && !['condense','broll'].includes(mode));
     $('studio-condense-options').classList.toggle('hidden', shorts || mode !== 'condense'); $('studio-broll-options').classList.toggle('hidden', shorts || mode !== 'broll');
     $('studio-text-run').textContent = busy ? 'Working…' : screens[mode].run;
@@ -172,6 +173,7 @@ export function initStudioText({ getUser, enabled, signIn, refreshCredits, getIn
   }
   async function run(refine = false) {
     if (busy || loading || !enabled()) return;
+    if (!canGenerateStudio(getUser(), mode)) return;
     if (!getUser()) return signIn();
     if (!await prepareSource()) return;
     const data = input(); if (refine) { if (!raw || resultMode !== mode || !$('studio-text-refine').value.trim()) return status('Add a refinement request below your draft.', true); data.followUp = $('studio-text-refine').value.trim(); data.currentResult = raw; }

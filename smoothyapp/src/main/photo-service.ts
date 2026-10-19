@@ -6,7 +6,7 @@ const MAX_REFS = 6;
 type Photo = { id: string; label: string; imageUrl: string; prompt?: string; model?: string; aspectRatio?: string; historyId?: string; createdAt?: string; isFavorite?: boolean };
 type PhotoDeps = {
   owner: () => string | null;
-  request: (route: string, options?: { method?: string; body?: unknown }) => Promise<any>;
+  request: (route: string, options?: { method?: string; body?: unknown; signal?: AbortSignal }) => Promise<any>;
   imageBytes: (url: string) => Promise<Buffer>;
   png: (bytes: Buffer) => Buffer;
   track: (feature: string) => void;
@@ -40,6 +40,8 @@ export class PhotoService {
   private photos = new Map<string, Photo>();
   private cache = new Map<string, Buffer>();
   private busy = false;
+  private controller: AbortController | null = null;
+  cancel() { this.controller?.abort(); }
   constructor(private deps: PhotoDeps) {}
   private owner() {
     const user = this.deps.owner();
@@ -60,7 +62,7 @@ export class PhotoService {
     if (!photo) throw new Error('This image is no longer available. Reload image history.');
     return photo;
   }
-  reset() { this.photos.clear(); this.cache.clear(); this.user = null; }
+  reset() { this.cancel(); this.photos.clear(); this.cache.clear(); this.user = null; }
   async run(input: any) {
     const user = this.owner();
     if (this.busy) throw new Error('Wait for the current image action to finish.');
@@ -73,6 +75,7 @@ export class PhotoService {
     const references = validatePhotoReferences(input.references);
     const selected = input.imageId ? this.photo(input.imageId) : null;
     this.busy = true;
+    const controller = this.controller = new AbortController();
     try {
       let data: any, label: string, prompt = '';
       {
@@ -92,18 +95,19 @@ export class PhotoService {
         if (caps.imageSizes && !caps.imageSizes.includes(size)) throw new Error('Choose a supported resolution for this model.');
         if (action !== 'generate' && !images.length) throw new Error('Upload or select a reference image first.');
         if (typeof input.subject === 'string' && input.subject.trim()) prompt = `Subject details: ${text(input.subject, 2000, 'subject details')}.\n\n${prompt}`;
-        data = await this.deps.request('/api/generate-reaction', { method: 'POST', body: {
+        data = await this.deps.request('/api/generate-reaction', { method: 'POST', signal: controller.signal, body: {
           images, prompt, reactionId: input.presetId || 'custom', reactionLabel: label, model,
           aspectRatio: ratio,
           ...(catalog.MODEL_CAPABILITIES[model]?.supportsImageSize && { imageSize: size }),
           imageType: action === 'edit' ? 'edit' : images.length ? 'reaction' : 'text-to-image',
         } });
       }
+      controller.signal.throwIfAborted();
       if (this.deps.owner() !== user) throw new Error('Your account changed. Reload image history for your account.');
       const photo = this.add({ label, imageUrl: data.imageUrl, prompt, model, aspectRatio: ratio, historyId: data.savedReactionId, createdAt: new Date().toISOString() });
       this.deps.track(`photos_${action.replace('-', '_')}`);
       return { photo, historySaved: data.historySaved, cloudStorageAvailable: data.cloudStorageAvailable };
-    } finally { this.busy = false; }
+    } finally { this.busy = false; this.controller = null; }
   }
   async history(page = 1, favorites = false) {
     const user = this.owner();

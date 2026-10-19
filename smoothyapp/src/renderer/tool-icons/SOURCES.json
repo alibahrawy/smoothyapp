@@ -1,0 +1,63 @@
+{
+  "library": "Lucide",
+  "version": "0.468.0",
+  "website": "https://lucide.dev",
+  "license": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/LICENSE",
+  "icons": {
+    "multicam": {
+      "icon": "panels-top-left",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/panels-top-left.svg",
+      "sha256": "321a2a5500f2b814a2e62eb73c4b01dc65c7334fe2e6f7d77517239383e26bb1"
+    },
+    "silence": {
+      "icon": "audio-lines",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/audio-lines.svg",
+      "sha256": "3942b8a5d6bccc927a55f857f0d44b90e2663470cd2d569000c9b60c37578dfa"
+    },
+    "captions": {
+      "icon": "captions",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/captions.svg",
+      "sha256": "5abaf98577eaa7989d1b955d32b50e8d8958619f774280f3925d34b39f23ab22"
+    },
+    "compressor": {
+      "icon": "file-archive",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/file-archive.svg",
+      "sha256": "50adc280c84fcde3a62288e91a049557bb15ab3162fcb9533f4e2f821eaad7dd"
+    },
+    "assets": {
+      "icon": "images",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/images.svg",
+      "sha256": "21646fbbc3c17a32033f581806ee466a41607dd308e2e321ba8daa7d583f0349"
+    },
+    "stock": {
+      "icon": "clapperboard",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/clapperboard.svg",
+      "sha256": "d6dca06e880bde6f384df9d68b589d464e85ee70deba0e3d2f1852f77beb15e5"
+    },
+    "audio": {
+      "icon": "music-2",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/music-2.svg",
+      "sha256": "fd3e51e40de1d9c5b1872030467fc1e181592072c3a70854133e060b134c3661"
+    },
+    "studio-text": {
+      "icon": "layout-dashboard",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/layout-dashboard.svg",
+      "sha256": "281ab865b4c04dab32a04023473e448f58be6a7ad90769450ac3349d79dc4aed"
+    },
+    "photos": {
+      "icon": "image-plus",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/image-plus.svg",
+      "sha256": "19a5bef8f17d2397b2c41422553f53746e7c8ad9886a11e7ad397c5371368ec0"
+    },
+    "chat": {
+      "icon": "messages-square",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/messages-square.svg",
+      "sha256": "eecf35710e7a26095c49f0e8261452f92a3909b4f9e2020ef242211285f7e922"
+    },
+    "logs": {
+      "icon": "terminal",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/terminal.svg",
+      "sha256": "1ec2382658b6fe0642253ba75d3bbd8f48d03c9aa79c9cdb0dbbc269e112b8a1"
+    }
+  }
+}

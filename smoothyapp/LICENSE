@@ -22,7 +22,7 @@ SOFTWARE.
 
 ---
 Scope: this MIT license covers the SmoothyEdit desktop app and Premiere bridge
-(smoothyapp/ and smoothyapp-cep/).
+(smoothyedit-app/ and smoothyapp-cep/).
 The web Studio + billing backend remain proprietary.
 
 Privacy: local tools (multicam, silence, captions, compressor, Assets) never

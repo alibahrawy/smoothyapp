@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
@@ -6,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 const fixture = { handlers: new Map(), events: [], usage: [] };
 globalThis.__stockIpcFixture = fixture;
-const output = await build({ entryPoints: [new URL('../src/main/stock-footage-ipc.ts', import.meta.url).pathname], bundle: true, platform: 'node', format: 'esm', write: false,
+const output = await build({ entryPoints: [fileURLToPath(new URL('../src/main/stock-footage-ipc.ts', import.meta.url))], bundle: true, platform: 'node', format: 'esm', write: false,
  plugins: [{ name: 'stock-fixture', setup(builder) {
   builder.onResolve({filter:/^\.\/telemetry$/},()=>({path:'telemetry',namespace:'fixture'}));
   builder.onResolve({filter:/^electron$/},()=>({path:'electron',namespace:'fixture'}));
@@ -15,12 +16,12 @@ const output = await build({ entryPoints: [new URL('../src/main/stock-footage-ip
  } }] });
 const { registerStockFootage } = await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
 const bytes=Buffer.concat([Buffer.from('1a45dfa3','hex'),Buffer.alloc(80)]);
-async function withFixture(action){
+async function withFixture(action,editor){
  const folder=await mkdtemp(path.join(os.tmpdir(),'smoothy-stock-ipc-'));const original=globalThis.fetch;const values=new Map([['stockFootageFolder',folder]]);let connected=true,importsSucceed=true;const imports=[];
  fixture.folder=folder;
  globalThis.fetch=async url=>url.includes('/w/api.php')?Response.json({batchcomplete:true,query:{pages:[{pageid:100,videoinfo:[{width:1920,height:1080,duration:10,descriptionurl:'https://commons.wikimedia.org/wiki/File:Ocean.webm',thumburl:'https://thumb.wikimedia.org/ocean.jpg',extmetadata:{LicenseShortName:{value:'Public domain'},AttributionRequired:{value:'false'}},derivatives:[{width:1920,height:1080,type:'video/webm',src:'https://upload.wikimedia.org/ocean.webm'}]}]}]}}):new Response(bytes);
  fixture.handlers.clear();fixture.events=[];fixture.usage=[];
- registerStockFootage({store:{get:key=>values.get(key),set:(key,value)=>values.set(key,value),delete:key=>values.delete(key)},window:()=>({webContents:{send:(type,data)=>fixture.events.push({type,data})}}),connected:()=>connected,importToPremiere:async filePath=>{imports.push(filePath);return {success:importsSucceed,error:'Premiere rejected MP4'};}});
+ registerStockFootage({store:{get:key=>values.get(key),set:(key,value)=>values.set(key,value),delete:key=>values.delete(key)},window:()=>({webContents:{send:(type,data)=>fixture.events.push({type,data})}}),connected:()=>connected,editor:()=>editor,importToPremiere:async filePath=>{imports.push(filePath);return {success:importsSucceed,nle:editor,error:'Premiere rejected MP4'};}});
  const invoke=(name,input)=>fixture.handlers.get('stock-'+name)(null,input);
  try{await action({folder,invoke,imports,values,disconnect:()=>{connected=false;},rejectImport:()=>{importsSucceed=false;}});}finally{globalThis.fetch=original;await rm(folder,{recursive:true,force:true});}
 }
@@ -38,3 +39,7 @@ test('desktop IPC exposes no provider key setter, remover or credential settings
  assert.deepEqual(f.invoke('get-settings'),{folder:f.folder,pixabayEnabled:false});
  assert.match((await f.invoke('search',{query:'ocean',provider:'pixabay'})).error,/unavailable in this build/);
 }));
+
+test('Resolve stock sends count only a confirmed Media Pool import separately from downloads',async()=>withFixture(async f=>{
+ await f.invoke('search',{query:'ocean'});const result=await f.invoke('download',{videoId:100,fileId:1,premiere:true});assert.equal(result.success,true);assert.deepEqual(fixture.usage,['stock_search','stock_download','stock_resolve']);
+},'resolve'));

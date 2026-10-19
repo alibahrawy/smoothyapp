@@ -94,10 +94,11 @@ function estimateNoiseFloor(samples: Int16Array): number {
  * Estimate speech threshold based on audio characteristics
  * Uses adaptive thresholding: noise floor + dynamic range analysis
  */
-function estimateSpeechThreshold(samples: Int16Array, aggressiveness: number): number {
+async function estimateSpeechThreshold(samples: Int16Array, aggressiveness: number, signal?: AbortSignal): Promise<number> {
   const frameEnergies: number[] = [];
 
   for (let i = 0; i < samples.length; i += FRAME_SIZE) {
+    if (i % (FRAME_SIZE * 1024) === 0) { await new Promise<void>(resolve => setImmediate(resolve)); signal?.throwIfAborted(); }
     const rms = calculateRMS(samples, i, FRAME_SIZE);
     frameEnergies.push(rms);
   }
@@ -130,13 +131,14 @@ function estimateSpeechThreshold(samples: Int16Array, aggressiveness: number): n
   return threshold;
 }
 
-function detectSpeech(
+async function detectSpeech(
   samples: Int16Array,
   speaker: string,
-  aggressiveness: number = 3
-): SpeechSegment[] {
+  aggressiveness: number = 3,
+  signal?: AbortSignal
+): Promise<SpeechSegment[]> {
   // Use adaptive threshold based on audio characteristics
-  const threshold = estimateSpeechThreshold(samples, aggressiveness);
+  const threshold = await estimateSpeechThreshold(samples, aggressiveness, signal);
   console.log(`    Adaptive threshold: ${threshold.toFixed(4)}`);
 
   const segments: SpeechSegment[] = [];
@@ -152,6 +154,7 @@ function detectSpeech(
   const maxSilenceFrames = Math.ceil(MAX_SILENCE_BRIDGE_MS / frameDurationMs);
 
   for (let i = 0; i < samples.length; i += FRAME_SIZE) {
+    if (i % (FRAME_SIZE * 1024) === 0) { await new Promise<void>(resolve => setImmediate(resolve)); signal?.throwIfAborted(); }
     const rms = calculateRMS(samples, i, FRAME_SIZE);
     const isSpeech = rms > threshold;
 
@@ -246,7 +249,8 @@ function mergeCloseSegments(segments: SpeechSegment[], maxGap: number): SpeechSe
 export async function runVad(
   sources: AudioSource[],
   aggressiveness: number = 3,
-  failOnError: boolean = false
+  failOnError: boolean = false,
+  signal?: AbortSignal
 ): Promise<SpeechSegment[]> {
   console.log('Running VAD analysis (Adaptive energy-based)...');
   console.log(`  Tracks: ${sources.length}`);
@@ -258,13 +262,15 @@ export async function runVad(
     console.log(`  Processing ${source.speaker}: ${source.path}`);
 
     try {
+      signal?.throwIfAborted();
       const samples = readWavFile(source.path);
-      const segments = detectSpeech(samples, source.speaker, aggressiveness);
+      const segments = await detectSpeech(samples, source.speaker, aggressiveness, signal);
 
       console.log(`    Found ${segments.length} speech segments`);
       allSegments.push(...segments);
     } catch (err) {
       console.error(`    Error processing ${source.speaker}:`, err);
+      signal?.throwIfAborted();
       if (failOnError) throw new Error(`Could not analyse ${source.speaker}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }

@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { EventEmitter } from 'node:events';
 import vm from 'node:vm';
+import { fileURLToPath } from 'node:url';
 import { build, transform } from 'esbuild';
 
 const stubs = {
@@ -12,12 +13,12 @@ const stubs = {
   './autocut/premiere-multicam': `export async function runPremiereMulticam(){const f=globalThis.fixture;f.jobs++;if(f.hold)await new Promise(resolve=>f.release=resolve);if(f.error)throw Error(f.error);return {success:true};}`,
   './autocut/vad-runner': `export const runVad=()=>{};`,
   './autocut/decision-engine': `export const generateShotDecisions=()=>{};`,
-  './autocut/audio-extractor': `export const extractAudioTrack=()=>{},stitchTimelineAudio=()=>{},cleanupTempFile=()=>{},resetAudioExtractionCancel=()=>{};`,
+  './autocut/audio-extractor': `export const extractAudioTrack=()=>{},stitchTimelineAudio=()=>{},cleanupTempFile=()=>{},resetAudioExtractionCancel=()=>{},cancelAudioExtraction=()=>{};`,
   './autocut/silence-detector': `export const combineAudioTracks=()=>{},analyzeSilence=()=>{},cleanupTempFile=()=>{},alignSegmentsToFrames=()=>{};`,
   './autocut/silence-xml-generator': `export const generateSilenceRemovalXML=()=>{};`,
 };
 const bundle = await build({
-  stdin: { contents: `export {runAutoCut,startNLEServers,setCallbacks} from './src/main/nle-router';export {initTelemetry,trackTool} from './src/main/telemetry';`, resolveDir: new URL('..', import.meta.url).pathname },
+  stdin: { contents: `export {runAutoCut,startNLEServers,setCallbacks} from './src/main/nle-router';export {initTelemetry,trackTool} from './src/main/telemetry';`, resolveDir: fileURLToPath(new URL('..', import.meta.url)) },
   bundle: true, platform: 'node', format: 'cjs', write: false, external: ['ws'],
   plugins: [{ name: 'native-adapters', setup(builder) {
     builder.onResolve({ filter: /.*/ }, args => args.path in stubs ? { path: args.path, namespace: 'fixture' } : undefined);
@@ -38,7 +39,7 @@ function fixture(disabled = false, version = 7) {
     process: { platform: 'darwin', env: disabled ? { SMOOTHY_TELEMETRY: '0' } : {} }, Buffer, URL,
     console: { log() {}, warn() {}, error() {} },
     fetch: async (_url, options) => { f.events.push(JSON.parse(options.body)); return {}; },
-    setTimeout, clearTimeout,
+    setTimeout, clearTimeout, setImmediate, AbortController,
   });
   vm.runInContext(bundle.outputFiles[0].text, context);
   const api = module.exports;
@@ -48,7 +49,7 @@ function fixture(disabled = false, version = 7) {
   const socket = new Socket(); f.server.emit('connection', socket, { url: '/' });
   socket.emit('message', Buffer.from(JSON.stringify({ type: 'sequenceInfo', multicamTimelineVersion: version })));
   let handler;
-  vm.runInNewContext(handlerCode, { ipcMain: { handle: (_name, callback) => { handler = callback; } }, runAutoCut: api.runAutoCut, trackTool: api.trackTool });
+  vm.runInNewContext(handlerCode, { multicamRequestActive: false, getActiveNLE: () => 'premiere', ipcMain: { handle: (_name, callback) => { handler = callback; } }, runAutoCut: api.runAutoCut, trackTool: api.trackTool });
   return { f, api, start: () => handler(null, { fixture: true }) };
 }
 

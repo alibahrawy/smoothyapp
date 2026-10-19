@@ -1,9 +1,11 @@
 import catalog from '../shared/chat-catalog.json';
+import { canGenerateStudio, studioAccessNotice } from './studio-access.js';
 import { renderChatReply } from './chat-format.js';
 import { createWordReveal } from './chat-reveal.js';
 
 export function initChat({ getUser, signIn, refreshCredits }) {
   const $ = id => document.getElementById(id), api = window.electronAPI;
+  const syncAccess = studioAccessNotice($('chat-composer-dock'), getUser, signIn);
   let thinking = catalog.defaultThinking;
   let turns = [], attachments = [], filesLoading = false, busy = false, stopping = false, active = null, account = null, generation = 0;
   let conversationId = null, historyView = false, historyLoading = false, historyError = '', historyItems = [], historyEpoch = 0;
@@ -23,15 +25,16 @@ export function initChat({ getUser, signIn, refreshCredits }) {
     $('chat-thinking').disabled = busy || filesLoading;
     $('chat-thinking').title = 'Turn reasoning on or off';
     const signedIn = Boolean(getUser());
-    $('chat-signin').classList.toggle('hidden', signedIn);
-    $('chat-signedin').classList.toggle('hidden', !signedIn);
-    $('chat-composer-dock').classList.toggle('hidden', !signedIn || historyView);
+    syncAccess();
+    $('chat-signin').classList.add('hidden');
+    $('chat-signedin').classList.remove('hidden');
+    $('chat-composer-dock').classList.toggle('hidden', historyView);
     historyButton.classList.toggle('hidden', !signedIn);
     historyButton.disabled = busy || filesLoading || historyLoading;
     historyButton.textContent = historyView ? 'Back to chat' : 'History';
     historyPanel.classList.toggle('hidden', !historyView);
     $('chat-results').classList.toggle('hidden', historyView);
-    $('chat-send').disabled = stopping || filesLoading || !signedIn || (!busy && !$('chat-prompt').value.trim() && !attachments.length);
+    $('chat-send').disabled = stopping || filesLoading || (!busy && !canGenerateStudio(getUser())) || (!busy && !$('chat-prompt').value.trim() && !attachments.length);
     $('chat-send').classList.toggle('is-generating', busy);
     $('chat-send').classList.toggle('is-stopping', stopping);
     $('chat-send').setAttribute('aria-label', busy ? 'Stop generating' : 'Send message');
@@ -199,12 +202,14 @@ export function initChat({ getUser, signIn, refreshCredits }) {
     active.reveal.feed(delta);
   });
   async function credits() {
+    if (!getUser()) { $('chat-credits').textContent = '100 free credits/month'; return; }
     const stamp = generation;
     try { const result = await api.getStudioCredits(); if (stamp === generation) $('chat-credits').textContent = result.success && Number.isFinite(result.credits?.credits) ? `${Math.round(result.credits.credits).toLocaleString()} credits` : 'Balance unavailable'; }
     catch { if (stamp === generation) $('chat-credits').textContent = 'Balance unavailable'; }
   }
   async function send() {
     if (busy || filesLoading) return;
+    if (!canGenerateStudio(getUser())) return;
     if (!getUser()) return signIn();
     const prompt = $('chat-prompt').value.trim(); if (!prompt && !attachments.length) return;
     const messages = turns.filter(turn => turn.reply).flatMap(turn => [{ role: 'user', content: turn.prompt, ...(turn.attachments?.length && { attachments: turn.attachments.map(file => file.id) }) }, { role: 'assistant', content: turn.reply }]);
@@ -267,6 +272,7 @@ export function initChat({ getUser, signIn, refreshCredits }) {
   function authChanged() {
     const next = getUser()?.id || null;
     if (next !== account) { generation++; historyEpoch++; conversationId = null; historyView = false; historyLoading = false; historyError = ''; historyItems = []; active?.reveal.cancel(); active = null; api.chatReset().catch(() => {}); turns = []; attachments = []; attachmentChips($('chat-attachments'), attachments, true); filesLoading = false; busy = false; stopping = false; account = next; $('chat-prompt').value = ''; $('chat-credits').textContent = 'Studio credits'; addMenu.hidePopover(); status(''); render(); }
+    if (!getUser()) $('chat-credits').textContent = '100 free credits/month';
     availability();
   }
   render();

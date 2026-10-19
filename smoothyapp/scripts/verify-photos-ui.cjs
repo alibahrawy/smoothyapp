@@ -4,9 +4,16 @@ const fs = require('node:fs'), path = require('node:path'), os = require('node:o
 const assert = require('node:assert/strict');
 const { buildSync } = require('esbuild');
 const root = path.resolve(__dirname, '..'), scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'smoothy-photo-ui-'));
-const catalog = JSON.parse(fs.readFileSync(path.join(root, 'src/shared/photo-catalog.json'), 'utf8'));
+const fullCatalog = JSON.parse(fs.readFileSync(path.join(root, 'src/shared/photo-catalog.json'), 'utf8'));
+const modelMenu = JSON.parse(fs.readFileSync(path.join(root, 'src/shared/photo-model-menu.json'), 'utf8'));
+const catalog = { ...fullCatalog, IMAGE_MODELS: modelMenu.companies.flatMap(company => company.models.map(choice => fullCatalog.IMAGE_MODELS.find(model => model.id === choice.id))) };
 app.setPath('userData', path.join(scratch, 'profile'));
-app.once('will-quit', () => fs.rmSync(scratch, { recursive: true, force: true }));
+// Chromium may still hold profile/cache handles while will-quit runs on Windows.
+// Temporary test cleanup must never throw into Electron's uncaught-error dialog.
+app.once('will-quit', () => {
+  try { fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 2, retryDelay: 50 }); }
+  catch { console.warn('[Photos UI fixture] Temporary profile is still locked; leaving it for later cleanup.'); }
+});
 protocol.registerSchemesAsPrivileged([{ scheme: 'smoothy-photo', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 const servicePath = path.join(scratch, 'photos.cjs');
 buildSync({ entryPoints: [path.join(root, 'src/main/photo-service.ts')], bundle: true, platform: 'node', format: 'cjs', outfile: servicePath });
@@ -20,7 +27,7 @@ let win, user = null, rejectNext = false, callId = 0, holdNext = false, releaseH
 const calls = [], errors = [], usage = [];
 const service = new PhotoService({ owner: () => user?.id || null, imageBytes: async () => png, png: bytes => bytes, track: id => usage.push(id), request: async (route, options) => {
   calls.push({ route, options });
-  if (holdNext) { holdNext = false; await new Promise(resolve => { releaseHeld = resolve; }); }
+  if (holdNext) { holdNext = false; await new Promise((resolve, reject) => { releaseHeld = resolve; options?.signal?.addEventListener('abort', () => reject(options.signal.reason), { once: true }); }); }
   if (rejectNext) { rejectNext = false; throw Error('No credits remaining'); }
   if (route.startsWith('/api/reactions?')) return storageMode === 'free' ? { totalPages: 0, reactions: [], cloudStorageAvailable: false } : { totalPages: 2, cloudStorageAvailable: true, reactions: [{ id: 'history-a', reactionLabel: '<img src=x onerror=alert(1)>', imageUrl, model: 'google/gemini-3.1-flash-image', aspectRatio: '16:9' }] };
   return { imageUrl, savedReactionId: storageMode === 'paid' ? `saved-${++callId}` : null, historySaved: storageMode === 'paid', cloudStorageAvailable: storageMode !== 'free' };
@@ -28,6 +35,7 @@ const service = new PhotoService({ owner: () => user?.id || null, imageBytes: as
 ipcMain.handle('fixture-call', async (_event, name, args) => {
   const canned = { getAuthState: { user }, getStatus: { connected: false }, getWebsiteConnectionStatus: { connected: false }, getAppVersion: '2.0.0', getCaptionModels: [], getCaptionLanguages: [], getCaptionEngine: 'cpu', getBridgeStatus: { cep: { installed: true } }, assetsGetOutputFolder: '/fixture/assets', audioLibraryState: { success: true, tracks: [], candidates: [], watching: false }, audioArchiveSearch: { success: true, tracks: [], categories: [], moods: [], total: 0, hasMore: false }, stockGetSettings: { pixabayEnabled: true, folder: '/fixture/stock' }, getStudioCredits: { success: true, credits: { credits: 1950 } } };
   try {
+    if (name === 'photosCancel') { service.cancel(); return { success: true }; }
     if (name === 'photosRun') return { success: true, ...await service.run(args[0]) };
     if (name === 'photosHistory') return { success: true, ...await service.history(args[0]?.page || 1, args[0]?.favorites) };
     if (name === 'photosReset') { service.reset(); return { success: true }; }
@@ -35,7 +43,7 @@ ipcMain.handle('fixture-call', async (_event, name, args) => {
     if (name === 'photosDelete') { await service.remove(args[0]); return { success: true }; }
     if (name.startsWith('photos')) { calls.push({ name, args }); return fileFailure ? { success: false, error: 'Could not save image' } : { success: true, canceled: name === 'photosSave' && saveCanceled }; }
     return canned[name] ?? {};
-  } catch (error) { return { success: false, error: error.message }; }
+  } catch (error) { return { success: false, canceled: error.name === 'AbortError', error: error.message }; }
 });
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 app.whenReady().then(async () => {
@@ -49,15 +57,15 @@ app.whenReady().then(async () => {
   const capture = async name => { await pause(350); const folder = process.env.SMOOTHY_REVIEW_DIR || path.join(root, '../docs/reviews/smoothyapp-v2-photo-menus'); fs.mkdirSync(folder, { recursive: true }); fs.writeFileSync(path.join(folder, `${name}.png`), (await win.webContents.capturePage()).toPNG()); };
   const setUser = async value => { user = value; win.webContents.send('onAuthStateChange', { user }); await pause(100); };
   try {
-    await win.loadFile(process.env.SMOOTHY_TEST_RENDERER || path.join(root, 'out/renderer/index.html')); await pause(250);
+    await win.loadFile(process.env.SMOOTHY_TEST_RENDERER || path.join(root, 'out/renderer/index.html')); win.showInactive(); await pause(250);
     await click('.nav-item[data-tab="photos"]');
-    assert.equal(await js(`document.getElementById('photos-signin').classList.contains('hidden')`), false);
+    assert.equal(await js(`document.getElementById('photos-signin').classList.contains('hidden')`), true);
     assert.equal(await js(`document.querySelector('#photos-empty h2').textContent`),'Create or edit an image');
     assert.equal(await js(`document.querySelector('#photos-empty p').textContent`),'Describe it or attach a picture.');
     assert.equal(await js(`document.querySelector('#photos-empty > span:last-child')`),null);
     assert.deepEqual(calls, []); assert.deepEqual(usage, []);
     await click('#photos-signin-btn'); assert.equal(await js(`document.getElementById('login-modal').classList.contains('hidden')`), false); await click('#login-close-btn');
-    await setUser({ id: 'account-a', email: 'fixture@example.test', tier: 'free' });
+    await setUser({ id: 'account-a', email: 'fixture@example.test', tier: 'pro' });
     assert.equal(await js(`document.getElementById('photos-signin').classList.contains('hidden')`), true);
     assert.equal(await js(`document.querySelectorAll('.photo-result-card').length`), 0);
     assert.equal(await js(`document.querySelectorAll('.nav-item[data-tab="photos"]').length`), 1);
@@ -79,17 +87,26 @@ app.whenReady().then(async () => {
     assert.equal(await js(`document.getElementById('photos-options')`),null);
     assert.equal(await js(`document.getElementById('photos-reactions-panel').hasAttribute('popover')`),false);
        assert.match(await js(`document.getElementById('photos-estimate').textContent`),/≈.*credits|Estimate unavailable/);
-    assert.ok(await js(`document.querySelectorAll('#photos-model-list img.photo-model-logo').length`)>0);
+    assert.equal(catalog.IMAGE_MODELS.length,21);
+    assert.equal(modelMenu.companies.length,11);
+    assert.ok(modelMenu.companies.every(company=>company.models.length<=2));
+    assert.equal(await js(`document.querySelectorAll('#photos-model-list img.photo-model-logo').length`),catalog.IMAGE_MODELS.length);
+    assert.equal(await js(`document.querySelectorAll('#photos-model-list .photo-model-tier').length`),catalog.IMAGE_MODELS.length);
+    assert.deepEqual(await js(`[...document.querySelectorAll('#photos-model-list [data-company="openai"] .photo-model-tier')].map(item=>item.textContent)`),['Fast','Precision']);
+    assert.equal(await js(`document.querySelectorAll('#photos-model-list [data-value^="openai/gpt-5"], #photos-model-list [data-value^="openai/gpt-image-1"], #photos-model-list [data-value="google/gemini-3-pro-image"], #photos-model-list [data-value="google/gemini-3.1-flash-image"]').length`),0);
+    for(const company of modelMenu.companies){
+      assert.equal(await js(`document.querySelectorAll('#photos-model-list [data-company=${JSON.stringify(company.id)}]').length`),company.models.length);
+    }
     assert.equal(await js(`[...document.querySelectorAll('#photos-model-list img.photo-model-logo')].every(i=>i.complete&&i.naturalWidth>0)`),true);
     assert.equal(await js(`document.querySelector('#photos-model .photo-model-logo').naturalWidth>0`),true);
-    await click('#photos-model');await click('#photos-model-list [data-value="google/gemini-3.1-flash-image"]');
+    await click('#photos-model');await click('#photos-model-list [data-value="google/gemini-nano-banana-2.1"]');
     const localCalls=calls.length, localUsage=usage.length;
     await click('#photos-size'); await click('#photos-size-list [data-value="4K"]');
     const largerEstimate=await js(`document.getElementById('photos-estimate').textContent`);
-    const largerModelPrice=await js(`document.querySelector('#photos-model-list [data-value="google/gemini-3.1-flash-image"] .photo-picker-price').textContent`);
+    const largerModelPrice=await js(`document.querySelector('#photos-model-list [data-value="google/gemini-nano-banana-2.1"] .photo-picker-price').textContent`);
     await click('#photos-size'); await click('#photos-size-list [data-value="1K"]');
     assert.notEqual(await js(`document.getElementById('photos-estimate').textContent`),largerEstimate);
-    assert.notEqual(await js(`document.querySelector('#photos-model-list [data-value="google/gemini-3.1-flash-image"] .photo-picker-price').textContent`),largerModelPrice);
+    assert.notEqual(await js(`document.querySelector('#photos-model-list [data-value="google/gemini-nano-banana-2.1"] .photo-picker-price').textContent`),largerModelPrice);
     await click('#photos-reactions');
     assert.equal(await js(`document.getElementById('photos-reactions-panel').hidden`),false);
     assert.equal(await js(`document.activeElement.id`),'photos-reactions-close');
@@ -102,13 +119,18 @@ app.whenReady().then(async () => {
     const menuCalls=calls.length, menuUsage=usage.length;
     await click('#photos-model'); await click('[data-model-filter="low-cost"]');
     assert.ok(await js(`document.querySelectorAll('#photos-model-list [role=option]:not([hidden])').length`)>0);
-    await js(`document.getElementById('photos-model-search').value='OpenAI';document.getElementById('photos-model-search').dispatchEvent(new Event('input'))`);
+    await js(`document.getElementById('photos-model-search').value='Microsoft';document.getElementById('photos-model-search').dispatchEvent(new Event('input'))`);
     assert.ok(await js(`document.querySelectorAll('#photos-model-list [role=option]:not([hidden])').length`)>0);
-    assert.ok(await js(`[...document.querySelectorAll('#photos-model-list [role=option]:not([hidden])')].every(option=>option.textContent.includes('OpenAI'))`));
+    assert.ok(await js(`[...document.querySelectorAll('#photos-model-list [role=option]:not([hidden])')].every(option=>option.textContent.includes('Microsoft') && option.querySelector('.photo-model-tier').textContent==='Budget')`));
     await js(`document.getElementById('photos-model-search').value='No match';document.getElementById('photos-model-search').dispatchEvent(new Event('input'))`);
     assert.equal(await js(`document.querySelector('#photos-model-menu .photo-picker-empty').classList.contains('hidden')`),false);
     await js(`document.getElementById('photos-model-menu').hidePopover()`); await click('#photos-model');
     assert.equal(await js(`document.querySelectorAll('#photos-model-list [role=option]:not([hidden])').length`),catalog.IMAGE_MODELS.length);
+    await capture('curated-models-desktop');
+    await click('[data-model-filter="premium"]');
+    assert.equal(await js(`document.querySelectorAll('#photos-model-list [role=option]:not([hidden])').length`),9);
+    assert.ok(await js(`[...document.querySelectorAll('#photos-model-list [role=option]:not([hidden])')].every(option=>option.querySelector('.photo-model-tier').textContent==='Premium')`));
+    await capture('premium-models-desktop');
     await click('[data-model-filter="4k"]');
     assert.ok(await js(`document.querySelectorAll('#photos-model-list [role=option]:not([hidden])').length > 0`));
     await capture('model-filter-desktop'); await js(`document.getElementById('photos-model-menu').hidePopover()`);
@@ -171,7 +193,7 @@ app.whenReady().then(async () => {
       assert.equal(calls.filter(call=>call.route==='/api/generate-reaction').at(-1).options.body.model, model.id);
     }
     // Model-specific options and references cannot create an unsupported paid request.
-    await click('#photos-model'); await click('#photos-model-list [data-value="bytedance-seed/seedream-4.5"]');
+    await click('#photos-model'); await click('#photos-model-list [data-value="google/gemini-nano-banana-2.1"]');
     await click('#photos-size'); await click('#photos-size-list [data-value="4K"]');
     assert.equal(await js(`document.getElementById('photos-size').value`),'4K');
     assert.equal(await js(`document.getElementById('photos-size-menu').matches(':popover-open')`),false);
@@ -189,7 +211,7 @@ app.whenReady().then(async () => {
     assert.equal(await js(`document.getElementById('photos-generate').disabled`),true);
     assert.match(await js(`document.getElementById('photos-reference-warning').textContent`),/up to 3 reference/);
     assert.equal(calls.filter(call=>call.route).length,beforeLimit);
-    await click('#photos-model'); await click('#photos-model-list [data-value="google/gemini-3.1-flash-image"]');
+    await click('#photos-model'); await click('#photos-model-list [data-value="google/gemini-nano-banana-2.1"]');
     assert.equal(await js(`document.getElementById('photos-generate').disabled`),false);
     await click('#photos-new-chat');
     // Menus use app focus/keyboard handling, including search, Home/End and Escape.
@@ -236,11 +258,11 @@ app.whenReady().then(async () => {
     const beforeBatch=usage.filter(id=>id==='photos_preset').length; holdNext=true;
     await click('#photos-generate'); assert.equal(await js(`document.getElementById('photos-generate').disabled`),true);
     await click('#photos-stop-batch'); releaseHeld(); await pause(150);
-    assert.equal(usage.filter(id=>id==='photos_preset').length,beforeBatch+1);
+    assert.equal(usage.filter(id=>id==='photos_preset').length,beforeBatch);
     assert.equal(await js(`getComputedStyle(document.getElementById('photos-status')).display`),'none');
     await capture('chat-result-desktop');
     // Model menus and the full-height reactions drawer stay in the viewport.
-    await click('#photos-model'); await js(`document.getElementById('photos-model-search').value='flux';document.getElementById('photos-model-search').dispatchEvent(new Event('input'))`); assert.equal(await js(`document.querySelectorAll('#photos-model-list [role=option]:not([hidden])').length`),5); await capture('model-menu-desktop'); await js(`document.getElementById('photos-model-menu').hidePopover()`);
+    await click('#photos-model'); await js(`document.getElementById('photos-model-search').value='flux';document.getElementById('photos-model-search').dispatchEvent(new Event('input'))`); assert.equal(await js(`document.querySelectorAll('#photos-model-list [role=option]:not([hidden])').length`),2); await capture('model-menu-desktop'); await js(`document.getElementById('photos-model-menu').hidePopover()`);
     await click('#photos-reactions');
     assert.equal(await js(`document.getElementById('photos-reactions-panel').hidden`),false);
     assert.equal(await js(`document.activeElement.id`),'photos-reactions-close');
@@ -248,7 +270,7 @@ app.whenReady().then(async () => {
     assert.equal(await js(`document.getElementById('photos-reactions-panel').hidden`),true);
     assert.equal(await js(`document.activeElement.id`),'photos-reactions');
     for (const windows of [false, true]) for (const [width, height] of [[1000, 740], [600, 500]]) {
-      win.setSize(width, height); win.webContents.send('onPlatformInfo', { isMac: !windows, isWindows: windows, isExpanded: false }); await pause(80);
+      win.setContentSize(width, height); win.webContents.send('onPlatformInfo', { isMac: !windows, isWindows: windows, isExpanded: false }); await pause(80);
       await click('.nav-item[data-tab="photos"]');
       const bounds = await js(`(()=>{const nav=document.getElementById('sidebar-nav'),foot=document.querySelector('.sidebar-footer').getBoundingClientRect();return {scroll:nav.scrollHeight,available:nav.clientHeight,footerBottom:foot.bottom,width:innerWidth,height:innerHeight,overflow:document.documentElement.scrollWidth>innerWidth,contentOverflow:document.querySelector('.photos-scroll').scrollWidth>document.querySelector('.photos-scroll').clientWidth}})()`);
       assert.equal(bounds.overflow, false, JSON.stringify(bounds)); assert.equal(bounds.contentOverflow, false, JSON.stringify(bounds)); assert.ok(bounds.footerBottom <= bounds.height, JSON.stringify(bounds));
@@ -317,7 +339,7 @@ app.whenReady().then(async () => {
     storageMode = 'paid';
     await click('.photo-result-preview'); await setUser(null);
     assert.equal(await js(`document.getElementById('photos-viewer').open`), false); assert.equal(await js(`document.querySelectorAll('.photo-result-card').length`), 0);
-    assert.equal(await js(`document.getElementById('photos-prompt').value`), ''); assert.equal(await js(`document.getElementById('photos-signin').classList.contains('hidden')`), false);
+    assert.equal(await js(`document.getElementById('photos-prompt').value`), ''); assert.equal(await js(`document.getElementById('photos-signin').classList.contains('hidden')`), true);
     assert.deepEqual(errors, []);
      console.log(`Native composer/reference and reaction row/full-height docked and responsive drawer/local logos/credit estimates/${catalog.IMAGE_MODELS.length} models/generate-edit/reactions/batch stopping/save success-cancel-failure/history/viewer/keyboard/privacy/zero input telemetry/Mac-Windows layouts passed.`);
     win.destroy(); app.quit();

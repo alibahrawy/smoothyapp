@@ -1,3 +1,4 @@
+import { editorName,editorText } from './editor-context';
 import { trackRow, refreshTrackCommunity } from './audio-player.js';
 
 export function initAudioArchive({ onSaved, player, community, onFavorite, onArtist, onViewChange, isLibraryBusy = () => false, localTracks, previewSaved }) {
@@ -126,7 +127,7 @@ export function initAudioArchive({ onSaved, player, community, onFavorite, onArt
       const result = await api.audioArchiveDownload({ id: track.id, premiere });
       if (result.canceled) { message('Download canceled.'); return; }
       if (!result.success) throw new Error(result.error);
-      onSaved(result); message(result.imported ? 'Saved and imported into Premiere’s Project panel.' : 'MP3 saved to Saved MP3s.');
+      onSaved(result); message(result.imported ? editorText('Saved and imported into Premiere’s Project panel.') : 'MP3 saved to Saved MP3s.');
     } catch (error) { message(error.message || 'Could not save this track. Please retry.', true); }
     finally { state.downloading = false; state.cancelable = false; update(); }
   }
@@ -163,7 +164,7 @@ export function initAudioArchive({ onSaved, player, community, onFavorite, onArt
   api.onAudioArchiveProgress(data => {
     if (!state.downloading || data.id !== state.selected?.id) return;
     if (data.phase === 'importing') state.cancelable = false;
-    message(data.phase === 'validating' ? 'Checking the MP3…' : data.phase === 'importing' ? 'Importing into Premiere…' : data.total ? `Downloading MP3… ${Math.min(100, Math.round(data.received / data.total * 100))}%` : `Downloading MP3… ${(data.received / 1048576).toFixed(1)} MB`); update();
+    message(data.phase === 'validating' ? 'Checking the MP3…' : data.phase === 'importing' ? editorText('Importing into Premiere…') : data.total ? `Downloading MP3… ${Math.min(100, Math.round(data.received / data.total * 100))}%` : `Downloading MP3… ${(data.received / 1048576).toFixed(1)} MB`); update();
   });
   let libraryActive = false;
   document.querySelectorAll('.nav-item:not(.disabled)').forEach(nav => nav.addEventListener('click', () => {

@@ -1,3 +1,4 @@
+import { setEditorContext,updateEditorLabels,editorName,editorText } from './editor-context';
 /**
  * SmoothyEdit - Renderer Script
  */
@@ -5,6 +6,8 @@ import { findCaptionMatches, replaceCaptionMatches } from './caption-text-tools.
 import { initCaptionFileInput } from './caption-file-input.js';
 import { initStockFootage } from './stock-footage.js';
 import { initAudioLibrary } from './audio-library.js';
+import { initLocalAudio } from './local-audio.js';
+import { initSidebarScroll } from './sidebar-scroll.js';
 import { initPhotos } from './photos.js';
 import { initChat } from './chat.js';
 import { initStudioText } from './studio-text.js';
@@ -146,6 +149,7 @@ const cepInstallBtn = document.getElementById('cep-install-btn');
 // NLE Selector DOM Elements
 const nleAutoBtn = document.getElementById('nle-auto-btn');
 const nlePremiereBtn = document.getElementById('nle-premiere-btn');
+const nleResolveBtn = document.getElementById('nle-resolve-btn');
 const nleStatusText = document.getElementById('nle-status-text');
 const connectionNleLabel = document.getElementById('connection-nle-label');
 
@@ -205,6 +209,8 @@ async function init() {
   const status = await window.electronAPI.getStatus();
   if (status.nle) state.activeNLE = status.nle;
   updateConnection(status.connected, status.nle);
+  updateNLESelectorUI();
+  window.electronAPI.resolveHandoffStatus?.().then(applyResolveHandoffStatus).catch(() => {});
   if (status.sequenceInfo) {
     displaySequenceInfo(status.sequenceInfo);
   }
@@ -236,8 +242,9 @@ async function init() {
 
   // Assets (SVG / image -> PNG) tab
   initAssets();
-  stockTools = initStockFootage({ isConnected: () => state.isConnected });
-  audioTools = initAudioLibrary({ isConnected: () => state.isConnected });
+  stockTools = initStockFootage({ isConnected: () => state.activeNLE==='resolve' || state.isConnected });
+  audioTools = initAudioLibrary({ isConnected: () => state.activeNLE==='resolve' || state.isConnected });
+  initLocalAudio();
   chatTools = initChat({ getUser: () => studioEnabled ? state.authState?.user : null, signIn: openLoginModal, refreshCredits: refreshStudioCredits });
   photosTools = initPhotos({ getUser: () => studioEnabled ? state.authState?.user : null, signIn: openLoginModal, refreshCredits: refreshStudioCredits });
   studioTextTools = initStudioText({ getUser: () => state.authState?.user, enabled: () => studioEnabled, signIn: openLoginModal, refreshCredits: refreshStudioCredits,
@@ -276,7 +283,9 @@ function updateWindowTitlebar() {
   const studioTool = ['studio-text', 'bestshorts'].includes(state.currentTab) ? document.querySelector(`[data-studio-mode="${state.studioMode}"]`) : null;
   const label = studioTool ? `Studio · ${studioTool.textContent.trim()}` : selected?.querySelector('.nav-label')?.textContent || 'SmoothyEdit';
   const accent = studioTool ? getComputedStyle(studioTool).getPropertyValue('--tool-color').trim() : selected && getComputedStyle(selected).getPropertyValue('--tab-accent').trim();
-  document.querySelector('.window-titlebar').style.setProperty('--window-accent', accent || '#E6E4DF');
+  const titlebarColor = accent || '#E6E4DF';
+  document.querySelector('.window-titlebar').style.setProperty('--window-accent', titlebarColor);
+  window.electronAPI.setWindowTitlebarColor?.(titlebarColor)?.catch(() => {});
   document.querySelectorAll('.window-titlebar > .status-bar').forEach(bar => {
     bar.dataset.windowActive = String(bar.dataset.windowTab === state.currentTab);
     const name = bar.querySelector('[data-window-tool-name]');
@@ -426,6 +435,7 @@ function setupSidebar() {
   });
   document.querySelector('.tool-search-shortcut').textContent = navigator.platform.toLowerCase().includes('mac') ? '⌘K' : 'Ctrl K';
   filter();
+  initSidebarScroll();
 }
 
 function setupSettingsLayout() {
@@ -509,7 +519,7 @@ async function updateFeatureLocks() {
   setShortsView(state.shortsView);
 }
 
-function openLoginModal() { accountTools?.open(); }
+  function openLoginModal(view = 'login') { accountTools?.open(view); }
 
 async function handleLogout() {
   await window.electronAPI.logout();
@@ -649,7 +659,7 @@ function setupEventListeners() {
     captionModelSelect.value = 'ggml-large-v3-turbo.bin';
     await onCaptionModelChange();
   });
-  if (progressCancelBtn) progressCancelBtn.addEventListener('click', cancelCaptionGeneration);
+  if (progressCancelBtn) progressCancelBtn.addEventListener('click', cancelProgressOperation);
   if (captionModelSelect) captionModelSelect.addEventListener('change', onCaptionModelChange);
   if (captionLanguageSelect) captionLanguageSelect.addEventListener('change', onCaptionLanguageChange);
   if (captionEngineSelect) captionEngineSelect.addEventListener('change', onCaptionEngineChange);
@@ -732,6 +742,74 @@ function setupEventListeners() {
   if (nlePremiereBtn) {
     nlePremiereBtn.addEventListener('click', () => setActiveNLE('premiere'));
   }
+  nleResolveBtn?.addEventListener('click', () => setActiveNLE('resolve'));
+  document.getElementById('resolve-install-helper').addEventListener('click', async event => {
+    const button = event.currentTarget; button.disabled = true;
+    try {
+      const result = await window.electronAPI.resolveInstallHandoff();
+      if (!result?.success) throw new Error(result?.error || 'Could not install Send to Smoothy.');
+      applyResolveHandoffStatus(result);
+    } catch (error) { showError(error.message); }
+    finally { button.disabled = false; }
+  });
+  document.getElementById('resolve-copy-helper-command').addEventListener('click', async () => {
+    const result = await window.electronAPI.resolveCopyHelperCommand();
+    if (!result?.success) { showError(result?.error || 'Could not copy the helper command.'); return; }
+    document.getElementById('resolve-helper-status').textContent = 'Command copied. In Resolve: Workspace → Console, select Lua, and paste it to send the current timeline without restarting Resolve.';
+  });
+  document.getElementById('resolve-check-helper').addEventListener('click', async () => {
+    applyResolveHandoffStatus(await window.electronAPI.resolveCheckHandoff());
+  });
+  document.getElementById('multicam-editor').addEventListener('change', event => setActiveNLE(event.target.value));
+  async function loadResolveSource(event) {
+    const button = event.currentTarget; button.disabled = true;
+    try {
+      const result = await window.electronAPI.resolveLoadTimeline(event.currentTarget.id==='resolve-load-manual');
+      if (result?.canceled) return;
+      if (!result?.success) throw new Error(result?.error || 'Could not load this timeline.');
+      state.activeNLE = 'resolve'; updateNLESelectorUI(); updateConnection(true, 'resolve'); displaySequenceInfo(result.sequenceInfo);
+      document.getElementById('resolve-workflow-status').textContent = `Loaded ${result.sequenceInfo.name}. Map your microphone tracks to cameras below.`;
+      document.getElementById('resolve-result-btn').classList.add('hidden');
+      document.getElementById('resolve-handoff-instructions').open = false;
+    } catch (error) { showError(error.message); }
+    finally { button.disabled = false; }
+  }
+  document.getElementById('resolve-load-btn').addEventListener('click',loadResolveSource);
+  document.getElementById('resolve-load-manual').addEventListener('click',loadResolveSource);
+  document.getElementById('resolve-result-btn').addEventListener('click', async event => {
+    const button=event.currentTarget;button.disabled=true;
+    try{const result=await window.electronAPI.resolveSendResult();if(!result?.success && !result?.canceled)showError(result?.error || 'No exported timeline is available.');}
+    catch(error){showError(error.message || 'Could not send the timeline to Resolve.');}
+    finally{button.disabled=false;}
+  });
+  const receiveBanner=document.getElementById('resolve-receive-banner');
+  function receiveStatus(value={}) {
+    state.editorHandoffBusy=!!value.active;
+    if(state.isProcessing && value.phase==='started'){progressCancelBtn.disabled=true;progressCancelBtn.textContent='Finishing in Resolve…';document.getElementById('resolve-cancel-btn').disabled=true;}
+    if(state.isProcessing && value.phase==='waiting'){progressCancelBtn.disabled=false;progressCancelBtn.textContent='Cancel';}
+    reconcileSequenceActions();
+    document.getElementById('multicam-editor').disabled=state.isProcessing || !!value.active;
+    receiveBanner.classList.toggle('hidden',!value.active && !value.error && !value.success);
+    document.getElementById('resolve-receive-message').textContent=value.active
+      ? value.phase==='started'?'Resolve is receiving your request. Waiting for confirmation…':'Waiting for Smoothy Connector. Start Workspace → Scripts → Smoothy Connector once per Resolve session; sends and timeline loads then happen automatically.'
+      :value.success?'DaVinci Resolve confirmed the request.':value.error || '';
+    document.getElementById('resolve-receive-cancel').classList.toggle('hidden',!value.active || value.phase==='started');
+    document.getElementById('resolve-receive-close').classList.toggle('hidden',!!value.active);
+    document.getElementById('resolve-receive-copy').classList.toggle('hidden',!value.active);
+    document.getElementById('resolve-receive-file').classList.toggle('hidden',!value.file);
+  }
+  window.electronAPI.onResolveReceiveStatus(receiveStatus);
+  window.electronAPI.resolveReceiveStatus().then(receiveStatus).catch(()=>{});
+  document.getElementById('resolve-receive-copy').addEventListener('click',()=>window.electronAPI.resolveReceiveCopyCommand());
+  document.getElementById('resolve-receive-file').addEventListener('click',()=>window.electronAPI.resolveReceiveShowFile());
+  document.getElementById('resolve-receive-cancel').addEventListener('click',async()=>{const result=await window.electronAPI.resolveReceiveCancel();if(result?.success===false)document.getElementById('resolve-receive-message').textContent=result.error;});
+  document.getElementById('resolve-receive-close').addEventListener('click',()=>receiveBanner.classList.add('hidden'));
+  document.getElementById('silence-send-resolve').addEventListener('click',()=>document.getElementById('resolve-result-btn').click());
+  document.querySelectorAll('[data-resolve-load]').forEach(button=>button.addEventListener('click',()=>document.getElementById('resolve-load-btn').click()));
+  document.getElementById('resolve-cancel-btn').addEventListener('click', async event => {
+    event.currentTarget.disabled = true; event.currentTarget.textContent = 'Canceling…';
+    await window.electronAPI.resolveCancelMulticam();
+  });
 
   // Check for updates button
   checkUpdateBtn.addEventListener('click', manualCheckForUpdates);
@@ -854,7 +932,7 @@ function setStudioSource(source, force = false) {
   if (!force && (state.isProcessing || state.shortsSourceLoading || studioTextTools?.isBusy())) return;
   if (state.shortsSource !== source) studioTextTools?.invalidateSource();
   state.shortsSource = source;
-  const names = { sequence: 'Premiere', transcript: 'Subtitles', audio: 'Audio/Video', youtube: 'YouTube' };
+  const names = { sequence: editorName(), transcript: 'Subtitles', audio: 'Audio/Video', youtube: 'YouTube' };
   document.getElementById('studio-source-slider').style.setProperty('--source-index', Object.keys(names).indexOf(source));
   document.querySelectorAll('[data-shorts-source]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.shortsSource === source)));
   for (const kind of Object.keys(names)) document.getElementById(`shorts-source-${kind}`).classList.toggle('hidden', kind !== source);
@@ -937,10 +1015,10 @@ function syncShortsAccount() {
 function setShortsView(view) {
   state.shortsView = view;
   const signedIn = !!state.authState?.user;
-  document.getElementById('shorts-workspace').classList.toggle('hidden', !signedIn || view === 'history');
+  document.getElementById('shorts-workspace').classList.toggle('hidden', view === 'history');
   document.getElementById('shorts-history-page').classList.toggle('hidden', !signedIn || view !== 'history');
-  document.getElementById('shorts-footer').classList.toggle('hidden', !signedIn || view === 'history');
-  bestshortsLock.classList.toggle('hidden', signedIn);
+  document.getElementById('shorts-footer').classList.toggle('hidden', view === 'history');
+  bestshortsLock.classList.add('hidden');
   const button = document.getElementById('shorts-history-btn');
   button.disabled = !signedIn;
   button.textContent = view === 'history' ? '← Back to Shorts' : 'History';
@@ -1011,6 +1089,10 @@ function renderCredits(credits) {
 
 async function refreshStudioCredits() {
   if (!studioEnabled) return;
+  if (!state.authState?.user) {
+    document.getElementById('studio-workspace-credits').textContent = '100 free credits/month';
+    return;
+  }
   const textEl = document.getElementById('studio-credits-inline');
   const barEl = document.getElementById('studio-credit-bar-fill');
   const upgradeBtn = document.getElementById('studio-upgrade-btn');
@@ -1189,7 +1271,7 @@ async function sendShortsToPremiere(shorts, button) {
   try {
     const result = await window.electronAPI.addShortsMarkers(shorts);
     if (!result?.success) throw new Error(result?.error || 'Could not add markers to Premiere.');
-    document.getElementById('shorts-status').textContent = `${shorts.length} marker${shorts.length === 1 ? '' : 's'} added to Premiere.`;
+    document.getElementById('shorts-status').textContent = `${shorts.length} marker${shorts.length === 1 ? '' : 's'} added to ${editorName()}.`;
   } catch (error) { document.getElementById('shorts-status').textContent = error.message || 'Could not add markers.'; }
   finally { updateExportButton(); }
 }
@@ -1236,29 +1318,47 @@ async function runStudioShorts() {
 }
 
 function setupElectronListeners() {
+  window.electronAPI.onResolveHandoffStatus?.(applyResolveHandoffStatus);
   window.electronAPI.onConnectionChange((data) => {
     updateConnection(data.connected, data.nle);
+    updateNLESelectorUI();
   });
 
   window.electronAPI.onSequenceInfo((info) => {
     if (state.shortsSource === 'sequence') studioTextTools?.invalidateSource();
     displaySequenceInfo(info);
+    if (info?.handoffSource === 'script' || info?.handoffSource === 'snapshot') {
+      document.getElementById('resolve-handoff-instructions').open = false;
+      document.getElementById('resolve-workflow-status').textContent = `Received ${info.name} from Resolve. Map your microphones to cameras below.`;
+      if (info.handoffSource === 'snapshot') document.getElementById('resolve-workflow-status').textContent += ' Source-only: grades, transforms, effects, fades, automation and mixer processing are not copied. Use a synced source assembly before finishing.';
+      document.getElementById('resolve-result-btn').classList.add('hidden');
+    }
   });
 
   window.electronAPI.onProgress((data) => {
     setProgress(data.progress, data.message);
+    if (data.cancelable === false && state.timelineOperation) { progressCancelBtn.disabled = true; progressCancelBtn.textContent = 'Finishing in Premiere…'; }
   });
 
-  window.electronAPI.onAutoCutResult((result) => {
+  function handleTimelineResult(result) {
+    const operation = result.operation || state.timelineOperation || 'multicam';
+    state.timelineOperation = null;
     hideProgress();
     state.isProcessing = false;
     reconcileSequenceActions();
 
-    if (state.currentTab === 'silence') {
+    if(result.exported && !result.imported){document.getElementById('resolve-result-btn').classList.remove('hidden');document.getElementById('silence-send-resolve').classList.toggle('hidden',operation!=='silence');}
+    if (result.canceled || result.cancelled) {
+      if (operation === 'silence') { setSilenceStatus('Canceled', 'idle'); silenceFooterStatus.textContent = result.error || 'Silence removal canceled'; }
+      else { setStatus('Canceled', 'idle'); footerStatus.textContent = result.error || 'Multicam canceled'; }
+      return;
+    }
+    if (operation === 'silence') {
       // Silence removal result
       if (result.success) {
         setSilenceStatus(`Done! Removed ${formatDuration(result.stats?.silenceRemoved || 0)} of silence`, 'success');
-        silenceFooterStatus.textContent = 'Silence removed - check Premiere for new sequence';
+        silenceFooterStatus.textContent = result.imported?'Silence removed · new timeline opened in Resolve.':result.handoff?'Silence removed · XML saved. Retry sending in manual options.':'Silence removed - check Premiere for new sequence';
+        if(result.handoff && !result.imported){document.getElementById('resolve-result-btn').classList.remove('hidden');document.getElementById('silence-send-resolve').classList.remove('hidden');}
 
         // Show stats
         document.getElementById('silence-stats-section').style.display = 'block';
@@ -1273,7 +1373,11 @@ function setupElectronListeners() {
     } else {
       // Auto-Switch result
       if (result.success) {
-        setStatus(`${result.stats?.shots || 0} camera cuts created — review in Premiere`, 'success');
+        setStatus(result.imported ? `${result.stats?.shots || 0} camera cuts created — review in Resolve` :result.handoff ? `${result.stats?.shots || 0} camera cuts exported — retry sending in manual options` : `${result.stats?.shots || 0} camera cuts created — review in Premiere`, 'success');
+        if (result.handoff && !result.imported) {
+          document.getElementById('resolve-result-btn').classList.remove('hidden');
+          document.getElementById('resolve-workflow-status').textContent = 'Timeline exported. In Resolve: File → Import → Timeline, then choose the saved XML. Review both cameras and audio sync.';
+        }
         const warnings = document.getElementById('multicam-review-warnings');
         warnings.replaceChildren();
         for (const message of result.warnings || []) {
@@ -1287,7 +1391,9 @@ function setupElectronListeners() {
         showError(result.error || 'Auto-Switch failed');
       }
     }
-  });
+  }
+  state.handleTimelineResult = handleTimelineResult;
+  window.electronAPI.onAutoCutResult(handleTimelineResult);
 
   // Website connection listeners
   window.electronAPI.onWebsiteConnectionChange((data) => {
@@ -1304,6 +1410,7 @@ function setupElectronListeners() {
 
   window.electronAPI.onExportProgress((data) => {
     setProgress(data.progress, data.message);
+    if (data.cancelable === false && state.timelineOperation) { progressCancelBtn.disabled = true; progressCancelBtn.textContent = 'Finishing in Premiere…'; }
   });
 
   // Studio Best Shorts progress
@@ -1355,9 +1462,10 @@ function setupElectronListeners() {
 
   // Platform info listener - applies platform-specific styles
   window.electronAPI.onPlatformInfo((data) => {
-    state.platform = data.isWindows ? 'windows' : (data.isMac ? 'macos' : 'unknown');
+    state.platform = data.isLinux ? 'linux' : (data.isWindows ? 'windows' : (data.isMac ? 'macos' : 'unknown'));
     document.body.classList.toggle('window-expanded', Boolean(data.isExpanded));
     applyPlatformStyles(data);
+    if (data.isLinux) lockEditorToResolveOnLinux();
   });
 
   // Log streaming from main process
@@ -1382,17 +1490,33 @@ function escapeHtml(text) {
 }
 
 function getNLEDisplayName() {
-  return 'Premiere Pro';
+  return state.activeNLE === 'resolve' ? 'Resolve Free' : 'Premiere Pro';
+}
+
+function applyResolveHandoffStatus(status) {
+  if (!status) return;
+  document.getElementById('resolve-install-helper').textContent = status.installed ? 'Reinstall Resolve helpers' : 'Install Resolve helpers';
+  document.getElementById('resolve-copy-helper-command').classList.toggle('hidden', !status.installed);
+  document.getElementById('resolve-check-helper').classList.toggle('hidden', !status.installed);
+  document.getElementById('resolve-helper-status').textContent = status.error ? `Could not receive the timeline: ${status.error} Manual XML loading is available below.`
+    : status.phase === 'waiting' ? 'Waiting for Smoothy Connector. Start Workspace → Scripts → Smoothy Connector once per Resolve session.'
+    : status.phase === 'started' ? 'Send to Smoothy started inside Resolve. Checking the open project and timeline…'
+    : status.phase === 'exporting' ? 'Resolve found your timeline and is exporting its XML…'
+    : status.phase === 'reading' ? 'Reading source clips directly from Resolve after its XML export refused…'
+    : status.phase === 'exported' && !status.received ? 'Resolve reports that the XML was exported. Waiting for the file to arrive…'
+    : status.received ? 'Timeline received from Resolve. Use Load current Resolve timeline or Refresh after making changes there.'
+    : status.installed ? 'Start Workspace → Scripts → Smoothy Connector once per Resolve session. Then use Load current Resolve timeline here; sends run automatically. The Console command is the one-shot source fallback only.'
+    : 'Experimental Lua helper. Sends XML when available, with a source-only fallback for synced source clips and isolated mono microphones.';
 }
 
 function getNLEPanelName() {
-  return 'Premiere';
+  return state.activeNLE === 'resolve' ? 'Resolve' : 'Premiere';
 }
 
 function updateConnectionGuide() {
   document.querySelectorAll('[data-premiere-guide]').forEach(card => {
     const localFile = card.closest('#tab-captions') && state.captionSource === 'file';
-    card.classList.toggle('hidden', !!(localFile || (state.isConnected && state.sequenceInfo?.hasSequence)));
+    card.classList.toggle('hidden', state.activeNLE === 'resolve' || !!(localFile || (state.isConnected && state.sequenceInfo?.hasSequence)));
     const installed = state.bridgeInstalled !== false;
     const steps = card.querySelectorAll('li');
     [installed, state.isConnected, !!state.sequenceInfo?.hasSequence].forEach((complete, index) => steps[index].classList.toggle('complete', complete));
@@ -1452,24 +1576,39 @@ function updateConnection(connected, nle) {
   state.isConnected = connected;
   if (nle) state.activeNLE = nle;
   const statusDot = connectionStatus.querySelector('.status-dot');
+  connectionStatus.querySelector('.editor-logo-premiere').classList.toggle('hidden', state.activeNLE === 'resolve');
+  connectionStatus.querySelector('.editor-logo-resolve').classList.toggle('hidden', state.activeNLE !== 'resolve');
+  const changedEditor=setEditorContext(state.activeNLE);
+  if(changedEditor){studioTextTools?.invalidateSource();state.currentShorts=[];}
+  updateEditorLabels();
+  photosTools?.editorChanged?.();
+  document.querySelector('[data-shorts-source=sequence]').textContent=editorName();
+  document.getElementById('assets-duration').closest('.form-group').classList.toggle('hidden',state.activeNLE==='resolve');
+  document.getElementById('edit-in-place').closest('.form-group').classList.toggle('hidden',state.activeNLE==='resolve');
+  document.getElementById('silence-action-note').textContent=state.activeNLE==='resolve'?'Reads the current Resolve timeline, saves in SmoothyEdit Assets → Resolve, and sends the new edit automatically.':'Removes silent parts from the selected sequence.';
   const nleName = getNLEDisplayName();
   const panelName = getNLEPanelName();
 
   if (connectionNleLabel) {
     connectionNleLabel.textContent = nleName;
   }
-  document.getElementById('connection-state-label').textContent = connected ? 'Connected' : 'Not connected';
+  const connectionLabel = state.activeNLE === 'resolve' ? (connected ? 'Ready' : 'Apply to connect') : (connected ? 'Connected' : 'Not connected');
+  document.getElementById('connection-state-label').textContent = connectionLabel;
   connectionStatus.setAttribute('aria-label', `${nleName}: ${connected ? 'Connected' : 'Not connected'}`);
   connectionStatus.title = `${nleName}: ${connected ? 'Connected' : 'Not connected'}`;
+  if (state.activeNLE === 'resolve') {
+    connectionStatus.setAttribute('aria-label', `${nleName}: ${connectionLabel}`);
+    connectionStatus.title = `${nleName}: ${connectionLabel} · local file handoff`;
+  }
 
   if (connected) {
-    setStatus(`Connected to ${nleName}`, 'idle');
-    setSilenceStatus(`Connected to ${nleName}`, 'idle');
-    setCaptionsStatus(`Connected to ${nleName}`, 'idle');
+    setStatus(state.activeNLE === 'resolve' ? 'Resolve timeline XML loaded · local Multicam' : `Connected to ${nleName}`, 'idle');
+    setSilenceStatus(state.activeNLE==='resolve'?'Resolve source timeline loaded':`Connected to ${nleName}`, 'idle');
+    setCaptionsStatus(state.activeNLE==='resolve'?'Resolve source timeline loaded':`Connected to ${nleName}`, 'idle');
     statusDot.classList.remove('disconnected');
     statusDot.classList.add('connected');
   } else {
-    setStatus(`Waiting for ${nleName}...`, 'idle');
+    setStatus(state.activeNLE === 'resolve' ? 'Ready · Apply reads your current Resolve timeline' : `Waiting for ${nleName}...`, 'idle');
     state.sequenceInfo = null;
     setSilenceStatus(`Waiting for ${nleName}...`, 'idle');
     setCaptionsStatus(`Waiting for ${nleName}...`, 'idle');
@@ -1481,14 +1620,14 @@ function updateConnection(connected, nle) {
     sequenceDetails.textContent = '';
     audioTracksList.innerHTML = `<p class="empty-message">Connect to ${panelName} to see audio tracks</p>`;
     videoTracksList.innerHTML = `<p class="empty-message">Connect to ${panelName} to see video tracks</p>`;
-    autoCutBtn.disabled = true;
+    autoCutBtn.disabled = state.activeNLE!=='resolve' || state.isProcessing || !!state.editorHandoffBusy;
     footerStatus.textContent = '';
 
     // Silence tab
     silenceSequenceName.textContent = 'No sequence loaded';
     silenceSequenceDetails.textContent = '';
     silenceAudioTracksList.innerHTML = `<p class="empty-message">Connect to ${panelName} to see audio tracks</p>`;
-    silenceRemoveBtn.disabled = true;
+    silenceRemoveBtn.disabled = state.activeNLE!=='resolve' || state.isProcessing || !!state.editorHandoffBusy;
     silenceFooterStatus.textContent = '';
 
     // Captions tab
@@ -1504,10 +1643,12 @@ function updateConnection(connected, nle) {
     updateExportButton();
   }
   reconcileSequenceActions();
-  if (!connected && state.captionSource === 'file') setCaptionsStatus(state.captionResult?.captions?.length ? 'Captions ready · local file' : 'Local file · Premiere connection optional', 'idle');
+  if (!connected && state.captionSource === 'file') setCaptionsStatus(state.captionResult?.captions?.length ? 'Captions ready · local file' : 'Local file · editor connection optional', 'idle');
   updateConnectionGuide();
   if (typeof assetsState !== 'undefined') updateAssetsUI();
+  updateEditorLabels();
 }
+
 
 // Track choices belong to their sequence and stable track index.
 const sequenceChoices = new Map();
@@ -1543,10 +1684,16 @@ function restoreTrackChoices(container, info) {
 }
 function reconcileSequenceActions() {
   const ready = state.isConnected && state.sequenceInfo?.hasSequence && !state.isProcessing;
-  autoCutBtn.disabled = !ready || !audioTracksList.querySelector('.audio-track-cb:checked') || !videoTracksList.querySelector('.video-track-cb:checked');
-  silenceRemoveBtn.disabled = !ready || !silenceAudioTracksList.querySelector('.silence-audio-track-cb:checked');
+  const resolve = state.activeNLE === 'resolve';
+  autoCutBtn.disabled = resolve ? state.isProcessing || !!state.editorHandoffBusy : !ready || !audioTracksList.querySelector('.audio-track-cb:checked') || videoTracksList.querySelectorAll('.video-track-cb:checked').length < (resolve ? 2 : 1);
+  silenceRemoveBtn.disabled = resolve ? state.isProcessing || !!state.editorHandoffBusy : !ready || !silenceAudioTracksList.querySelector('.silence-audio-track-cb:checked');
   updateGenerateCaptionsButton();
-  importCaptionsBtn.disabled = !state.isConnected || !state.sequenceInfo?.hasSequence || !state.captionResult?.captions?.length || state.isProcessing;
+  importCaptionsBtn.disabled = (state.activeNLE!=='resolve' && (!state.isConnected || !state.sequenceInfo?.hasSequence)) || !state.captionResult?.captions?.length || state.isProcessing;
+  document.getElementById('multicam-editor').disabled = state.isProcessing || !!state.editorHandoffBusy;
+  document.getElementById('resolve-load-btn').disabled = state.isProcessing;
+  const cancel = document.getElementById('resolve-cancel-btn');
+  cancel.classList.toggle('hidden', !(resolve && state.isProcessing));
+  if (!state.isProcessing) { cancel.disabled = false; cancel.textContent = 'Cancel'; }
   updateAssetsUI();
 }
 
@@ -1559,10 +1706,10 @@ function displaySequenceInfo(info) {
     displayCaptionsSequenceInfo(info);
     reconcileSequenceActions();
     sequenceName.textContent = 'No sequence open';
-    sequenceDetails.textContent = 'Open a sequence in Premiere';
+    sequenceDetails.textContent = state.activeNLE === 'resolve' ? 'Load an exported Resolve timeline XML' : 'Open a sequence in Premiere';
     audioTracksList.innerHTML = '<p class="empty-message">Open a sequence first</p>';
     videoTracksList.innerHTML = '<p class="empty-message">Open a sequence first</p>';
-    autoCutBtn.disabled = true;
+    autoCutBtn.disabled = state.activeNLE!=='resolve' || state.isProcessing || !!state.editorHandoffBusy;
     footerStatus.textContent = 'Open a sequence to begin';
     updateConnectionGuide();
     return;
@@ -1636,7 +1783,7 @@ function displaySequenceInfo(info) {
   // Enable button if we have both
   const hasAudio = info.audioTracks && info.audioTracks.length > 0;
   const hasVideo = info.videoTracks && info.videoTracks.length > 0;
-  autoCutBtn.disabled = !(hasAudio && hasVideo);
+  autoCutBtn.disabled = state.activeNLE==='resolve' ? state.isProcessing || !!state.editorHandoffBusy : !(hasAudio && hasVideo);
   footerStatus.textContent = hasAudio && hasVideo ? '' : 'Need audio and video tracks';
 
   // Also update other tabs
@@ -1678,8 +1825,30 @@ function refreshWideCameraOptions() {
   }
 }
 
+async function prepareResolveApply(operation) {
+  if(state.activeNLE!=='resolve')return true;
+  const before=state.sequenceInfo;
+  const layout=info=>JSON.stringify(['audioTracks','videoTracks'].map(kind=>(info?.[kind]||[]).map(t=>[t.index,t.name,[...new Set((t.clips||[]).map(c=>c.path))].sort()])));
+  const choices=[...document.querySelectorAll('.audio-track-cb,.speaker-name,.speaker-camera,.video-track-cb,.camera-index,.silence-audio-track-cb')].map(el=>({cls:el.classList[0],index:el.dataset.trackIndex,value:el.value,checked:el.checked}));
+  state.isProcessing=true;state.timelineOperation=operation;reconcileSequenceActions();showProgress('Reading the current Resolve timeline…',{cancelable:true});
+  try{
+    const result=await window.electronAPI.resolveLoadTimeline(false,true);
+    if(result?.canceled)return false;
+    if(!result?.success)throw new Error(result?.error || 'Could not read the current Resolve timeline.');
+    displaySequenceInfo(result.sequenceInfo);
+    const sameTimeline=before && (before.nativeId ? before.nativeId===result.sequenceInfo.nativeId : before.id===result.sequenceInfo.id);
+    if(sameTimeline && layout(before)===layout(result.sequenceInfo))for(const saved of choices){
+      const el=document.querySelector('.'+saved.cls+'[data-track-index="'+saved.index+'"]');
+      if(el){if(el.type==='checkbox')el.checked=saved.checked;else el.value=saved.value;}
+    }
+    return true;
+  }catch(error){showError(error.message);return false;}
+  finally{state.isProcessing=false;state.timelineOperation=null;hideProgress();reconcileSequenceActions();}
+}
+
 async function runAutoCut() {
-  if (state.isProcessing || !state.sequenceInfo) return;
+  if(state.isProcessing)return;
+  if(!await prepareResolveApply('multicam') || !state.sequenceInfo)return;
 
   // Gather audio mappings
   const audioMappings = [];
@@ -1794,10 +1963,16 @@ async function runAutoCut() {
   };
 
   state.isProcessing = true;
-  showProgress('Starting...');
+  reconcileSequenceActions();
+  document.getElementById('resolve-result-btn').classList.add('hidden');document.getElementById('silence-send-resolve').classList.add('hidden');
+  state.timelineOperation = 'multicam';
+  showProgress('Starting...', { cancelable: true });
   setStatus('Processing...', 'processing');
 
-  await window.electronAPI.startAutoCut(config);
+  try {
+    const result = await window.electronAPI.startAutoCut(config);
+    if (result?.success === false && state.timelineOperation) state.handleTimelineResult(result);
+  } catch (error) { state.handleTimelineResult({ success: false, error: error.message }); }
 }
 
 // Silence Removal Functions
@@ -1805,9 +1980,9 @@ function displaySilenceSequenceInfo(info) {
   preserveTrackChoices(silenceAudioTracksList);
   if (!info || !info.hasSequence) {
     silenceSequenceName.textContent = 'No sequence open';
-    silenceSequenceDetails.textContent = 'Open a sequence in Premiere';
+    silenceSequenceDetails.textContent = state.activeNLE==='resolve'?'Load a Resolve timeline or use Send to Smoothy':'Open a sequence in Premiere';
     silenceAudioTracksList.innerHTML = '<p class="empty-message">Open a sequence first</p>';
-    silenceRemoveBtn.disabled = true;
+    silenceRemoveBtn.disabled = state.activeNLE!=='resolve' || state.isProcessing || !!state.editorHandoffBusy;
     silenceFooterStatus.textContent = 'Open a sequence to begin';
     return;
   }
@@ -1837,7 +2012,7 @@ function displaySilenceSequenceInfo(info) {
 
   restoreTrackChoices(silenceAudioTracksList, info);
   const hasAudio = !!silenceAudioTracksList.querySelector('.silence-audio-track-cb:checked');
-  silenceRemoveBtn.disabled = !hasAudio;
+  silenceRemoveBtn.disabled = state.activeNLE==='resolve' ? state.isProcessing || !!state.editorHandoffBusy : !hasAudio;
   silenceFooterStatus.textContent = hasAudio ? '' : 'Need audio tracks';
 
   // Hide stats section until we run analysis
@@ -1845,7 +2020,8 @@ function displaySilenceSequenceInfo(info) {
 }
 
 async function runSilenceRemoval() {
-  if (state.isProcessing || !state.sequenceInfo) return;
+  if(state.isProcessing)return;
+  if(!await prepareResolveApply('silence') || !state.sequenceInfo)return;
 
   // Gather selected audio tracks
   const audioSources = [];
@@ -1883,7 +2059,7 @@ async function runSilenceRemoval() {
     });
   }
 
-  const editInPlace = document.getElementById('edit-in-place').checked;
+  const editInPlace = state.activeNLE!=='resolve' && document.getElementById('edit-in-place').checked;
 
   if (editInPlace) {
     const confirmed = window.confirm(
@@ -1910,10 +2086,16 @@ async function runSilenceRemoval() {
   };
 
   state.isProcessing = true;
-  showProgress('Starting silence analysis...');
+  document.getElementById('resolve-result-btn').classList.add('hidden');document.getElementById('silence-send-resolve').classList.add('hidden');
+  state.timelineOperation = 'silence';
+  reconcileSequenceActions();
+  showProgress('Starting silence analysis...', { cancelable: true });
   setSilenceStatus('Analyzing...', 'processing');
 
-  await window.electronAPI.startSilenceRemoval(config);
+  try {
+    const result = await window.electronAPI.startSilenceRemoval(config);
+    if (result?.success === false && state.timelineOperation) state.handleTimelineResult(result);
+  } catch (error) { state.handleTimelineResult({ success: false, error: error.message }); }
 }
 
 function setSilenceStatus(text, type) {
@@ -2203,14 +2385,14 @@ function updateExportButton() {
   if (state.shortsSource === 'audio') ready = !!state.shortsAudioPath;
   if (state.shortsSource === 'youtube') ready = !!state.shortsYoutube?.subtitleText;
   clearMarkersBtn.disabled = !hasSequence || busy;
-  document.getElementById('clear-all-markers-btn').disabled = !hasSequence || busy;
+  document.getElementById('clear-all-markers-btn').disabled = state.activeNLE==='resolve' || !hasSequence || busy;
   const analyzeBtn = document.getElementById('analyze-shorts-btn');
   analyzeBtn.disabled = !signedIn || !ready || busy;
   analyzeBtn.textContent = state.isProcessing ? 'Analyzing…' : state.shortsMode === 'best' ? 'Find Best Part' : 'Find Shorts';
   const sendBtn = document.getElementById('send-shorts-btn');
   sendBtn.disabled = !hasSequence || busy || !state.currentShorts.length;
   const compactActions = window.innerWidth <= 650;
-  const fullSendLabel = state.currentShorts.length > 1 ? `Add ${state.currentShorts.length} markers in Premiere` : 'Add marker in Premiere';
+  const fullSendLabel = state.currentShorts.length > 1 ? `Add ${state.currentShorts.length} markers in ${editorName()}` : `Add marker in ${editorName()}`;
   sendBtn.textContent = compactActions ? (state.currentShorts.length > 1 ? `Add ${state.currentShorts.length} markers` : 'Add marker') : fullSendLabel;
   sendBtn.title = sendBtn.ariaLabel = fullSendLabel;
   clearMarkersBtn.textContent = compactActions ? 'Clear markers' : 'Clear Smoothy markers';
@@ -2220,9 +2402,9 @@ function updateExportButton() {
   clearAllMarkersBtn.title = clearAllMarkersBtn.ariaLabel = 'Clear all markers';
   document.querySelectorAll('#studio-compose-footer [data-shorts-source], #studio-compose-footer input, #studio-compose-footer textarea, #shorts-workspace button:not(.shorts-copy-field)').forEach(control => { control.disabled = busy; });
   document.getElementById('shorts-history-btn').disabled = !signedIn || state.isProcessing;
-  if (!signedIn) bestshortsFooterStatus.textContent = 'Sign in to use Studio';
+  if (!signedIn) bestshortsFooterStatus.textContent = 'Sign up for 100 free AI credits every month';
   else if (busy) bestshortsFooterStatus.textContent = state.shortsSourceLoading ? 'Loading YouTube subtitles…' : 'Analyzing your source…';
-  else if (!ready) bestshortsFooterStatus.textContent = state.shortsSource === 'sequence' ? 'Connect Premiere and open a sequence' : '';
+  else if (!ready) bestshortsFooterStatus.textContent = state.shortsSource === 'sequence' ? (state.activeNLE==='resolve'?'Load a Resolve timeline or use Send to Smoothy':'Connect Premiere and open a sequence') : '';
   else bestshortsFooterStatus.textContent = '';
   syncStudioToolButtons(); studioTextTools?.refresh();
 }
@@ -2230,7 +2412,7 @@ function updateExportButton() {
 function displayBestshortsSequenceInfo(info) {
   if (!info || !info.hasSequence) {
     bestshortsSequenceName.textContent = 'No sequence open';
-    bestshortsSequenceDetails.textContent = 'Open a sequence in Premiere';
+    bestshortsSequenceDetails.textContent = state.activeNLE==='resolve'?'Load a Resolve timeline or use Send to Smoothy':'Open a sequence in Premiere';
     updateExportButton();
     return;
   }
@@ -2284,7 +2466,7 @@ function displayCaptionsSequenceInfo(info) {
   preserveTrackChoices(captionsAudioTracksList);
   if (!info || !info.hasSequence) {
     captionsSequenceName.textContent = 'No sequence open';
-    captionsSequenceDetails.textContent = 'Open a sequence in Premiere';
+    captionsSequenceDetails.textContent = state.activeNLE==='resolve'?'Load a Resolve timeline or use Send to Smoothy':'Open a sequence in Premiere';
     captionsAudioTracksList.innerHTML = '<p class="empty-message">Open a sequence first</p>';
     updateGenerateCaptionsButton();
     if (state.captionSource === 'sequence') {
@@ -2573,6 +2755,17 @@ function setCaptionSource(source) {
   updateConnectionGuide();
 }
 
+async function cancelProgressOperation() {
+  if (state.isTranscribing) return cancelCaptionGeneration();
+  if (!state.timelineOperation || !state.isProcessing) return;
+  progressCancelBtn.disabled = true; progressCancelBtn.textContent = 'Canceling…';
+  document.getElementById('progress-text').textContent = 'Cancel requested. Waiting for the current step to stop safely…';
+  try {
+    const result = await window.electronAPI.cancelTimelineJob();
+    if (result?.success === false) document.getElementById('progress-text').textContent = result.error;
+  } catch { progressCancelBtn.disabled = false; progressCancelBtn.textContent = 'Retry cancel'; }
+}
+
 async function cancelCaptionGeneration() {
   if (!state.isTranscribing) return;
   progressCancelBtn.disabled = true;
@@ -2590,7 +2783,7 @@ async function runGenerateCaptions() {
   const useFile = state.captionSource === 'file';
 
   if (!useFile && !state.sequenceInfo) {
-    showError('Open a sequence in Premiere, or switch to Audio / Video File');
+    showError(editorText('Open a sequence in Premiere, or switch to Audio / Video File'));
     return;
   }
 
@@ -2655,9 +2848,9 @@ async function runGenerateCaptions() {
         importCaptionsBtn.disabled = true;
       } else {
         setCaptionsStatus(`Generated ${result.captions.length} captions`, 'success');
-        captionsFooterStatus.textContent = 'Captions ready - save or send to Premiere';
+        captionsFooterStatus.textContent = editorText('Captions ready - save or send to Premiere');
         saveCaptionsBtn.disabled = false;
-        importCaptionsBtn.disabled = !state.isConnected;
+        importCaptionsBtn.disabled = state.activeNLE!=='resolve' && !state.isConnected;
       }
 
       // Apply the active text-style toggles, then show the preview.
@@ -2895,19 +3088,20 @@ async function saveCaptionsFile() {
 }
 
 async function importCaptionsToPremiere() {
-  if (!state.captionResult || !state.isConnected) return;
+  if (!state.captionResult || (state.activeNLE!=='resolve' && !state.isConnected)) return;
 
   importCaptionsBtn.disabled = true;
-  setCaptionsStatus('Sending to Premiere...', 'processing');
+  setCaptionsStatus(`Sending to ${editorName()}…`, 'processing');
 
   try {
     const result = await window.electronAPI.importCaptionsToPremiere(state.captionResult.captions);
 
     if (result.success) {
-      const msg = result.message || 'Captions sent to Premiere!';
+      const msg = result.message || (result.nle==='resolve'?'SRT imported into Resolve’s Media Pool. Drag it onto a subtitle track.':'Captions sent to Premiere!');
       setCaptionsStatus(msg, 'success');
       captionsFooterStatus.textContent = msg;
-    } else {
+    } else if(result.canceled){setCaptionsStatus('Import canceled','idle');}
+    else {
       setCaptionsStatus('Import failed', 'error');
       showError(result.error || 'Failed to import captions');
     }
@@ -3070,7 +3264,8 @@ async function reinstallLegacyBridge() {
 }
 
 async function setActiveNLE(nle) {
-  await window.electronAPI.setActiveNLE(nle);
+  const switched = await window.electronAPI.setActiveNLE(nle);
+  if (switched?.success === false) { showError(switched.error); updateNLESelectorUI(); return; }
   state.activeNLE = nle;
   updateNLESelectorUI();
 
@@ -3082,11 +3277,25 @@ async function setActiveNLE(nle) {
   }
 }
 
+// Premiere Pro does not run on Linux: hide the Auto/Premiere choices and keep
+// the editor switcher on DaVinci Resolve.
+function lockEditorToResolveOnLinux() {
+  if (nlePremiereBtn) nlePremiereBtn.classList.add('hidden');
+  if (nleAutoBtn) nleAutoBtn.classList.add('hidden');
+  if (state.activeNLE !== 'resolve') {
+    setActiveNLE('resolve');
+  }
+}
+
 function updateNLESelectorUI() {
   const nle = state.activeNLE;
 
   // Update button states
-  [nleAutoBtn, nlePremiereBtn].forEach(btn => {
+  document.getElementById('multicam-editor').value = nle === 'resolve' ? 'resolve' : 'premiere';
+  document.getElementById('resolve-workflow').classList.toggle('hidden', nle !== 'resolve');
+  document.getElementById('resolve-dev-badge').classList.toggle('hidden', nle !== 'resolve');
+  document.getElementById('multicam-action-note').textContent = nle === 'resolve' ? 'Apply reads your current timeline, saves in SmoothyEdit Assets → Resolve, and opens the new edit in Resolve automatically.' : 'Cuts a duplicate with your nests, effects and continuous audio.';
+  [nleAutoBtn, nlePremiereBtn, nleResolveBtn].forEach(btn => {
     if (btn) btn.classList.remove('active');
   });
 
@@ -3096,7 +3305,11 @@ function updateNLESelectorUI() {
   } else if (nle === 'premiere' && nlePremiereBtn) {
     nlePremiereBtn.classList.add('active');
     nleStatusText.textContent = 'Locked to Premiere Pro';
+  } else if (nle === 'resolve' && nleResolveBtn) {
+    nleResolveBtn.classList.add('active');
+    nleStatusText.textContent = 'Resolve Free · local Multicam XML handoff';
   }
+  updateConnectionGuide();
 }
 
 // ========================================
@@ -3162,7 +3375,7 @@ function setupPinListener() {
 
 function applyPlatformStyles(platformInfo) {
   // Remove any existing platform classes
-  document.body.classList.remove('platform-windows', 'platform-macos');
+  document.body.classList.remove('platform-windows', 'platform-macos', 'platform-linux');
 
   if (platformInfo.isWindows) {
     document.body.classList.add('platform-windows');
@@ -3170,6 +3383,9 @@ function applyPlatformStyles(platformInfo) {
   } else if (platformInfo.isMac) {
     document.body.classList.add('platform-macos');
     console.log('[Platform] macOS detected - applying macOS styles');
+  } else if (platformInfo.isLinux) {
+    document.body.classList.add('platform-linux');
+    console.log('[Platform] Linux detected - Resolve is the supported editor');
   }
 }
 
@@ -3565,6 +3781,8 @@ async function startCompression() {
   }
 
   compressorState.isCompressing = true;
+  document.getElementById('compressor-cancel-btn').disabled = false;
+  document.getElementById('compressor-cancel-btn').textContent = 'Cancel';
   compressorState.compressionResults = [];
   compressorState.lastBatchResult = null;
 
@@ -3759,18 +3977,13 @@ function compressionComplete(payload) {
   footerStatus.textContent = `Compressed ${successful.length} file${successful.length === 1 ? '' : 's'} in ${formatDurationMs(elapsedMs)}, saved ${formatBytes(Math.max(bytesSaved, 0))} (${savings}%)`;
 }
 
-function cancelCompression() {
-  window.electronAPI.compressorStop();
-  compressorState.isCompressing = false;
-
-  document.getElementById('compressor-progress-section').classList.add('hidden');
-  document.getElementById('compressor-start-btn').disabled = false;
-  document.getElementById('compressor-settings-section').classList.remove('hidden');
-
-  const statusBar = document.getElementById('compressor-status-bar');
-  const statusText = document.getElementById('compressor-status-text');
-  statusBar.className = 'status-bar status-idle';
-  statusText.textContent = 'Cancelling compression...';
+async function cancelCompression() {
+  const button = document.getElementById('compressor-cancel-btn');
+  button.disabled = true; button.textContent = 'Canceling…';
+  document.getElementById('compressor-status-bar').className = 'status-bar status-idle';
+  document.getElementById('compressor-status-text').textContent = 'Canceling compression…';
+  try { await window.electronAPI.compressorStop(); }
+  catch { button.disabled = false; button.textContent = 'Retry cancel'; }
 }
 
 function showCompressorError(message) {
@@ -4302,6 +4515,7 @@ async function convertAssets(saveAs) {
 }
 
 async function sendAssetsToPremiere() {
+  const editor=state.activeNLE;
   if (assetsState.busy || !assetsState.items.length) return;
 
   assetsState.busy = true;
@@ -4309,25 +4523,27 @@ async function sendAssetsToPremiere() {
 
   try {
     const item = assetsState.items[assetsState.activeIndex];
-    setAssetsStatus(`Preparing ${item.name} for Premiere…`, 'working');
+    setAssetsStatus(`Preparing ${item.name} for ${editorName()}…`, 'working');
     const rendered = await renderAssetToPng(item, readAssetOptions());
 
-    setAssetsStatus('Sending to Premiere…', 'working');
+    setAssetsStatus(`Sending to ${editor==='resolve'?'DaVinci Resolve':'Premiere'}…`, 'working');
     const result = await window.electronAPI.assetsSendToPremiere({
       fileName: rendered.fileName,
       bytes: rendered.bytes,
+      editor,
       durationSeconds: parseFloat(assetsDuration.value) || 5
     });
 
+    if(result?.canceled){setAssetsStatus('Send canceled','idle');return;}
     if (!result || !result.success) {
-      throw new Error((result && result.error) || 'Premiere did not accept the image. Is the SmoothyEdit panel open?');
+      throw new Error((result && result.error) || editorText('Premiere did not accept the image. Check the selected editor handoff.'));
     }
 
-    setAssetsStatus(`Sent to Premiere: ${rendered.fileName}`, 'success');
+    setAssetsStatus(`Sent to ${result.nle==='resolve'?'DaVinci Resolve':editorName()}: ${rendered.fileName}`, 'success');
   } catch (e) {
     console.error('Send asset to Premiere failed:', e);
     setAssetsStatus(`Send failed: ${e.message}`, 'error');
-    showError(`Could not send the image to Premiere: ${e.message}`);
+    showError(`Could not send the image to ${editorName()}: ${e.message}`);
   } finally {
     assetsState.busy = false;
     updateAssetsUI();
@@ -4361,7 +4577,7 @@ function updateAssetsUI() {
   document.getElementById('assets-preview-section').setAttribute('aria-busy', String(!!assetsState.processing));
   assetsEmptyGuide.classList.toggle('hidden', assetsState.items.length > 0);
   [assetsConvertBtn, assetsSaveAsBtn, assetsSendBtn].forEach((btn) => {
-    if (btn) btn.disabled = !enabled || (btn === assetsSendBtn && !(state.isConnected && state.sequenceInfo?.hasSequence));
+    if (btn) btn.disabled = !enabled || (btn === assetsSendBtn && !(state.activeNLE==='resolve' || (state.isConnected && state.sequenceInfo?.hasSequence)));
   });
 
   if (assetsFooterStatus) {
@@ -4420,8 +4636,8 @@ async function processActiveAsset(operation) {
     }
     renderAssetsPreview();
     document.getElementById('assets-process-status').textContent = operation === 'upscale'
-      ? `Upscaled ${factor}× to ${updated.width} × ${updated.height}. Ready to save or send to Premiere.`
-      : 'Background removed. Ready to save a transparent PNG or send to Premiere.';
+      ? `Upscaled ${factor}× to ${updated.width} × ${updated.height}. Ready to save or send to ${editorName()}.`
+      : editorText('Background removed. Ready to save a transparent PNG or send to Premiere.');
     setAssetsStatus(operation === 'upscale' ? 'Image upscaled' : 'Background removed', 'success');
   } catch (error) {
     document.getElementById('assets-process-status').textContent = error.message || 'Image processing failed. Try again.';

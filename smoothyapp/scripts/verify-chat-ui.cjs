@@ -61,10 +61,10 @@ app.whenReady().then(async()=>{
  const proof=process.env.CHAT_REVIEW_DIR||path.join(root,'../docs/reviews/smoothyapp-v2-chat-assets');fs.mkdirSync(proof,{recursive:true});
  const capture=async name=>fs.writeFileSync(path.join(proof,name+'.png'),(await win.webContents.capturePage()).toPNG());
  try{
-  await win.loadFile(process.env.CHAT_RENDERER_FILE||path.join(root,'out/renderer/index.html'));await pause(300);
-  await click('.nav-item[data-tab="chat"]');assert.equal(await js(`document.getElementById('chat-signin').classList.contains('hidden')`),false);assert.equal(calls.length+events.length,0);
+  await win.loadFile(process.env.CHAT_RENDERER_FILE||path.join(root,'out/renderer/index.html'));win.showInactive();await pause(300);
+  await click('.nav-item[data-tab="chat"]');assert.equal(await js(`document.getElementById('chat-signin').classList.contains('hidden')`),true);assert.equal(calls.length+events.length,0);
   await click('#chat-signin-btn');assert.equal(await js(`document.getElementById('login-modal').classList.contains('hidden')`),false);await click('#login-close-btn');
-   user={id:'a',tier:'free',email:'fixture@example.test'};win.webContents.send('onAuthStateChange',{user});await pause(100);await click('.nav-item[data-tab="chat"]');
+   user={id:'a',tier:'pro',email:'fixture@example.test'};win.webContents.send('onAuthStateChange',{user});await pause(100);await click('.nav-item[data-tab="chat"]');
    const composerStyle=await js(`(()=>{const read=selector=>{const style=getComputedStyle(document.querySelector(selector));return{background:style.backgroundColor,shadow:style.boxShadow,radius:style.borderRadius,padding:style.padding}};return{photo:read('#tab-photos .photo-composer'),chat:read('#tab-chat .photo-composer')}})()`);
    assert.deepEqual(composerStyle.chat,composerStyle.photo);assert.notEqual(composerStyle.chat.shadow,'none');
   assert.equal(await js(`document.getElementById('chat-model')`),null);assert.equal(await js(`document.getElementById('chat-model-menu')`),null);assert.equal(await js(`document.querySelectorAll('#tab-chat select').length`),0);

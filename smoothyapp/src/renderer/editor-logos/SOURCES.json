@@ -1,0 +1,12 @@
+{
+  "davinci-resolve.svg": {
+    "source": "https://commons.wikimedia.org/wiki/File:DaVinci_Resolve_17_logo.svg",
+    "author": "Asav / Blackmagic Design",
+    "license": "Public domain (PD-textlogo); trademark retained"
+  },
+  "premiere-pro.svg": {
+    "source": "https://commons.wikimedia.org/wiki/File:Adobe_Premiere_Pro_CC_icon.svg",
+    "author": "Adobe",
+    "license": "Public domain (PD-textlogo); trademark retained"
+  }
+}

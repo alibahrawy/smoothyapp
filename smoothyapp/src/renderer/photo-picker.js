@@ -22,6 +22,7 @@ export function createPhotoPicker(id, { searchable = false, menuWidth, onChange 
     if (!item) return;
     button.value = item.value;
     button.querySelector('.photo-picker-label').textContent = item.triggerLabel || item.label;
+    if (item.company) button.setAttribute('aria-label', `Image model: ${item.label}, ${item.badge}`);
     if (triggerLogo) {
       if (item.logo) { triggerLogo.src = item.logo; triggerLogo.hidden = false; if (triggerMonogram) triggerMonogram.hidden = true; }
       else { triggerLogo.removeAttribute('src'); triggerLogo.hidden = true; if (triggerMonogram) { triggerMonogram.textContent = item.monogram || ''; triggerMonogram.hidden = !item.monogram; } }
@@ -33,7 +34,12 @@ export function createPhotoPicker(id, { searchable = false, menuWidth, onChange 
     items = next; list.replaceChildren();
     items.forEach(item => {
       const option = document.createElement('button'); option.type = 'button'; option.setAttribute('role', 'option'); option.dataset.value = item.value;
-      const text = document.createElement('span'), label = document.createElement('strong'); label.textContent = item.label; text.append(label);
+      const text = document.createElement('span'), label = document.createElement('strong'); label.textContent = item.label;
+      if (item.badge) {
+        const heading = document.createElement('span'); heading.className = 'photo-picker-title';
+        const badge = document.createElement('span'); badge.className = 'photo-model-tier'; badge.dataset.tier = item.tier; badge.textContent = item.badge;
+        heading.append(label,badge); text.append(heading); option.dataset.company = item.company;
+      } else text.append(label);
       text.className = 'photo-picker-text';
       if (item.description) { const detail = document.createElement('small'); detail.textContent = item.description; text.append(detail); }
       if (item.price) { const price = document.createElement('small'); price.className = 'photo-picker-price'; price.textContent = item.price; text.append(price); }

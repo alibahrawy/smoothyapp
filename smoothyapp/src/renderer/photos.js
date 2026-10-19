@@ -1,4 +1,7 @@
+import { editorName,editorText } from './editor-context';
 import catalog from '../shared/photo-catalog.json';
+import modelMenu from '../shared/photo-model-menu.json';
+import { canGenerateStudio, studioAccessNotice } from './studio-access.js';
 import { createPhotoPicker } from './photo-picker.js';
 import { estimatePhotoCredits, formatPhotoEstimate } from './photo-credit-estimate.js';
 import googleLogo from './model-logos/google.png';
@@ -7,10 +10,16 @@ import fluxLogo from './model-logos/black-forest-labs.png';
 import seedLogo from './model-logos/bytedance-seed.png';
 import grokLogo from './model-logos/x-ai.png';
 import riverflowLogo from './model-logos/sourceful.png';
+import microsoftLogo from './model-logos/microsoft.png';
+import tencentLogo from './model-logos/tencent.png';
+import qwenLogo from './model-logos/qwen.png';
+import kreaLogo from './model-logos/krea.png';
+import recraftLogo from './model-logos/recraft.png';
 
 export function initPhotos({ getUser, signIn, refreshCredits }) {
   const $ = id => document.getElementById(id);
   const api = window.electronAPI;
+  const syncAccess = studioAccessNotice($('photos-composer-dock'), getUser, signIn);
   let messages = [], history = [], references = [], selected = null, showHistory = false;
   let page = 1, pages = 1, busy = false, stopBatch = false, account = null, generation = 0, historyLoading = false, filesLoading = false;
   const presets = new Set();
@@ -28,27 +37,28 @@ export function initPhotos({ getUser, signIn, refreshCredits }) {
   const modelPicker = createPhotoPicker('photos-model', { searchable: true, menuWidth: 460, onChange: modelChanged });
   const ratioPicker = createPhotoPicker('photos-ratio', { onChange: availability });
   const sizePicker = createPhotoPicker('photos-size', { onChange: availability });
-  const family = id => id.startsWith('google/') ? 'Google' : id.startsWith('openai/') ? 'OpenAI' : id.startsWith('black-forest-labs/') ? 'Black Forest Labs' : id.startsWith('bytedance-seed/') ? 'ByteDance' : id.startsWith('x-ai/') ? 'xAI' : id.startsWith('sourceful/') ? 'Sourceful' : id.startsWith('microsoft/') ? 'Microsoft' : id.startsWith('tencent/') ? 'Tencent' : id.startsWith('meta/') ? 'Meta' : id.startsWith('qwen/') ? 'Qwen' : id.startsWith('krea/') ? 'Krea' : id.startsWith('recraft/') ? 'Recraft' : id.startsWith('inclusionai/') ? 'inclusionAI' : 'Image model';
-  const logos = { Google: googleLogo, OpenAI: openaiLogo, 'Black Forest Labs': fluxLogo, ByteDance: seedLogo, xAI: grokLogo, Sourceful: riverflowLogo };
-  const monograms = { Microsoft: 'MS', Tencent: 'T', Meta: 'M', Qwen: 'Q', Krea: 'K', Recraft: 'R', inclusionAI: 'iA' };
+  const logos = { google: googleLogo, openai: openaiLogo, 'black-forest-labs': fluxLogo, 'bytedance-seed': seedLogo, 'x-ai': grokLogo, sourceful: riverflowLogo, microsoft: microsoftLogo, tencent: tencentLogo, qwen: qwenLogo, krea: kreaLogo, recraft: recraftLogo };
+  const choices = modelMenu.companies.flatMap(company => company.models.map(choice => ({ ...catalog.IMAGE_MODELS.find(model => model.id === choice.id), ...choice, company })));
+  const badges = { budget: 'Budget', premium: 'Premium', fast: 'Fast', precision: 'Precision', preview: 'Preview' };
   $('photos-estimate').classList.add('hidden');
-  modelPicker.setItems(catalog.IMAGE_MODELS.map(model => {
-    const description = catalog.IMAGE_MODEL_DESCRIPTIONS[model.id] || '', provider = family(model.id);
+  modelPicker.setItems(choices.map(model => {
+    const { description, company, tier } = model;
     const caps = catalog.MODEL_CAPABILITIES[model.id] || {};
-    const tags = [...(/fast/i.test(description) ? ['fast'] : []), ...(/cheap|economical|cost-efficient|low.cost/i.test(description) ? ['low-cost'] : []), ...(caps.supportsImageSize && (caps.imageSizes || catalog.IMAGE_SIZES).includes('4K') ? ['4k'] : [])];
-    return { value: model.id, label: model.label, description: `${provider} · ${description}`, logo: logos[provider], monogram: monograms[provider], tags };
+    const tags = [...(tier === 'fast' || /fast/i.test(description) ? ['fast'] : []), ...(tier === 'budget' ? ['low-cost'] : []), ...(tier === 'premium' ? ['premium'] : []), ...(caps.supportsImageSize && (caps.imageSizes || catalog.IMAGE_SIZES).includes('4K') ? ['4k'] : [])];
+    return { value: model.id, label: model.label, description: `${company.label} · ${description}`, company: company.id, logo: logos[company.id], badge: badges[tier], tier, tags };
   }), catalog.DEFAULT_IMAGE_MODEL);
   ratioPicker.setItems(catalog.ASPECT_RATIOS.map(value => ({ value, label: value })), catalog.DEFAULT_ASPECT_RATIO);
   sizePicker.setItems(catalog.IMAGE_SIZES.map(value => ({ value, label: value })), catalog.DEFAULT_IMAGE_SIZE);
 
   function availability() {
+    syncAccess();
     const current = action(), max = catalog.MODEL_CAPABILITIES[$('photos-model').value]?.maxReferences ?? 6;
     const tooMany = (selected ? 1 : references.length) > max;
-    $('photos-generate').disabled = busy || filesLoading || !getUser() || tooMany || (current !== 'preset' && !$('photos-prompt').value.trim()) || (current === 'preset' && !hasSource());
+    $('photos-generate').disabled = busy || filesLoading || !canGenerateStudio(getUser()) || tooMany || (current !== 'preset' && !$('photos-prompt').value.trim()) || (current === 'preset' && !hasSource());
     const label = current === 'preset' ? `Generate ${presets.size} reaction${presets.size === 1 ? '' : 's'}` : actionNames[current];
     const estimate = formatPhotoEstimate(estimatePhotoCredits({ model: $('photos-model').value, imageSize: $('photos-size').value, references: selected ? 1 : references.length, promptLength: $('photos-prompt').value.length + $('photos-subject').value.length, count: presets.size || 1 }));
     $('photos-estimate').textContent = estimate;
-    for (const model of catalog.IMAGE_MODELS) {
+    for (const model of choices) {
       const modelEstimate = estimatePhotoCredits({ model: model.id, imageSize: $('photos-size').value, references: selected ? 1 : references.length, promptLength: $('photos-prompt').value.length + $('photos-subject').value.length, count: 1 });
       modelPicker.setPrice(model.id, modelEstimate ? `${formatPhotoEstimate(modelEstimate)} / image` : 'Estimate unavailable');
     }
@@ -155,8 +165,8 @@ export function initPhotos({ getUser, signIn, refreshCredits }) {
     try {
       const response = await api[`photos${action}`](photo.id);
       if (generation !== stamp) return;
-      if (!response.success) throw new Error(response.error);
       if (response.canceled) return;
+      if (!response.success) throw new Error(response.error);
       status('');
     } catch (error) { if (generation === stamp) status(error.message || 'Could not use this image. Please retry.', true); }
   }
@@ -168,7 +178,7 @@ export function initPhotos({ getUser, signIn, refreshCredits }) {
     preview.append(image); const title = document.createElement('h3'); title.textContent = photo.label;
     const meta = document.createElement('p'); meta.className = 'help-text'; meta.textContent = [catalog.IMAGE_MODELS.find(model => model.id === photo.model)?.label, photo.aspectRatio].filter(Boolean).join(' · ');
     const actions = document.createElement('div'); actions.className = 'photo-card-actions';
-    actions.append(imageButton('Edit / reuse', () => usePhoto(photo)), imageButton('Save PNG', () => fileAction(photo, 'Save')), imageButton('Copy', () => fileAction(photo, 'Copy')), imageButton('Premiere ↗', () => fileAction(photo, 'Premiere')));
+    actions.append(imageButton('Edit / reuse', () => usePhoto(photo)), imageButton('Save PNG', () => fileAction(photo, 'Save')), imageButton('Copy', () => fileAction(photo, 'Copy')), imageButton(editorName()+' ↗', () => fileAction(photo, 'Premiere')));
     if (showHistory && photo.historyId) {
       const favorite = imageButton(photo.isFavorite ? '★ Favorite' : '☆ Favorite', async () => {
         favorite.disabled = true; const stamp = generation;
@@ -214,12 +224,14 @@ export function initPhotos({ getUser, signIn, refreshCredits }) {
     availability(); if (scroll && !showHistory) $('photos-view-panel').scrollTop = $('photos-view-panel').scrollHeight;
   }
   async function syncCreditPill() {
+    if (!getUser()) { $('photos-credits').textContent = '100 free credits/month'; return; }
     const stamp = generation;
     try { const response = await api.getStudioCredits(); if (generation !== stamp) return; $('photos-credits').textContent = response.success && Number.isFinite(response.credits?.credits) ? `${Math.round(response.credits.credits).toLocaleString()} credits` : 'Balance unavailable'; }
     catch { if (generation === stamp) $('photos-credits').textContent = 'Balance unavailable'; }
   }
   async function perform() {
     if (busy || filesLoading) return;
+    if (!canGenerateStudio(getUser())) return;
     if (!getUser()) return signIn();
     const current = action(), chosen = [...presets];
     if (current !== 'generate' && !hasSource()) return status('Attach or select a picture first.', true);
@@ -230,16 +242,17 @@ export function initPhotos({ getUser, signIn, refreshCredits }) {
     const stamp = generation; busy = true; stopBatch = false; messages.push(message); setHistory(false); renderResults(true);
     modelPicker.close(); ratioPicker.close(); sizePicker.close();
     setReactionsOpen(false);
-    $('photos-stop-batch').classList.toggle('hidden', current !== 'preset' || chosen.length < 2); $('photos-stop-batch').disabled = false;
+    $('photos-stop-batch').classList.remove('hidden'); $('photos-stop-batch').textContent = 'Stop'; $('photos-stop-batch').disabled = false;
     status('Working… This AI action uses Studio credits.');
     let completed = 0, cloudSaveFailed = false, paidStorageRequired = false;
     try {
       const jobs = current === 'preset' ? chosen : [null];
       for (const presetId of jobs) {
-        if (stopBatch || stamp !== generation) break;
+        if (stopBatch || stamp !== generation || !canGenerateStudio(getUser())) break;
         if (jobs.length > 1) status(`Generating reaction ${completed + 1} of ${jobs.length} · credits per image…`);
         const response = await api.photosRun({ ...input, ...(presetId && { presetId }) });
         if (stamp !== generation) break;
+        if (response.canceled) { stopBatch = true; break; }
         if (!response.success) throw new Error(response.error || 'The image action failed.');
         if (response.photo) message.photos.push(response.photo);
         cloudSaveFailed ||= response.historySaved === false && response.cloudStorageAvailable === true;
@@ -251,7 +264,7 @@ export function initPhotos({ getUser, signIn, refreshCredits }) {
         const ready = `${completed} image${completed === 1 ? '' : 's'} ready.`;
         status(cloudSaveFailed ? `${ready} Cloud history could not save every image. Save PNG to keep your results.`
           : paidStorageRequired ? `${ready} Save PNG to keep your results. Cloud image history requires a paid membership.`
-          : stopBatch ? `${ready} Remaining reactions stopped.` : `${ready} Describe another edit below, or start a new chat.`, cloudSaveFailed, paidStorageRequired);
+          : stopBatch ? `${ready} Image request stopped.` : `${ready} Describe another edit below, or start a new chat.`, cloudSaveFailed, paidStorageRequired);
       }
     } catch (error) { if (stamp === generation) { message.error = error.message; status(`${completed ? `${completed} images ready. ` : ''}${error.message}`, true); } }
     finally {
@@ -297,7 +310,7 @@ export function initPhotos({ getUser, signIn, refreshCredits }) {
     if (event.key === 'Escape' && !event.defaultPrevented && !viewer.open && !$('photos-reactions-panel').hidden && $('tab-photos').classList.contains('active')) { event.preventDefault(); setReactionsOpen(false, true); }
   });
   $('photos-generate').addEventListener('click', perform);
-  $('photos-stop-batch').addEventListener('click', () => { stopBatch = true; $('photos-stop-batch').disabled = true; status('Finishing the current image, then stopping. The current image can still spend credits.'); });
+  $('photos-stop-batch').addEventListener('click', async () => { stopBatch = true; $('photos-stop-batch').disabled = true; $('photos-stop-batch').textContent = 'Stopping…'; status('Stopping the image request. Work already accepted by Studio may use credits.', false, true); try { await api.photosCancel(); } catch { status('Could not stop the current request. Remaining reactions will not start.', true); } });
   async function loadHistory() {
     if (!getUser() || historyLoading) return;
     const stamp = generation; historyLoading = true; renderResults(); status('Loading image history…');
@@ -343,9 +356,10 @@ export function initPhotos({ getUser, signIn, refreshCredits }) {
       $('photos-prompt').value = ''; $('photos-subject').value = ''; $('photos-credits').textContent = 'Studio credits'; $('photos-stop-batch').classList.add('hidden'); status(''); renderReferences(); setHistory(false);
       api.photosReset().catch(() => {});
     }
-    $('photos-signin').classList.toggle('hidden', Boolean(user)); $('photos-signedin').classList.toggle('hidden', !user); $('photos-composer-dock').classList.toggle('hidden', !user);
+    $('photos-signin').classList.add('hidden'); $('photos-signedin').classList.remove('hidden'); $('photos-composer-dock').classList.remove('hidden');
+    if (!getUser()) $('photos-credits').textContent = '100 free credits/month';
     availability(); if (user && $('tab-photos').classList.contains('active')) activate();
   }
   modelChanged(); authChanged(); renderResults();
-  return { activate, authChanged, isBusy: () => busy || historyLoading || filesLoading };
+  return { activate, authChanged, editorChanged:()=>{renderResults();}, isBusy: () => busy || historyLoading || filesLoading };
 }

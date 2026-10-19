@@ -7,6 +7,10 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <aside id="resolve-receive-banner" class="resolve-receive-banner hidden" aria-label="DaVinci Resolve handoff">
+    <p id="resolve-receive-message" role="status" aria-live="polite"></p>
+    <div><button type="button" id="resolve-receive-copy" class="stock-text-button">Show connector script</button><button type="button" id="resolve-receive-file" class="stock-text-button">Show file</button><button type="button" id="resolve-receive-cancel" class="stock-text-button">Cancel pending handoff</button><button type="button" id="resolve-receive-close" class="stock-text-button hidden">Close</button></div>
+  </aside>
   <div class="app-container">
     <!-- One shared title/status bar above both panels. -->
     <header class="window-titlebar" aria-label="Window title and tool status"></header>
@@ -17,63 +21,213 @@
         <div class="nav-group-label nav-group-header"><span class="nav-group-title">Your workspace</span><button type="button" id="sidebar-toggle-btn" class="settings-btn sidebar-toggle-btn" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="sidebar-nav" title="Collapse sidebar"><svg class="sidebar-toggle-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 17-5-5 5-5m7 10-5-5 5-5"/></svg></button></div>
         <label class="tool-search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input type="search" id="tool-search" placeholder="Find a tool…" aria-label="Find a tool"><span aria-hidden="true" class="tool-search-shortcut">⌘K</span></label>
       </div>
+      <div class="sidebar-tools-scroll">
       <nav class="sidebar-nav" id="sidebar-nav" aria-label="Tool channels">
 <section class="channel-group" data-channel-group="editing"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-editing"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">Editing</span></button><div class="channel-group-items" id="channels-editing"><a href="#" class="nav-item active" data-tab="multicam">
-          <span class="nav-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-              <line x1="8" y1="21" x2="16" y2="21"></line>
-              <line x1="12" y1="17" x2="12" y2="21"></line>
-            </svg>
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="panels-top-left"
+  xmlns="http://www.w3.org/2000/svg"
+  width="20"
+  height="20"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <rect width="18" height="18" x="3" y="3" rx="2" />
+  <path d="M3 9h18" />
+  <path d="M9 21V9" />
+</svg>
+
           </span>
           <span class="nav-label">Multicam</span>
         </a><a href="#" class="nav-item" data-tab="silence">
-          <span class="nav-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-              <line x1="23" y1="9" x2="17" y2="15"></line>
-              <line x1="17" y1="9" x2="23" y2="15"></line>
-            </svg>
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="audio-lines"
+  xmlns="http://www.w3.org/2000/svg"
+  width="20"
+  height="20"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M2 10v3" />
+  <path d="M6 6v11" />
+  <path d="M10 3v18" />
+  <path d="M14 8v7" />
+  <path d="M18 5v13" />
+  <path d="M22 10v3" />
+</svg>
+
           </span>
           <span class="nav-label">Silence Removal</span>
+        </a><a href="#" class="nav-item" data-tab="local-audio" style="--tab-accent:#9FEAE2">
+          <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 10v4m4-7v10m4-14v18m4-14v10m4-7v4m3-6v12"/></svg></span><span class="nav-label">Audio Cleanup</span>
         </a><a href="#" class="nav-item" data-tab="captions">
-          <span class="nav-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-            </svg>
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="captions"
+  xmlns="http://www.w3.org/2000/svg"
+  width="20"
+  height="20"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <rect width="18" height="14" x="3" y="5" rx="2" ry="2" />
+  <path d="M7 15h4M15 15h2M7 11h2M13 11h4" />
+</svg>
           </span>
           <span class="nav-label">Captions</span>
         </a><a href="#" class="nav-item" data-tab="compressor">
-          <span class="nav-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="m4 4 6 6M4 10h6V4m10 16-6-6m6 0h-6v6"/>
-            </svg>
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="file-archive"
+  xmlns="http://www.w3.org/2000/svg"
+  width="20"
+  height="20"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M10 12v-1" />
+  <path d="M10 18v-2" />
+  <path d="M10 7V6" />
+  <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+  <path d="M15.5 22H18a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v16a2 2 0 0 0 .274 1.01" />
+  <circle cx="10" cy="20" r="2" />
+</svg>
+
           </span>
           <span class="nav-label">Compressor</span>
         </a><a href="#" class="nav-item" data-tab="assets">
-          <span class="nav-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <circle cx="8.5" cy="8.5" r="1.5"></circle>
-              <polyline points="21 15 16 10 5 21"></polyline>
-            </svg>
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="images"
+  xmlns="http://www.w3.org/2000/svg"
+  width="20"
+  height="20"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M18 22H4a2 2 0 0 1-2-2V6" />
+  <path d="m22 13-1.296-1.296a2.41 2.41 0 0 0-3.408 0L11 18" />
+  <circle cx="12" cy="8" r="2" />
+  <rect width="16" height="16" x="6" y="2" rx="2" />
+</svg>
+
           </span>
           <span class="nav-label">Assets</span>
         </a></div></section><section class="channel-group" data-channel-group="library"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-library"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">Library</span></button><div class="channel-group-items" id="channels-library"><a href="#" class="nav-item" data-tab="stock">
-          <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m10 8 6 4-6 4zM3 7h4M3 12h4M3 17h4M17 7h4M17 17h4"/></svg></span>
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="clapperboard"
+  xmlns="http://www.w3.org/2000/svg"
+  width="20"
+  height="20"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z" />
+  <path d="m6.2 5.3 3.1 3.9" />
+  <path d="m12.4 3.4 3.1 4" />
+  <path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+</svg>
+</span>
           <span class="nav-label">Stock Footage</span>
         </a><a href="#" class="nav-item" data-tab="audio">
-          <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l12-2v13M9 9l12-2"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="music-2"
+  xmlns="http://www.w3.org/2000/svg"
+  width="20"
+  height="20"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <circle cx="8" cy="18" r="4" />
+  <path d="M12 18V2l7 4" />
+</svg>
+</span>
           <span class="nav-label">Audio Library</span>
-        </a></div></section><section class="channel-group" data-channel-group="studio" data-fold-key="ai-workspace"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-studio"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">AI</span><span id="studio-credits-inline" class="nav-credits hidden">—</span></button><div class="channel-group-items" id="channels-studio"><a href="#" class="nav-item" data-tab="studio-text" style="--tab-accent:#B0EC9C" aria-label="Dashboard · Studio · Shorts, Condense, Hooks, Titles, Descriptions, Thumbnails, B-roll, Social, Blog, SFX"><span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 10h18M10 10v11"/><path d="m14 14 4 2-4 2v-4Z"/></svg></span><span class="nav-label">Dashboard</span><span class="paid-badge">Credits</span></a><a href="#" class="nav-item" data-tab="photos" aria-label="AI Photos · generate, edit, reactions, image history"><span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 5-5 4 4 4-6 5 7"/></svg></span><span class="nav-label">AI Photos</span></a><a href="#" class="nav-item" data-tab="chat" aria-label="Chat"><span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z"/></svg></span><span class="nav-label">Chat</span></a></div></section><a href="#" class="nav-item hidden" data-tab="logs">
-          <span class="nav-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="4 17 10 11 4 5"></polyline>
-              <line x1="12" y1="19" x2="20" y2="19"></line>
-            </svg>
+        </a></div></section><section class="channel-group" data-channel-group="studio" data-fold-key="ai-workspace"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-studio"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">AI</span><span id="studio-credits-inline" class="nav-credits hidden">—</span></button><div class="channel-group-items" id="channels-studio"><a href="#" class="nav-item" data-tab="studio-text" style="--tab-accent:#B0EC9C" aria-label="Dashboard · Studio · Shorts, Condense, Hooks, Titles, Descriptions, Thumbnails, B-roll, Social, Blog, SFX"><span class="nav-icon"><svg aria-hidden="true" data-icon="layout-dashboard"
+  xmlns="http://www.w3.org/2000/svg"
+  width="20"
+  height="20"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <rect width="7" height="9" x="3" y="3" rx="1" />
+  <rect width="7" height="5" x="14" y="3" rx="1" />
+  <rect width="7" height="9" x="14" y="12" rx="1" />
+  <rect width="7" height="5" x="3" y="16" rx="1" />
+</svg>
+</span><span class="nav-label">Dashboard</span><span class="paid-badge">Credits</span></a><a href="#" class="nav-item" data-tab="photos" aria-label="AI Photos · generate, edit, reactions, image history"><span class="nav-icon"><svg aria-hidden="true" data-icon="image-plus"
+  xmlns="http://www.w3.org/2000/svg"
+  width="20"
+  height="20"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M16 5h6" />
+  <path d="M19 2v6" />
+  <path d="M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5" />
+  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+  <circle cx="9" cy="9" r="2" />
+</svg>
+</span><span class="nav-label">AI Photos</span></a><a href="#" class="nav-item" data-tab="chat" aria-label="Chat"><span class="nav-icon"><svg aria-hidden="true" data-icon="messages-square"
+  xmlns="http://www.w3.org/2000/svg"
+  width="20"
+  height="20"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z" />
+  <path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1" />
+</svg>
+</span><span class="nav-label">Chat</span></a></div></section><a href="#" class="nav-item hidden" data-tab="logs">
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="terminal"
+  xmlns="http://www.w3.org/2000/svg"
+  width="20"
+  height="20"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <polyline points="4 17 10 11 4 5" />
+  <line x1="12" x2="20" y1="19" y2="19" />
+</svg>
+
           </span>
           <span class="nav-label">Logs</span>
         </a><p id="tool-search-empty" class="help-text hidden" role="status">No tools found.</p></nav>
+      </div>
 
       <!-- Sidebar footer -->
       <div class="sidebar-footer">
@@ -98,13 +252,20 @@
           </button>
         </div>
 
-        <div class="connection-status" id="connection-status" role="status" aria-live="polite">
+        <div class="connection-status editor-switcher" id="connection-status">
+          <select id="multicam-editor" aria-label="Editing in" title="Switch editing app">
+            <option value="premiere">Premiere Pro</option>
+            <option value="resolve">DaVinci Resolve Free</option>
+          </select>
+          <span class="editor-logo editor-logo-premiere" aria-hidden="true"><img src="./editor-logos/premiere-pro.svg" width="28" height="28" alt=""/></span>
+          <span class="editor-logo editor-logo-resolve hidden" aria-hidden="true"><img src="./editor-logos/davinci-resolve.svg" width="28" height="28" alt=""/></span>
           <span class="connection-status-icon" aria-hidden="true"><span class="status-dot disconnected"></span></span>
           <span class="connection-status-copy">
             <span class="status-label" id="connection-nle-label">Premiere Pro</span>
             <span class="connection-state-label" id="connection-state-label">Not connected</span>
           </span>
         </div>
+        <span id="resolve-dev-badge" class="hidden" hidden>2.1 development</span>
         <div class="footer-row">
           <div class="footer-actions">
             <span id="sidebar-version" class="version">Version…</span>
@@ -138,6 +299,34 @@
 
     <!-- Main content area -->
     <main class="main-content">
+      <div class="tab-content" id="tab-local-audio">
+        <div class="content-scroll">
+          <div class="local-audio-shell">
+            <section class="local-audio-intro">
+              <h1>Audio Cleanup</h1>
+              <p class="help-text">Split any recording into <strong>Speech</strong> and <strong>Music</strong> — noise stays with the music. Turn on <strong>Enhanced</strong> to clean the speech and remove everything else.</p>
+            </section>
+            <div class="local-audio-input" role="group" aria-label="Audio or video input">
+              <span class="local-audio-file-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 10v4m4-7v10m4-14v18m4-14v10m4-7v4m3-6v12"/></svg></span>
+              <span id="local-audio-source" class="local-audio-source is-empty">Choose an audio or video file.</span>
+              <button type="button" id="local-audio-pick" class="btn btn-secondary">Choose file</button>
+            </div>
+            <div class="local-audio-notes"><p class="local-audio-note">Audio stays on your computer. No credits needed.</p>
+            <p id="local-audio-setup-note" class="local-audio-note hidden">First setup downloads the local engine and models. GPU runtimes can be several GB.</p><p id="local-audio-device" class="local-audio-note"></p></div>
+            <div id="local-audio-operation" class="local-audio-operation">
+              <div id="local-audio-feedback" class="local-audio-feedback hidden">
+                <div id="local-audio-activity" class="local-audio-activity hidden"><span class="local-audio-spinner" aria-hidden="true"></span><strong id="local-audio-task"></strong><span id="local-audio-elapsed" aria-hidden="true"></span></div>
+                <p id="local-audio-status" class="help-text" role="status" aria-live="polite" aria-atomic="true"></p>
+                <div id="local-audio-progress" class="local-audio-progress hidden" role="progressbar" aria-label="Audio processing in progress"><span></span></div>
+                <p id="local-audio-progress-hint" class="help-text hidden">Running on your computer. Longer files can take several minutes.</p>
+                <div class="local-audio-actions"><button type="button" id="local-audio-cancel" class="btn btn-secondary hidden">Cancel</button><button type="button" id="local-audio-retry" class="btn btn-secondary hidden">Retry separation</button><button type="button" id="local-audio-setup" class="stock-text-button hidden">Repair engine &amp; retry</button></div>
+              </div>
+            </div>
+            <div id="local-audio-results" class="local-audio-results hidden" aria-label="Audio preview and mix"></div>
+            <p id="local-audio-playback-status" class="help-text hidden" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
       <div class="tab-content" id="tab-studio-text">
         <header id="studio-workspace-header" class="studio-workspace-header">
           <div class="studio-workspace-heading"><div><h1>Studio</h1><p id="studio-workspace-description" class="help-text">One input, more possibilities.</p></div><div class="studio-header-actions"><span id="studio-workspace-credits" class="photos-credit-pill">Studio credits</span><button type="button" id="studio-dashboard-btn" class="stock-text-button" title="Open Studio Dashboard in your browser">Dashboard ↗</button><button type="button" id="shorts-history-btn" class="btn btn-secondary btn-small hidden" disabled>History</button><button type="button" id="studio-text-history-toggle" class="btn btn-secondary btn-small">History</button></div></div>
@@ -154,14 +343,13 @@
         </div>
         <footer id="studio-compose-footer" class="studio-compose-footer">
           <div id="studio-text-composer" class="studio-composer hidden">
-            <div class="studio-composer-heading"><span id="studio-text-source-heading">Input</span></div>
             <div id="studio-source-slider" class="studio-source-slider" role="group" aria-label="Studio input source" style="--source-index: 0">
               <button type="button" data-shorts-source="sequence" aria-pressed="true">Premiere</button>
               <button type="button" data-shorts-source="transcript" aria-pressed="false">Subtitles</button>
               <button type="button" data-shorts-source="audio" aria-pressed="false">Audio/Video</button>
               <button type="button" data-shorts-source="youtube" aria-pressed="false">YouTube</button>
             </div>
-            <div id="shorts-source-sequence" class="shorts-source-panel">
+            <div id="shorts-source-sequence" class="shorts-source-panel"><button type="button" class="stock-text-button hidden" data-resolve-source data-resolve-load>Load Resolve timeline</button><p class="help-text hidden" data-resolve-source>Uses the loaded source timeline’s trims and microphone channels, without Resolve mixer effects. Load the timeline again here after changing it in Resolve.</p>
               <div class="section-header-row">
                 <p id="bestshorts-sequence-name" class="sequence-info">No sequence loaded</p>
                 <button id="bestshorts-refresh-btn" type="button" class="btn btn-secondary btn-small">Refresh</button>
@@ -265,10 +453,10 @@
             <div class="photo-reactions-footer"><span id="photos-reactions-estimate" class="photo-credit-estimate" aria-live="polite"></span><p class="help-text">Estimated cost · final credits may vary.</p><div class="photo-reaction-popup-actions"><button type="button" id="photos-reactions-clear" class="stock-text-button">Clear reactions</button><button type="button" id="photos-reactions-done" class="btn btn-secondary btn-small">Done</button></div></div>
           </aside>
         </div>
-        <div id="photos-model-menu" class="photo-picker-popup photo-image-model-menu" popover><div class="photo-model-menu-header"><label class="photo-model-search"><span class="sr-only">Search image models</span><input type="search" id="photos-model-search" placeholder="Search image models…" aria-label="Search image models"></label><span class="photo-model-kind">Image</span></div><div class="photo-model-filters" role="group" aria-label="Filter image models"><button type="button" data-model-filter="all" aria-pressed="true">All</button><button type="button" data-model-filter="fast" aria-pressed="false">Fast</button><button type="button" data-model-filter="low-cost" aria-pressed="false">Low cost</button><button type="button" data-model-filter="4k" aria-pressed="false">4K</button></div><div id="photos-model-list" class="photo-picker-list" role="listbox" aria-label="Image models"></div><p class="photo-picker-empty hidden">No matching models</p></div>
+        <div id="photos-model-menu" class="photo-picker-popup photo-image-model-menu" popover><div class="photo-model-menu-header"><label class="photo-model-search"><span class="sr-only">Search image models</span><input type="search" id="photos-model-search" placeholder="Search models or companies…" aria-label="Search image models"></label><span class="photo-model-kind">Image</span></div><div class="photo-model-filters" role="group" aria-label="Filter image models"><button type="button" data-model-filter="all" aria-pressed="true">All</button><button type="button" data-model-filter="fast" aria-pressed="false">Fast</button><button type="button" data-model-filter="low-cost" aria-pressed="false">Budget</button><button type="button" data-model-filter="premium" aria-pressed="false">Premium</button><button type="button" data-model-filter="4k" aria-pressed="false">4K</button></div><div id="photos-model-list" class="photo-picker-list" role="listbox" aria-label="Image models"></div><p class="photo-picker-empty hidden">No matching models</p></div>
         <div id="photos-ratio-menu" class="photo-picker-popup photo-picker-compact" popover><div id="photos-ratio-list" class="photo-picker-list" role="listbox" aria-label="Image shapes"></div></div>
         <div id="photos-size-menu" class="photo-picker-popup photo-picker-compact" popover><div id="photos-size-list" class="photo-picker-list" role="listbox" aria-label="Image resolutions"></div></div>
-        <dialog id="photos-viewer" class="photo-viewer" aria-labelledby="photos-viewer-title"><div class="photo-viewer-heading"><h2 id="photos-viewer-title">Image preview</h2><button type="button" id="photos-viewer-close" class="stock-text-button" aria-label="Close image preview">×</button></div><img id="photos-viewer-image" alt=""><p id="photos-viewer-meta" class="help-text"></p><div class="photo-viewer-actions"><button type="button" id="photos-viewer-use" class="btn btn-primary">Use as reference</button><button type="button" id="photos-viewer-save" class="btn btn-secondary">Save PNG</button><button type="button" id="photos-viewer-copy" class="btn btn-secondary">Copy</button><button type="button" id="photos-viewer-premiere" class="btn btn-secondary">Send to Premiere</button></div></dialog>
+        <dialog id="photos-viewer" class="photo-viewer" aria-labelledby="photos-viewer-title"><div class="photo-viewer-heading"><h2 id="photos-viewer-title">Image preview</h2><button type="button" id="photos-viewer-close" class="stock-text-button" aria-label="Close image preview">×</button></div><img id="photos-viewer-image" alt=""><p id="photos-viewer-meta" class="help-text"></p><div class="photo-viewer-actions"><button type="button" id="photos-viewer-use" class="btn btn-primary">Use as reference</button><button type="button" id="photos-viewer-save" class="btn btn-secondary">Save PNG</button><button type="button" id="photos-viewer-copy" class="btn btn-secondary">Copy</button><button type="button" id="photos-viewer-premiere" class="btn btn-secondary" data-editor-copy="Send to Premiere" data-editor-send>Send to Premiere</button></div></dialog>
       </div>
 
       <div class="tab-content" id="tab-audio">
@@ -314,7 +502,7 @@
               <label class="stock-field" for="audio-license">License from the track’s details<select id="audio-license"><option value="unverified">Check license / other audio</option><option value="youtube-standard">YouTube · Attribution not required</option><option value="cc-by">Creative Commons · Attribution required</option></select></label>
               <label class="stock-field" for="audio-credit">Attribution / license notes<textarea id="audio-credit" rows="3" maxlength="10000" placeholder="Paste the attribution copied from YouTube Studio"></textarea></label>
               <p class="help-text">License details are saved as entered. Follow the track’s terms for your intended use.</p>
-              <div class="audio-actions"><button class="btn btn-secondary" type="submit" id="audio-save">Keep in my library</button><button class="btn btn-primary hidden" type="button" id="audio-send">Send to Premiere</button><button class="stock-text-button" type="button" id="audio-copy-credit">Copy attribution</button></div>
+              <div class="audio-actions"><button class="btn btn-secondary" type="submit" id="audio-save">Keep in my library</button><button class="btn btn-primary hidden" type="button" id="audio-send" data-editor-copy="Send to Premiere" data-editor-send>Send to Premiere</button><button class="stock-text-button" type="button" id="audio-copy-credit">Copy attribution</button></div>
             </form>
           </section>
           <p class="audio-library-note">Unofficial audio archive. Check each track’s license before publishing.</p>
@@ -329,7 +517,7 @@
             <label class="audio-dock-volume" title="Volume"><span aria-hidden="true">♪</span><input type="range" id="audio-dock-volume" min="0" max="1" step="0.05" value="1" aria-label="Volume"></label>
             <button type="button" id="audio-dock-star" class="audio-star" aria-label="Favorite track" aria-pressed="false">☆</button>
           </div>
-          <div class="audio-dock-footer"><p id="audio-archive-status" class="help-text" role="status" aria-live="polite"></p><span id="audio-dock-license" class="hidden"></span><button type="button" class="stock-text-button" id="audio-info-open" aria-haspopup="dialog">Licenses &amp; credits</button><button type="button" class="stock-text-button hidden" id="audio-dock-details">Track details</button><button type="button" class="stock-text-button hidden" id="audio-dock-save">↓ Save MP3</button><button type="button" class="stock-text-button" id="audio-dock-send">Send to Premiere</button><button type="button" class="stock-text-button hidden" id="audio-archive-cancel">Cancel download</button></div>
+          <div class="audio-dock-footer"><p id="audio-archive-status" class="help-text" role="status" aria-live="polite"></p><span id="audio-dock-license" class="hidden"></span><button type="button" class="stock-text-button" id="audio-info-open" aria-haspopup="dialog">Licenses &amp; credits</button><button type="button" class="stock-text-button hidden" id="audio-dock-details">Track details</button><button type="button" class="stock-text-button hidden" id="audio-dock-save">↓ Save MP3</button><button type="button" class="stock-text-button" id="audio-dock-send" data-editor-copy="Send to Premiere" data-editor-send>Send to Premiere</button><button type="button" class="stock-text-button hidden" id="audio-archive-cancel">Cancel download</button></div>
           <p id="audio-status" class="help-text" role="status" aria-live="polite"></p>
         </div>
         <dialog id="audio-info-dialog" class="audio-info-dialog" aria-labelledby="audio-info-heading">
@@ -372,27 +560,44 @@
             <p class="help-text"><a id="stock-preview-license" class="link" href="https://creativecommons.org" data-stock-external>View usage terms ↗</a></p>
             <div class="stock-preview-controls">
               <label class="stock-field" for="stock-resolution">Download version<select id="stock-resolution"></select></label>
-              <div class="stock-preview-actions"><button type="button" class="btn btn-secondary" id="stock-download-btn">Download MP4</button><button type="button" class="btn btn-primary" id="stock-premiere-btn" disabled>Send to Premiere</button></div>
+              <div class="stock-preview-actions"><button type="button" class="btn btn-secondary" id="stock-download-btn">Download MP4</button><button type="button" class="btn btn-primary" id="stock-premiere-btn" disabled data-editor-copy="Send to Premiere" data-editor-send>Send to Premiere</button></div>
             </div>
-            <p class="help-text" id="stock-premiere-note">Connect Premiere to import the video into your Project panel.</p>
+            <p class="help-text" id="stock-premiere-note" data-editor-copy="Connect Premiere to import the video into your Project panel.">Connect Premiere to import the video into your Project panel.</p>
           </section>
           <p class="help-text stock-search-status" id="stock-search-status" role="status" aria-live="polite">Search for a subject, place, or mood.</p>
           <div class="stock-results" id="stock-results" aria-label="Stock footage search results"></div>
           <button type="button" class="btn btn-secondary hidden stock-more" id="stock-load-more">Load more videos</button>
           <div class="stock-folder"><span>Save to <span id="stock-folder-path"></span></span><button type="button" class="stock-text-button" id="stock-change-folder">Change folder</button></div>
         </div>
-        <div class="stock-footer"><p id="stock-action-status" role="status" aria-live="polite">Download an MP4 or send it to Premiere’s Project panel.</p><button type="button" class="btn btn-secondary btn-small hidden" id="stock-cancel-btn">Cancel download</button></div>
+        <div class="stock-footer"><p id="stock-action-status" role="status" aria-live="polite" data-editor-copy="Download an MP4 or send it to Premiere’s Project panel.">Download an MP4 or send it to Premiere’s Project panel.</p><button type="button" class="btn btn-secondary btn-small hidden" id="stock-cancel-btn">Cancel download</button></div>
       </div>
 
       <!-- Multicam Tab Content -->
       <div class="tab-content active" id="tab-multicam">
         <!-- Status bar -->
         <div id="status-bar" class="status-bar status-idle">
-          <span id="status-text">Waiting for Premiere...</span>
+          <span id="status-text" data-editor-copy="Waiting for Premiere...">Waiting for Premiere...</span>
         </div>
 
         <!-- Scrollable content -->
         <div class="content-scroll">
+          <section id="resolve-workflow" class="section resolve-workflow hidden" aria-labelledby="resolve-workflow-title">
+            <div class="section-header-row"><h2 id="resolve-workflow-title">Multicam for Resolve Free</h2><span class="resolve-local-label">Runs locally</span></div>
+            <p class="help-text">Apply reads the current Resolve timeline, saves the edit in SmoothyEdit Assets → Resolve, and sends it back automatically. Start Smoothy Connector once per Resolve session.</p>
+            <details id="resolve-advanced-options"><summary>Connection &amp; manual options</summary>
+            <div class="resolve-workflow-actions"><button type="button" class="btn btn-secondary btn-small" id="resolve-install-helper">Install Resolve helpers</button><button type="button" class="stock-text-button hidden" id="resolve-copy-helper-command">Copy Console command</button><button type="button" class="stock-text-button hidden" id="resolve-check-helper">Check helper</button></div>
+            <p class="help-text" id="resolve-helper-status" role="status">Experimental Lua helper. Sends XML when available, with a source-only fallback for synced source clips and isolated mono microphones.</p>
+            <details id="resolve-handoff-instructions"><summary>Manual XML handoff</summary><ol>
+              <li>In Resolve, export your synced timeline: <strong>File → Export → Timeline → Final Cut Pro 7 XML</strong>.</li>
+              <li>Load the XML here, map each microphone to a camera, then run Multicam.</li>
+              <li>Import the saved XML in Resolve using <strong>File → Import → Timeline</strong>.</li>
+            </ol><button type="button" id="resolve-load-manual" class="stock-text-button">Load timeline XML file</button></details>
+            <p class="help-text">Start <strong>Workspace → Scripts → Smoothy Connector</strong> once per Resolve session. Then load timelines and send results here automatically. Start it from the Scripts menu, not the Console.</p>
+            <div class="resolve-workflow-actions"><button type="button" class="btn btn-secondary btn-small" id="resolve-load-btn">Load current Resolve timeline</button><button type="button" class="btn btn-secondary btn-small hidden" id="resolve-result-btn">Send timeline to DaVinci Resolve</button></div>
+            <p id="resolve-workflow-status" class="help-text" role="status">Start with normal-speed source clips on separate camera tracks and isolated microphone tracks.</p>
+            <details><summary>Development support &amp; limitations</summary><p class="help-text">The helper tries Resolve’s XML export, then reads a source-only snapshot if export is refused. The snapshot requires matching-rate, normal-speed source clips and isolated mono microphones. It copies source timing and channel selection; grades, transforms, effects, fades, automation and mixer processing are not copied. Its exact native compatibility is still under test. Manual XML supports more audio layouts. The result has ordinary editable cuts with the chosen camera on top and alternates underneath. Decompose nested/multicam clips and remove retiming, transitions and animated effects before export. Run Multicam on a synced source assembly before finishing. Your original timeline is never overwritten.</p></details>
+            </details>
+          </section>
           <aside id="multicam-result-notice" class="multicam-review-notice hidden" aria-live="polite">
             <strong>Review this result</strong>
             <ul id="multicam-review-warnings"></ul>
@@ -413,7 +618,7 @@
             <p class="help-text">Choose each speaker’s audio and camera. Your choices are saved per sequence.</p>
 
             <div id="audio-tracks-list" class="tracks-list">
-              <p class="empty-message">Connect to Premiere to see audio tracks</p>
+              <p class="empty-message" data-editor-copy="Connect to Premiere to see audio tracks">Connect to Premiere to see audio tracks</p>
             </div>
           </section>
 
@@ -424,7 +629,7 @@
             <p class="help-text">The topmost camera track gets the winning camera at every cut and the bottom camera track keeps the other angle underneath. No clips are disabled.</p>
 
             <div id="video-tracks-list" class="tracks-list">
-              <p class="empty-message">Connect to Premiere to see video tracks</p>
+              <p class="empty-message" data-editor-copy="Connect to Premiere to see video tracks">Connect to Premiere to see video tracks</p>
             </div>
 
             <div class="form-group" style="margin-top: 12px;">
@@ -477,6 +682,7 @@
         <!-- Action footer -->
         <footer class="content-footer">
           <p id="multicam-action-note" class="footer-action-note">Cuts a duplicate with your nests, effects and continuous audio.</p>
+          <button type="button" id="resolve-cancel-btn" class="btn btn-secondary btn-small hidden">Cancel</button>
           <p id="footer-status" class="footer-status"></p>
           <button id="autocut-btn" class="btn btn-primary btn-large" aria-describedby="multicam-action-note" disabled>
             <span class="btn-icon">
@@ -495,7 +701,7 @@
       <div class="tab-content" id="tab-captions">
         <!-- Status bar -->
         <div id="captions-status-bar" class="status-bar status-idle">
-          <span id="captions-status-text">Waiting for Premiere...</span>
+          <span id="captions-status-text" data-editor-copy="Waiting for Premiere...">Waiting for Premiere...</span>
         </div>
 
         <!-- Scrollable content -->
@@ -508,10 +714,10 @@
           <!-- Source: sequence or local file -->
           <section class="section">
             <h2>Source</h2>
-            <p class="help-text">Transcribe a Premiere sequence, or any audio/video file on your computer.</p>
+            <p class="help-text" data-editor-copy="Transcribe a Premiere sequence, or any audio/video file on your computer.">Transcribe a Premiere sequence, or any audio/video file on your computer.</p>
 
             <div class="source-switch" id="captions-source-switch">
-              <button class="source-option active" id="captions-source-sequence" data-source="sequence">Premiere Sequence</button>
+              <button class="source-option active" id="captions-source-sequence" data-source="sequence" data-editor-copy="Premiere Sequence">Premiere Sequence</button>
               <button class="source-option" id="captions-source-file" data-source="file">Audio / Video File</button>
             </div>
 
@@ -557,7 +763,7 @@
             </div>
           </section>
           <!-- Sequence Info -->
-          <section class="section" id="captions-sequence-section">
+          <section class="section" id="captions-sequence-section"><button type="button" class="stock-text-button hidden" data-resolve-source data-resolve-load>Load Resolve timeline</button><p class="help-text hidden" data-resolve-source>Uses the loaded source timeline’s trims and microphone channels, without Resolve mixer effects. Load the timeline again here after changing it in Resolve.</p>
             <div class="section-header-row">
               <h2>Active Sequence</h2>
               <button id="captions-refresh-btn" class="btn btn-secondary btn-small">Refresh</button>
@@ -572,7 +778,7 @@
             <p class="help-text">Detected audio tracks that will be transcribed</p>
 
             <div id="captions-audio-tracks-list" class="tracks-list">
-              <p class="empty-message">Connect to Premiere to see audio tracks</p>
+              <p class="empty-message" data-editor-copy="Connect to Premiere to see audio tracks">Connect to Premiere to see audio tracks</p>
             </div>
 
             <div id="caption-model-progress" class="model-progress hidden">
@@ -628,7 +834,7 @@
               <h2>Edit captions</h2>
               <span id="captions-count" class="help-text"></span>
             </div>
-            <p class="help-text">Edit any subtitle or timing below. Search and replace words across the all subtitles. Changes apply to Save SRT and Send to Premiere.</p>
+            <p class="help-text" data-editor-copy="Edit any subtitle or timing below. Search and replace words across the all subtitles. Changes apply to Save SRT and Send to Premiere.">Edit any subtitle or timing below. Search and replace words across the all subtitles. Changes apply to Save SRT and Send to Premiere.</p>
             <div class="caption-find-replace" role="group" aria-label="Find and replace captions">
               <div class="caption-search-fields">
                 <div class="form-group">
@@ -663,7 +869,7 @@
 
         <!-- Action footer -->
         <footer class="content-footer">
-          <p id="captions-action-note" class="footer-action-note">Generate editable captions. Save an SRT or add a caption track to your Premiere sequence.</p>
+          <p id="captions-action-note" class="footer-action-note" data-editor-copy="Generate editable captions. Save an SRT or add a caption track to your Premiere sequence.">Generate editable captions. Save an SRT or add a caption track to your Premiere sequence.</p>
           <p id="captions-footer-status" class="footer-status"></p>
           <div class="footer-buttons">
             <button id="generate-captions-btn" class="btn btn-primary btn-large" aria-describedby="captions-action-note" disabled>
@@ -684,7 +890,7 @@
               </span>
               Save SRT
             </button>
-            <button id="import-captions-btn" class="btn btn-secondary" aria-describedby="captions-action-note" disabled>
+            <button id="import-captions-btn" class="btn btn-secondary" aria-describedby="captions-action-note" disabled data-editor-send>
               <span class="btn-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polygon points="5 3 19 12 5 21 5 3"></polygon>
@@ -700,7 +906,7 @@
       <div class="tab-content" id="tab-silence">
         <!-- Status bar -->
         <div id="silence-status-bar" class="status-bar status-idle">
-          <span id="silence-status-text">Waiting for Premiere...</span>
+          <span id="silence-status-text" data-editor-copy="Waiting for Premiere...">Waiting for Premiere...</span>
         </div>
 
         <!-- Scrollable content -->
@@ -711,7 +917,7 @@
               <h2>Active Sequence</h2>
               <button id="silence-refresh-btn" class="btn btn-secondary btn-small">Refresh</button>
             </div>
-            <p id="silence-sequence-name" class="sequence-info">No sequence loaded</p>
+            <button type="button" class="stock-text-button hidden" data-resolve-source data-resolve-load>Load Resolve timeline</button><p class="help-text hidden" data-resolve-source>Uses the loaded source timeline’s trims and microphone channels, without Resolve mixer effects. Load the timeline again here after changing it in Resolve.</p><p class="help-text hidden" data-resolve-source>XML handoff may omit grades, transforms, effects, fades, automation and mixer processing. Review the imported timeline before finishing.</p><button type="button" class="stock-text-button hidden" id="silence-send-resolve">Send exported timeline to DaVinci Resolve</button><p id="silence-sequence-name" class="sequence-info">No sequence loaded</p>
             <p id="silence-sequence-details" class="help-text"></p>
           </section>
 
@@ -721,7 +927,7 @@
             <p class="help-text">Select audio tracks to analyze for silence (will be combined)</p>
 
             <div id="silence-audio-tracks-list" class="tracks-list">
-              <p class="empty-message">Connect to Premiere to see audio tracks</p>
+              <p class="empty-message" data-editor-copy="Connect to Premiere to see audio tracks">Connect to Premiere to see audio tracks</p>
             </div>
           </section>
 
@@ -816,7 +1022,7 @@
           <section class="section shorts-signin-page">
             <span class="shorts-eyebrow">STUDIO</span>
             <h1>Find your next great short.</h1>
-            <p>Turn a Premiere sequence, subtitles, audio file, or YouTube video into moments worth sharing.</p>
+            <p data-editor-copy="Turn a Premiere sequence, subtitles, audio file, or YouTube video into moments worth sharing.">Turn a Premiere sequence, subtitles, audio file, or YouTube video into moments worth sharing.</p>
             <div class="shorts-signin-features">
               <span>Multiple clips or one best part</span>
               <span>Titles and descriptions ready to copy</span>
@@ -836,10 +1042,10 @@
           </section>
 
         <section id="shorts-footer" class="shorts-marker-actions hidden">
-          <p id="shorts-action-note" class="footer-action-note">Find clip ideas using Studio credits. Add markers to locate them in your Premiere timeline.</p>
+          <p id="shorts-action-note" class="footer-action-note" data-editor-copy="Find clip ideas using Studio credits. Add markers to locate them in your Premiere timeline.">Find clip ideas using Studio credits. Add markers to locate them in your Premiere timeline.</p>
           <p id="bestshorts-footer-status" class="footer-status"></p>
           <div class="shorts-footer-actions">
-            <button id="send-shorts-btn" type="button" class="btn btn-secondary" aria-describedby="shorts-action-note" disabled>Add markers in Premiere</button>
+            <button id="send-shorts-btn" type="button" class="btn btn-secondary" aria-describedby="shorts-action-note" disabled data-editor-copy="Add markers in Premiere">Add markers in Premiere</button>
             <button id="clear-markers-btn" type="button" class="btn btn-secondary btn-small" disabled>Clear Smoothy markers</button>
             <button id="clear-all-markers-btn" type="button" class="btn btn-secondary btn-small" disabled>Clear all…</button>
           </div>
@@ -1087,7 +1293,7 @@
           <!-- Input -->
           <section class="section" id="assets-input-section">
             <h2>Add an image</h2>
-            <p class="help-text">Import an SVG or a regular image, convert it to PNG, then send it straight to your Premiere timeline.</p>
+            <p class="help-text" data-editor-copy="Import an SVG or a regular image, convert it to PNG, then send it straight to your Premiere timeline.">Import an SVG or a regular image, convert it to PNG, then send it straight to your Premiere timeline.</p>
 
             <div id="assets-drop-zone" class="drop-zone">
               <div class="drop-zone-content">
@@ -1109,13 +1315,13 @@
           </section>
 
           <section id="assets-empty-guide" class="assets-empty-guide" aria-labelledby="assets-guide-title">
-            <h3 id="assets-guide-title">Your images, ready for Premiere</h3>
+            <h3 id="assets-guide-title" data-editor-copy="Your images, ready for Premiere">Your images, ready for Premiere</h3>
             <p>Bring graphics into your edit in a few clicks.</p>
             <ul class="assets-feature-list">
               <li><span class="assets-feature-icon" aria-hidden="true">✂</span><span><strong>Remove background</strong><br>Create a transparent cutout, free on your device.</span></li>
               <li><span class="assets-feature-icon" aria-hidden="true">↑</span><span><strong>Upscale 2× or 4×</strong><br>Enlarge your image while preserving detail and transparency.</span></li>
               <li><span class="assets-feature-icon" aria-hidden="true">↗</span><span><strong>Convert SVG to PNG</strong><br>Export a PNG with a transparent or custom background.</span></li>
-              <li><span class="assets-feature-icon" aria-hidden="true">+</span><span><strong>Copy, paste, and import</strong><br>Copy an image, paste it here, and send it straight to your Premiere Pro timeline.</span></li>
+              <li><span class="assets-feature-icon" aria-hidden="true">+</span><span><strong>Copy, paste, and import</strong><br><span data-editor-copy="Copy an image, paste it here, and send it straight to your Premiere Pro timeline.">Copy an image, paste it here, and send it straight to your Premiere Pro timeline.</span></span></li>
             </ul>
           </section>
 
@@ -1213,7 +1419,7 @@
 
         <!-- Action footer -->
         <footer class="content-footer assets-footer">
-          <p id="assets-action-note" class="footer-action-note">Export PNG saves all images. Save As and Send to Premiere use the selected image.</p>
+          <p id="assets-action-note" class="footer-action-note" data-editor-copy="Export PNG saves all images. Save As and Send to Premiere use the selected image.">Export PNG saves all images. Save As and Send to Premiere use the selected image.</p>
           <p id="assets-footer-status" class="footer-status"></p>
           <div class="assets-actions">
             <button id="assets-convert-btn" class="btn btn-secondary" aria-describedby="assets-action-note" disabled>
@@ -1226,7 +1432,7 @@
               </span>
               Export PNG
             </button>
-            <button id="assets-send-btn" class="btn btn-primary" aria-describedby="assets-action-note" disabled>
+            <button id="assets-send-btn" class="btn btn-primary" aria-describedby="assets-action-note" disabled data-editor-send>
               <span class="btn-icon">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polygon points="5 3 19 12 5 21 5 3"></polygon>
@@ -1311,17 +1517,18 @@
         <p id="chat-writing-status" class="help-text" role="status" aria-live="polite"></p>
       </div>
       <!-- Active NLE Selector -->
-      <div class="settings-section hidden">
+      <div class="settings-section">
         <h4>Active Editor</h4>
-        <p class="help-text">SmoothyEdit connects to Premiere Pro. DaVinci Resolve support is coming soon.</p>
+        <p class="help-text">Premiere uses its live bridge. Resolve Free uses Smoothy Connector for automatic sends and timeline loads. Start it from Workspace → Scripts once per Resolve session.</p>
         <div class="nle-selector">
           <button class="nle-option" id="nle-auto-btn" data-nle="null">
             <span class="nle-icon">Auto</span>
           </button>
           <button class="nle-option" id="nle-premiere-btn" data-nle="premiere">
-            <span class="nle-icon">Pr</span>
+            <span class="nle-icon"><img src="./editor-logos/premiere-pro.svg" width="28" height="28" alt=""/></span>
             <span class="nle-label">Premiere Pro</span>
           </button>
+          <button class="nle-option" id="nle-resolve-btn" data-nle="resolve"><span class="nle-icon"><img src="./editor-logos/davinci-resolve.svg" width="28" height="28" alt=""/></span><span class="nle-label">Resolve Free</span></button>
         </div>
         <p class="help-text" id="nle-status-text">Auto-detecting...</p>
       </div>
@@ -1468,6 +1675,7 @@
           <p class="help-text">Enter the code from your authenticator app</p>
         </div>
 
+        <p id="account-signup-credits" class="help-text hidden">Sign up for <strong>free</strong> and get <strong>100 AI credits</strong> every month.</p>
         <div id="login-error" class="error-message hidden" role="alert"></div>
 
         <button type="submit" id="login-submit-btn" class="btn btn-primary btn-large">

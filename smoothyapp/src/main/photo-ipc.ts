@@ -9,7 +9,7 @@ import { assertStudioEnabled } from './app-preferences';
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'smoothy-photo', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
 
-export function registerPhotos(deps: { window: () => BrowserWindow | null; connected: () => boolean; importToPremiere: (file: string) => Promise<any> }) {
+export function registerPhotos(deps: { window: () => BrowserWindow | null; connected: () => boolean; editor?:()=> 'premiere'|'resolve'|null; importToPremiere: (file: string,editor?:'premiere'|'resolve'|null) => Promise<any> }) {
   const service = new PhotoService({ owner: getStoredUserId, request: requestPhotoRoute, imageBytes: fetchPhotoBytes, track: trackTool, png: bytes => {
     const image = nativeImage.createFromBuffer(bytes), size = image.getSize();
     if (image.isEmpty() || size.width * size.height > 50_000_000) throw new Error('This image is invalid or too large to open.');
@@ -17,7 +17,7 @@ export function registerPhotos(deps: { window: () => BrowserWindow | null; conne
   } });
   const result = async (action: () => Promise<any>) => {
     try { assertStudioEnabled(); return { success: true, ...(await action()) }; }
-    catch (error) { return { success: false, error: error instanceof Error ? error.message : 'The image action failed. Please retry.' }; }
+    catch (error) { return { success: false, canceled: error instanceof Error && error.name === 'AbortError', error: error instanceof Error ? error.message : 'The image action failed. Please retry.' }; }
   };
   protocol.handle('smoothy-photo', async request => {
     try {
@@ -26,6 +26,7 @@ export function registerPhotos(deps: { window: () => BrowserWindow | null; conne
       return new Response(await service.bytes(url.pathname.slice(1)), { headers: { 'content-type': 'image/png', 'cache-control': 'no-store' } });
     } catch { return new Response('', { status: 404 }); }
   });
+  ipcMain.handle('photos-cancel', () => { service.cancel(); return { success: true }; });
   ipcMain.handle('photos-run', (_, input) => result(() => service.run(input)));
   ipcMain.handle('photos-history', (_, input) => result(() => service.history(input?.page || 1, input?.favorites === true)));
   ipcMain.handle('photos-favorite', (_, input) => result(async () => { await service.favorite(input?.id, input?.active); return {}; }));
@@ -43,15 +44,17 @@ export function registerPhotos(deps: { window: () => BrowserWindow | null; conne
     await fs.writeFile(choice.filePath, await service.bytes(id)); trackTool('photos_save'); return {};
   }));
   ipcMain.handle('photos-premiere', (_, id) => result(async () => {
-    if (!deps.connected()) throw new Error('Connect Premiere before sending an image.');
+    const editor=deps.editor?.();
+    if (!deps.connected()) throw new Error('Connect the selected editor before sending an image.');
     const bytes = await service.bytes(id);
     const folder = path.join(app.getPath('pictures'), 'SmoothyEdit AI Photos');
     await fs.mkdir(folder, { recursive: true });
     // Permanent media: Premiere references this file after the app closes.
     const file = path.join(folder, `${id}.png`); await fs.writeFile(file, bytes);
-    const imported = await deps.importToPremiere(file);
+    const imported = await deps.importToPremiere(file,editor);
+    if(imported?.canceled)return imported;
     if (!imported?.success) throw new Error(imported?.error || 'Image saved. Premiere could not import it; please retry.');
-    trackTool('photos_premiere'); return {};
+    trackTool(imported.nle==='resolve'?'photos_resolve':'photos_premiere'); return {};
   }));
   return service;
 }

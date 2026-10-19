@@ -1,11 +1,12 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
 import vm from 'node:vm';
-const bundle = await build({ entryPoints: [new URL('../src/main/web-api.ts', import.meta.url).pathname], bundle: true, platform: 'node', format: 'cjs', write: false, plugins: [{ name: 'auth', setup(builder) {
+const bundle = await build({ entryPoints: [fileURLToPath(new URL('../src/main/web-api.ts', import.meta.url))], bundle: true, platform: 'node', format: 'cjs', write: false, plugins: [{ name: 'auth', setup(builder) {
   builder.onResolve({ filter: /^\.\/auth-service$/ }, () => ({ path: 'auth', namespace: 'fixture' }));
-  builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: `export const getStoredUserId=()=>globalThis.fixture.user,getAuthHeaders=()=>({'Content-Type':'application/json',Authorization:'Bearer fixture-session'});` }));
+  builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: `export const getAuthState=()=>({user:{tier:globalThis.fixture.tier || 'pro'}}); export const getStoredUserId=()=>globalThis.fixture.user,getAuthHeaders=()=>({'Content-Type':'application/json',Authorization:'Bearer fixture-session'});` }));
 } }] });
 function fixture() {
   const f = { user: 'account-a', calls: [], response: new Response(JSON.stringify({ imageUrl: 'fixture' }), { status: 200 }) };

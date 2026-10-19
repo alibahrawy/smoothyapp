@@ -144,8 +144,8 @@ export async function listStudioHistory(mode: string, page = 1) {
 }
 
 /**
- * Remaining Studio credits for the signed-in user. Free accounts start at 100
- * and Pro at 2,000 per month; credits are only spent on cloud calls.
+ * Remaining Studio credits for the signed-in user. Legacy free balances may
+ * remain readable; signed-in Free and Pro accounts use their tier allowance.
  */
 export async function getCredits(): Promise<StudioCredits> {
   const response = await fetch(`${API_BASE}/api/credits`, { headers: requireAuth(), signal: studioSignal() });
@@ -282,12 +282,12 @@ export async function getYoutubeTranscript(url: string): Promise<{ transcript: s
 }
 
 /** Internal fixed-route client. Credentials stay in the main process. */
-export async function requestPhotoRoute(route: string, options: { method?: string; body?: unknown } = {}): Promise<any> {
+export async function requestPhotoRoute(route: string, options: { method?: string; body?: unknown; signal?: AbortSignal } = {}): Promise<any> {
   if (!/^\/api\/(generate-reaction|reactions(?:\/[A-Za-z0-9%-]+)?)(?:\?[^#]*)?$/.test(route)) throw new Error('Unsupported photo endpoint.');
   const response = await fetch(`${API_BASE}${route}`, {
     headers: requireAuth(), method: options.method || 'GET',
     ...(options.body !== undefined && { body: JSON.stringify(options.body) }),
-    signal: AbortSignal.any([studioSignal(), AbortSignal.timeout(240000)]),
+    signal: AbortSignal.any([studioSignal(), AbortSignal.timeout(240000), ...(options.signal ? [options.signal] : [])]),
   });
   if (response.status === 401) throw new NotSignedInError('Your session expired. Sign in again to use AI Photos.');
   if (!response.ok) throw new Error(await readError(response));

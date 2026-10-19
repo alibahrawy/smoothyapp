@@ -9,7 +9,7 @@ import { assertStudioEnabled } from './app-preferences';
 
 export function registerStudioTools(window: () => BrowserWindow | null, enabled: () => boolean) {
   const service = createStudioService({ owner: getStoredUserId, enabled, request: requestStudioText, saveHistory: saveStudioHistory, track: trackTool,
-    verifyAccess: async mode => { if (studioProModes.includes(mode) && (await getCredits()).tier !== 'pro') throw new Error('This tool requires Studio Pro. See the plan at smoothyedit.com/pricing.'); },
+    verifyAccess: async mode => { if (studioProModes.includes(mode) && (await getCredits()).tier !== 'pro') throw new Error('This tool requires Studio Pro. See smoothyedit.com/pricing.'); },
   });
   const wrap = async (fn: () => Promise<any>) => { try { return { success: true, ...await fn() }; } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Studio request failed.' }; } };
   ipcMain.handle('studio-tools-run', (_, input) => wrap(() => service.run(input)));

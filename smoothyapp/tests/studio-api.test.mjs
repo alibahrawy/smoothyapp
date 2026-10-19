@@ -1,10 +1,11 @@
+import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
 import vm from 'node:vm';
-const bundle = await build({ stdin: { contents: "export * from './web-api';export * from './app-preferences';", resolveDir: new URL('../src/main', import.meta.url).pathname, loader: 'ts' }, bundle: true, platform: 'node', format: 'cjs', write: false, plugins: [{ name: 'auth', setup(builder) {
+const bundle = await build({ stdin: { contents: "export * from './web-api';export * from './app-preferences';", resolveDir: fileURLToPath(new URL('../src/main', import.meta.url)), loader: 'ts' }, bundle: true, platform: 'node', format: 'cjs', write: false, plugins: [{ name: 'auth', setup(builder) {
   builder.onResolve({filter:/^\.\/auth-service$/}, () => ({path:'auth',namespace:'fixture'}));
-  builder.onLoad({filter:/.*/,namespace:'fixture'}, () => ({contents: "export const getStoredUserId=()=>globalThis.fixture.user;export const getAuthHeaders=()=>({'Content-Type':'application/json',Authorization:'Bearer fixture-token'});"}));
+  builder.onLoad({filter:/.*/,namespace:'fixture'}, () => ({contents: "export const getAuthState=()=>({user:{tier:globalThis.fixture.tier || 'pro'}}); export const getStoredUserId=()=>globalThis.fixture.user;export const getAuthHeaders=()=>({'Content-Type':'application/json',Authorization:'Bearer fixture-token'});"}));
 } }] });
 function fixture() {
   const f = { user: 'a', enabled: true, calls: [], response: () => new Response('{"titles":["A useful idea"]}') }, module = {exports:{}};
@@ -17,6 +18,15 @@ test('native Studio text uses signed fixed endpoints and reads streamed Unicode 
   assert.equal(await api.requestStudioText('/api/analyze', {analysisMode:'title',subtitleText:'Speech'}, new AbortController().signal), 'A 🌟 idea');
   assert.equal(f.calls[0][0], 'https://smoothyedit.com/api/analyze'); assert.equal(f.calls[0][1].headers.Authorization, 'Bearer fixture-token'); assert.match(f.calls[0][1].body, /analysisMode/);
   await assert.rejects(api.requestStudioText('https://evil.test', {}, new AbortController().signal), /Unsupported/); assert.equal(f.calls.length,1);
+});
+
+test('signed-in free accounts can request generation; anonymous accounts cannot fetch or spend',async()=>{
+ const {f,api}=fixture();f.tier='free';
+ for(const route of ['/api/analyze','/api/chat','/api/follow-up'])await api.requestStudioText(route,{},new AbortController().signal);
+ await api.requestPhotoRoute('/api/generate-reaction',{method:'POST'});await api.requestPhotoRoute('/api/generate-reaction?source=desktop',{method:'POST'});
+ assert.equal(f.calls.length,5);f.user=null;
+ for(const call of [()=>api.requestStudioText('/api/chat',{},new AbortController().signal),()=>api.requestPhotoRoute('/api/generate-reaction',{method:'POST'}),()=>api.analyzeShorts('Speech'),()=>api.getYoutubeTranscript('https://youtube.com/watch?v=example')])await assert.rejects(call(),/Sign in/);
+ assert.equal(f.calls.length,5);
 });
 test('all cloud AI entrypoints reject disabled settings before fetching; free local services are not involved', async () => {
   const {f,api} = fixture(); f.enabled=false;
