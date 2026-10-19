@@ -1,0 +1,72 @@
+# Release-repo template: copy to .github/workflows at the public repo root.
+name: Stage verified Linux release
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful native Build Linux run ID
+        required: true
+      release_tag:
+        description: Existing draft release tag
+        required: true
+permissions:
+  actions: read
+  contents: write
+jobs:
+  stage:
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BUILD_RUN_ID: ${{ inputs.run_id }}
+      DRAFT_RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify source run and draft
+        run: |
+          gh run view "$BUILD_RUN_ID" --repo "$GITHUB_REPOSITORY" --json conclusion,workflowName,headBranch,headSha > /tmp/source-run.json
+          gh release view "$DRAFT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft > /tmp/draft.json
+          python3 - <<'PY'
+          import json,os
+          run=json.load(open('/tmp/source-run.json'))
+          assert run['conclusion']=='success' and run['workflowName']=='Build Linux' and run['headBranch']=='main',run
+          assert json.load(open('/tmp/draft.json'))['isDraft'], 'Refusing to modify a public release'
+          version=json.load(open('smoothyapp/package.json'))['version']
+          assert os.environ['DRAFT_RELEASE_TAG']=='v'+version
+          print('Verified native build:',run['headSha'])
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+          pattern: smoothyedit-linux-*
+          merge-multiple: true
+          path: release-linux
+      - name: Verify architecture, package version and updater hashes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess,json,hashlib,base64,re
+          root=Path('release-linux'); version=json.load(open('smoothyapp/package.json'))['version']
+          images=list(root.glob('*.AppImage')); debs=list(root.glob('*.deb'))
+          assert len(images)==2 and len(debs)==2
+          for p in images:
+            data=p.read_bytes(); assert data[:4]==b'\x7fELF'
+            arch=int.from_bytes(data[18:20],'little' if data[5]==1 else 'big')
+            assert arch==(183 if 'arm64' in p.name else 62),(p.name,arch)
+          for p in debs:
+            field=lambda key: subprocess.check_output(['dpkg-deb','-f',str(p),key],text=True).strip()
+            assert field('Version')==version
+            assert field('Architecture')==('arm64' if 'arm64' in p.name else 'amd64')
+          manifests=list(root.glob('latest-linux*.yml')); assert len(manifests)==2
+          for p in manifests:
+            text=p.read_text(); assert re.search(r'^version: '+re.escape(version)+r'$',text,re.M)
+            entries=re.findall(r'- url: (\S+)\n\s+sha512: (\S+)\n\s+size: (\d+)',text); assert entries
+            for name,digest,size in entries:
+              data=(root/name).read_bytes(); assert len(data)==int(size)
+              assert base64.b64encode(hashlib.sha512(data).digest()).decode()==digest
+          files=sorted(root.iterdir()); assert all(p.suffix in ['.AppImage','.deb','.yml'] for p in files)
+          hashes=''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in files)
+          (root/'SHA256SUMS-linux.txt').write_text(hashes); print(hashes)
+          PY
+      - name: Attach verified artifacts to the draft only
+        run: gh release upload "$DRAFT_RELEASE_TAG" release-linux/* --repo "$GITHUB_REPOSITORY"
