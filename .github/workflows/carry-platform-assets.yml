@@ -52,7 +52,10 @@ jobs:
               file=pathlib.Path('carry')/asset['name']
               assert file.stat().st_size==asset['size'],asset['name']
               with file.open('rb') as data:
-                  digest=hashlib.file_digest(data,'sha256').hexdigest()
+                  hasher=hashlib.sha256()
+                  for chunk in iter(lambda:data.read(1048576),b''):
+                      hasher.update(chunk)
+                  digest=hasher.hexdigest()
               assert 'sha256:'+digest==asset['digest'],asset['name']
               print('Verified:',asset['name'])
           PY
