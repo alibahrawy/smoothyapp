@@ -62,7 +62,8 @@ function fixture(options = {}) {
       setInPoint(ticks, mediaType) { this._inTicks = String(Number(ticks)); }, setOutPoint(ticks, mediaType) { this._outTicks = String(Number(ticks)); } },
     effects: { lumetri: 'warm', position: [960, 540], keyframes: [{ time: 34, value: 20 }] }, ...attrs });
   const copyClip = item => ({ ...item, start: new Time(item.start.seconds), end: new Time(item.end.seconds), inPoint: new Time(item.inPoint.seconds), outPoint: new Time(item.outPoint.seconds), effects: structuredClone(item.effects) });
-  const track = (name, clips, muted = false) => ({ name, clips: collection(clips, 'numItems'), muted,
+  let nextTrackId = 1;
+  const track = (name, clips, muted = false) => ({ id: nextTrackId++, name, clips: collection(clips, 'numItems'), muted,
     isMuted() { return this.muted; }, setMute(value) { this.muted = !!value; },
     overwriteClip(item, ticks) {
       // Actual Premiere inserts linked audio even through a video track API.
@@ -87,7 +88,9 @@ function fixture(options = {}) {
       state.files.set(file, 128); return 0;
     },
     clone() {
-      const clone = makeSequence('clone-' + (++state.clones), this.videoTracks.map(item => track(item.name, item.clips.map(copyClip), item.muted)), this.audioTracks.map(item => track(item.name, item.clips.map(copyClip), item.muted)));
+      const copyTrack = item => Object.assign(track(item.name, item.clips.map(copyClip), item.muted), { id: item.id });
+      const clone = makeSequence('clone-' + (++state.clones), this.videoTracks.map(copyTrack), this.audioTracks.map(copyTrack));
+      clone.end = new Time(this.end.seconds);
       clone.markers = structuredClone(this.markers); clone.captions = structuredClone(this.captions); clone.mixer = structuredClone(this.mixer);
       project.sequences.push(clone); return true; // Deliberately not a Sequence.
     }
@@ -101,11 +104,12 @@ function fixture(options = {}) {
   function Folder(folder) { this.fsName = folder; this.name = path.basename(folder); this.exists = folder.includes('57415645') || (options.renderAudio ? fs.existsSync(folder) : this.name === 'smoothyedit-multicam-ABC123'); this.getFiles = () => [{ fsName: folder + '/Waveform.epr' }]; }
   Folder.temp = { fsName: '/fixture/tmp' }; Folder.appPackage = { fsName: '/fixture/Premiere.app' };
   const context = { app: { project, enableQE() {} }, Time, File, Folder, console, qe: { project: { getActiveSequence() { return {
-    addTracks(count, after, audioCount) {
+    addTracks(count, insertAt, audioCount) {
       if (options.failScratchAdd) return;
       assert.equal(audioCount, 0);
       const seq = project.activeSequence;
-      seq.videoTracks.splice(after + 1, 0, track('Scratch', []));
+      // Native QE inserts AT the supplied zero-based index, not after it.
+      seq.videoTracks.splice(options.wrongScratchPosition ? insertAt - 1 : insertAt, 0, track('Scratch', []));
       if (options.scratchAudioMutation) seq.audioTracks.push(track('Unexpected Audio', []));
     },
     removeVideoTrack(index) {
@@ -325,6 +329,49 @@ test('three camera swaps keep every angle once', () => {
     assert.deepEqual([...playing].sort(), ['Nest 1', 'Nest 2', 'Title']);
     assert.equal(playing[2], ['Nest 1', 'Nest 2', 'Title'][ranges[Math.floor(frame / 50)].trackIndex]);
   }
+});
+
+test('last-track cameras swap without spare tracks at frame zero or a later timeline start', () => {
+  for (const cameraCount of [2, 3]) for (const offset of [0, 19353]) {
+    const f = fixture();
+    if (cameraCount === 2) f.source.videoTracks.pop();
+    for (const track of f.source.videoTracks) for (const clip of track.clips) {
+      clip.start.seconds += offset / 25; clip.end.seconds += offset / 25;
+    }
+    f.source.end.seconds += offset / 25;
+    const before = f.json(f.source), indices = Array.from({ length: cameraCount }, (_, i) => i);
+    const prepared = f.call('prepareMulticamTimeline', { jobId: f.jobId, sequenceId: 'source', timelineRevision: f.context.smoothyTimelineRevision(f.source, false),
+      audioDirectory: '/fixture/smoothyedit-multicam-ABC123', videoTrackIndices: indices, audioTrackIndices: [0, 1] });
+    assert.equal(prepared.success, true, prepared.error);
+    const clone = f.project.sequences[1], audio = f.json(clone.audioTracks), trackIds = clone.videoTracks.map(track => track.id);
+    const ranges = offset ? [{ startFrame: 0, endFrame: offset, trackIndex: -1 }] : [];
+    for (let i = 0; i < 5; i++) ranges.push({ startFrame: offset + i * 50, endFrame: offset + (i + 1) * 50, trackIndex: i % cameraCount });
+    const result = f.call('applyMulticamTimelineCuts', { jobId: f.jobId, ranges });
+    assert.equal(result.success, true, result.error);
+    assert.deepEqual(clone.videoTracks.map(track => track.id), trackIds);
+    for (let frame = offset; frame < offset + 250; frame++) {
+      const parts = clone.videoTracks.map(track => track.clips.filter(clip => Math.round(clip.start.seconds * 25) <= frame && Math.round(clip.end.seconds * 25) > frame));
+      assert.ok(parts.every(pieces => pieces.length === 1 && !pieces[0].disabled));
+      const winner = ranges.find(range => range.startFrame <= frame && range.endFrame > frame).trackIndex;
+      assert.equal(parts[cameraCount - 1][0].projectItem.nodeId, f.source.videoTracks[winner].clips[0].projectItem.nodeId);
+      assert.deepEqual(parts.flat().map(clip => clip.projectItem.nodeId).sort(), f.source.videoTracks.map(track => track.clips[0].projectItem.nodeId).sort());
+      for (const [clip] of parts) {
+        const original = f.source.videoTracks.find(track => track.clips[0].projectItem.nodeId === clip.projectItem.nodeId).clips[0];
+        assert.deepEqual(clip.effects, original.effects);
+      }
+    }
+    assert.deepEqual(f.json(clone.audioTracks), audio); assert.deepEqual(f.json(f.source), before);
+  }
+});
+
+test('an unexpected insertion position is rejected before moves or removal of user tracks', () => {
+  const f = fixture({ wrongScratchPosition: true }); f.prepare();
+  const before = f.json(f.source), clone = f.project.sequences[1], trackIds = clone.videoTracks.map(track => track.id);
+  const result = f.call('applyMulticamTimelineCuts', { jobId: f.jobId, ranges: [{ startFrame: 0, endFrame: 250, trackIndex: 0 }] });
+  assert.equal(result.success, false); assert.match(result.error, /shifted an existing video track/);
+  assert.equal(f.state.moves.length, 0);
+  assert.ok(trackIds.every(id => clone.videoTracks.some(track => track.id === id)));
+  assert.deepEqual(f.json(f.source), before);
 });
 test('final audit rejects a wrong camera even when every video frame is covered', () => {
   const f = fixture({ afterMove(seq, index) {
@@ -585,7 +632,7 @@ test('refresh and final camera edits load current host code even when Premiere r
     getSystemPath() { return '/fixture'; }
     evalScript(script, callback) {
       // Native Premiere reintroduced the previous host on subsequent calls.
-      vm.runInContext(host.replace('20261004-multicam-reverse-track-v32', 'cached-host').replace('multicamTimelineVersion: 7', 'multicamTimelineVersion: 6'), f.context);
+      vm.runInContext(host.replace(/var SMOOTHY_CEP_HOST_VERSION = "[^"]+";/, 'var SMOOTHY_CEP_HOST_VERSION = "cached-host";').replace('multicamTimelineVersion: 7', 'multicamTimelineVersion: 6'), f.context);
       f.context.applyMulticamTimelineCuts = () => { unsafeCalls++; throw Error('Cached camera overwrite invoked'); };
       callback(String(vm.runInContext(script, f.context)));
     }

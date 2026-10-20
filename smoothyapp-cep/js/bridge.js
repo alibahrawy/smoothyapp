@@ -9,7 +9,7 @@
   'use strict';
 
   const csInterface = new CSInterface();
-  const HOST_SCRIPT_VERSION = '20261004-multicam-reverse-track-v32';
+  const HOST_SCRIPT_VERSION = '20261020-multicam-append-track-v33';
   const MARKER_PAYLOAD_CHUNK_SIZE = 8000;
   let ws = null;
   let isConnected = false;

@@ -48,7 +48,7 @@ if (typeof JSON === 'undefined') {
   };
 }
 
-var SMOOTHY_CEP_HOST_VERSION = "20261004-multicam-reverse-track-v32";
+var SMOOTHY_CEP_HOST_VERSION = "20261020-multicam-append-track-v33";
 
 function getSmoothyCepHostVersion() {
   return SMOOTHY_CEP_HOST_VERSION;
@@ -311,18 +311,28 @@ function applyMulticamTimelineCuts(payloadJSON) {
         var item = track.getItemAt(i);
         if (item.type === "Clip" && Math.round(Number(item.start.ticks) / ticksPerFrame) === piece.start + offset && Math.round(Number(item.end.ticks) / ticksPerFrame) === piece.end + offset) { found = item; break; }
       }
-      if (!found || typeof found.moveToTrack !== "function") throw new Error("Premiere could not move camera video safely at frame " + piece.start + ".");
+      if (!found) throw new Error("Premiere could not locate camera V" + (from + 1) + " at frame " + piece.start + " for the video move. The original is untouched; inspect the incomplete duplicate.");
+      if (typeof found.moveToTrack !== "function") throw new Error("This Premiere version does not expose camera track moves. The original is untouched; inspect the incomplete duplicate.");
       // Video track delta, zero audio track delta, zero time delta, move (not copy).
       found.moveToTrack(to - from, 0, "00:00:00:00", false);
       smoothyMulticamFindClip(seq, to, piece, offset, frame);
     }
     originalTrackCount = seq.videoTracks.numTracks;
+    var originalTrackIds = [];
+    for (t = 0; t < originalTrackCount; t++) originalTrackIds.push(String(seq.videoTracks[t].id));
     function ensureScratchTrack() {
       if (scratchIndex >= 0) return;
       if (typeof qeSeq.addTracks !== "function" || typeof qeSeq.removeVideoTrack !== "function") throw new Error("This Premiere version cannot swap camera video safely.");
       // Append one video-only track; never reuse or remove the user's tracks.
-      qeSeq.addTracks(1, originalTrackCount - 1, 0);
+      // QE's second argument is the zero-based insertion position, not an
+      // "insert after" index. Inserting at count - 1 shifts the last camera
+      // into our supposed scratch slot and makes the camera lookup fail.
+      qeSeq.addTracks(1, originalTrackCount, 0);
       if (seq.videoTracks.numTracks !== originalTrackCount + 1) throw new Error("Premiere could not create the temporary camera track.");
+      for (var i = 0; i < originalTrackCount; i++) {
+        if (String(seq.videoTracks[i].id) !== originalTrackIds[i]) throw new Error("Premiere shifted an existing video track while preparing the duplicate. The original is untouched; inspect the incomplete duplicate.");
+      }
+      if (seq.videoTracks[originalTrackCount].clips.numItems) throw new Error("Premiere did not append an empty temporary camera track. The original is untouched; inspect the incomplete duplicate.");
       scratchIndex = originalTrackCount;
       qeSeq = qe.project.getActiveSequence();
       verifyAudio();

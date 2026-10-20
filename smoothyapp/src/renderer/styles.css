@@ -3536,6 +3536,10 @@ body {
   -webkit-backdrop-filter: none;
   animation: none;
 }
+/* Windows caption buttons occupy the shared title bar even above overlays. */
+body.platform-windows #settings-modal {
+  top: max(var(--titlebar-height), env(titlebar-area-height, var(--titlebar-height)));
+}
 #settings-modal .settings-modal {
   display: flex;
   flex-direction: column;

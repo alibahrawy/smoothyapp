@@ -1,5 +1,9 @@
 # smoothyapp — Agent Notes
 
+## Windows 2.1.1 patch release authorized — 2026-10-20
+
+The owner requested fixing the Settings title-bar/navigation overlap and publishing Windows **2.1.1** with the Multicam frame-0/timeline-start fix. Related commits/pushes, Windows installer/updater publication and mandatory website changelog deployment are authorized. Carry forward verified Mac/Linux **2.1.0** artifacts and metadata without renaming or rebuilding them as 2.1.1.
+
 This is the **public release repo** for the SmoothyEdit desktop app
 (`alibahrawy/smoothyapp`). Source of truth / monorepo lives at
 `/Users/alibahrawy/Documents/Coding/smoothyedit`.

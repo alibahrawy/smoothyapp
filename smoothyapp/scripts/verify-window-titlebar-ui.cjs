@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'smoothy-resolve-ui-'));
 app.setPath('userData', path.join(scratch, 'profile'));
-const captures = path.resolve(root, '..', 'docs/reviews/smoothyapp-windows-titlebar'); fs.mkdirSync(captures, { recursive: true });
+const captures = process.env.SMOOTHY_UI_CAPTURES || path.resolve(root, '..', 'docs/reviews/smoothyapp-windows-titlebar'); fs.mkdirSync(captures, { recursive: true });
 const methods = [...fs.readFileSync(path.join(root, 'src/preload/index.ts'), 'utf8').matchAll(/^  (\w+):/gm)].map(m => m[1]);
 const clip = name => ({ name, path: '/fixture/media.wav', start: 0, end: 60, inPoint: 0, outPoint: 60 });
 const sequence = { hasSequence: true, nle: 'resolve', id: 'fixture-resolve', timelineRevision: 'fixture-resolve', name: 'Synced interview', duration: 60, fps: 25, width: 1920, height: 1080,
@@ -46,7 +46,7 @@ app.whenReady().then(async()=>{
  try{
   await win.loadFile(path.join(root,'out/renderer/index.html'));win.showInactive();await pause(500);await js(`document.body.classList.add('platform-windows')`);await win.webContents.insertCSS('* { animation: none !important; transition: none !important; }');
   const proof=[];
-  for(const [width,height] of [[900,700],[600,500]]){
+  for(const [width,height] of [[1180,740],[900,700],[600,500]]){
    win.setSize(width,height);await pause(200);
    for(const tab of ['multicam','photos','chat','local-audio']){
     await js(`document.querySelector('[data-tab="${tab}"]').click()`);await pause(50);const data=await metrics();
@@ -56,6 +56,20 @@ app.whenReady().then(async()=>{
     proof.push({width,height,tab,...data,topInset:content.y-outer.y});
    }
    fs.writeFileSync(path.join(captures,`titlebar-${width}.png`),(await win.webContents.capturePage()).toPNG());
+   await js(`document.getElementById('settings-btn').click()`);await pause(80);
+   const settings=await js(`(()=>{const rect=id=>{const r=document.getElementById(id).getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom}};return{overlay:rect('settings-modal'),close:rect('settings-close-btn'),header:document.querySelector('#settings-modal .modal-header').getBoundingClientRect().toJSON(),body:rect('settings-body'),captionHeight:navigator.windowControlsOverlay.getTitlebarAreaRect().height,overflow:document.documentElement.scrollWidth>innerWidth,focused:document.activeElement.id}})()`);
+   assert.ok(settings.overlay.y>=settings.captionHeight,'Settings must begin below native caption controls');
+   assert.ok(settings.close.y>=settings.captionHeight,'Close settings overlaps native controls');
+   assert.ok(settings.close.x+settings.close.width<=width&&settings.close.bottom<height);
+   assert.equal(settings.focused,'settings-close-btn');assert.equal(settings.overflow,false);
+   assert.ok(settings.body.height>150);assert.ok(settings.body.bottom<=height);
+   await js(`document.getElementById('settings-body').scrollTop=500`);
+   assert.equal(await js(`document.querySelector('#settings-modal .modal-header').getBoundingClientRect().y`),settings.header.y);
+   proof.push({width,height,settings});
+   fs.writeFileSync(path.join(captures,`settings-${width}.png`),(await win.webContents.capturePage()).toPNG());
+   await js(`document.getElementById('settings-close-btn').click()`);
+   assert.equal(await js(`document.getElementById('settings-modal').classList.contains('hidden')`),true);
+   assert.equal(await js(`document.querySelector('.app-container').inert`),false);
   }
   assert.ok(colors.length>=8);assert.ok(new Set(colors).size>=3);
   assert.equal(chrome.setWindowTitlebarColor(win,'transparent'),false);assert.equal(chrome.setWindowTitlebarColor(win,'#FFFFFF', 'darwin'),false);
@@ -64,8 +78,8 @@ app.whenReady().then(async()=>{
   win.minimize();await until(()=>win.isMinimized());win.restore();await until(()=>!win.isMinimized());
   fs.writeFileSync(path.join(captures,'native-metrics.json'),JSON.stringify({proof,colors},null,2));
   let closed=false;win.once('closed',()=>closed=true);win.close();await until(()=>closed);
-  fs.writeFileSync(path.join(captures,'native-result.json'),JSON.stringify({passed:true,checks:['native-overlay','38px-shared-bar','no-extra-titlebar','tool-accents','900px-layout','600px-layout','maximize','restore','minimize','close','Mac/Linux-options']},null,2));
-  console.log('PASS: native Windows overlay shares the 38px app bar; no extra caption row; colors follow tools; reserved native control area at 900/600px; maximize/restore/minimize/close and unchanged Mac/Linux options.');app.exit(0);
+  fs.writeFileSync(path.join(captures,'native-result.json'),JSON.stringify({passed:true,checks:['native-overlay','38px-shared-bar','no-extra-titlebar','tool-accents','1180px-layout','900px-layout','600px-layout','settings-caption-clearance','settings-header-fixed-on-scroll','settings-close-focus-and-return','maximize','restore','minimize','close','Mac/Linux-options']},null,2));
+  console.log('PASS: native Windows controls share the 38px app bar; tool accents; Settings below caption controls at 1180/900/600px; fixed header on scroll; settings close/focus; maximize/restore/minimize/close; unchanged Mac/Linux options.');app.exit(0);
  }catch(error){console.error(error);if(!win.isDestroyed())win.destroy();app.exit(1);}
 });
 app.once('will-quit',()=>{try{fs.rmSync(scratch,{recursive:true,force:true});}catch{}});
