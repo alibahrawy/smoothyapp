@@ -1,0 +1,72 @@
+name: Carry unchanged platform assets
+on:
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: Previous verified release
+        required: true
+        default: v2.1.0
+      release_tag:
+        description: Existing draft patch release
+        required: true
+        default: v2.1.1
+permissions:
+  contents: write
+concurrency:
+  group: carry-platform-assets-${{ inputs.release_tag }}
+  cancel-in-progress: false
+jobs:
+  carry:
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      SOURCE_TAG: ${{ inputs.source_tag }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - name: Validate releases and expected artifacts
+        run: |
+          gh release view "$SOURCE_TAG" --json assets,isDraft,tagName > source.json
+          gh release view "$RELEASE_TAG" --json isDraft,tagName > target.json
+          python3 - <<'PY'
+          import json,os,re
+          assert os.environ['GH_REPO']=='alibahrawy/smoothyapp'
+          for key in ['SOURCE_TAG','RELEASE_TAG']:
+              assert re.fullmatch(r'v\d+\.\d+\.\d+',os.environ[key])
+          source=json.load(open('source.json')); target=json.load(open('target.json'))
+          assert not source['isDraft'] and target['isDraft']
+          assert source['tagName']!=target['tagName']
+          assets=[a for a in source['assets'] if 'mac' in a['name'] or 'linux' in a['name']]
+          assert assets and any(a['name']=='latest-mac.yml' for a in assets)
+          for asset in assets:
+              assert os.path.basename(asset['name'])==asset['name']
+              assert asset['state']=='uploaded' and asset['digest'].startswith('sha256:')
+          json.dump(assets,open('expected.json','w'))
+          PY
+      - name: Download and verify unchanged platform artifacts
+        run: |
+          gh release download "$SOURCE_TAG" --pattern '*mac*' --pattern '*linux*' --dir carry
+          python3 - <<'PY'
+          import hashlib,json,pathlib
+          for asset in json.load(open('expected.json')):
+              file=pathlib.Path('carry')/asset['name']
+              assert file.stat().st_size==asset['size'],asset['name']
+              with file.open('rb') as data:
+                  digest=hashlib.file_digest(data,'sha256').hexdigest()
+              assert 'sha256:'+digest==asset['digest'],asset['name']
+              print('Verified:',asset['name'])
+          PY
+      - name: Copy only to the draft and verify remote digests
+        run: |
+          test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
+          gh release upload "$RELEASE_TAG" carry/* --clobber
+          gh release view "$RELEASE_TAG" --json assets > uploaded.json
+          python3 - <<'PY'
+          import json
+          actual={a['name']:a for a in json.load(open('uploaded.json'))['assets']}
+          for expected in json.load(open('expected.json')):
+              found=actual[expected['name']]
+              assert found['state']=='uploaded'
+              assert found['size']==expected['size'] and found['digest']==expected['digest'],expected['name']
+          print('All carried platform assets verified; release remains draft.')
+          PY
