@@ -1,5 +1,9 @@
 # smoothyapp — Agent Notes
 
+## Windows 2.2.0 built and published — 2026-10-23
+
+The owner requested updating the local checkout to the last pushed source, building the new Windows app 2.2 and publishing it to the website and GitHub. Windows x64 **2.2.0** was built from `46b0975` plus packaging commit `4f99ce5`, which excludes the tracked CEP `.debug` debug-port file from packages. The unsigned installer, blockmap and `latest.yml` were uploaded to the existing **v2.2.0** release; Mac/Linux 2.2.0 artifacts were preserved unchanged and the prior Windows 2.1.1 files remain. The mandatory website changelog was updated for Windows availability and deployed. This supersedes the "owner will build Windows" handoff for this release.
+
 ## SmoothyApp 2.2 Mac/Linux publication authorized — 2026-10-23
 
 The owner explicitly requested signing the new app and publishing SmoothyApp **2.2** for **macOS and Linux**, and will build Windows on their Windows PC. This supersedes the 2026-10-22 local-only hold for this release and authorizes scoped source commits/pushes, Developer ID signing / Apple notarization, native Linux builds and verified **2.2.0** publication, plus the mandatory website changelog/deployment. Preserve Windows **2.1.1** installer/blockmap/`latest.yml` unchanged until the owner supplies Windows 2.2. Preserve prior releases and the already published SmoothyREC 1.1.1.
