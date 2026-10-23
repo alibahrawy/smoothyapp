@@ -71,7 +71,8 @@
         "from": "../smoothyapp-cep",
         "to": "cep-plugin",
         "filter": [
-          "**/*"
+          "**/*",
+          "!**/.debug"
         ]
       },
       {
