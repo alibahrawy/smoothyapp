@@ -100,6 +100,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setCaptionLanguage: (code: string) => ipcRenderer.invoke('set-caption-language', code),
 
   // Auth
+  getAuthProviders: () => ipcRenderer.invoke('auth-get-providers'),
+  loginWithGoogle: () => ipcRenderer.invoke('auth-google-login'),
+  cancelGoogleSignIn: () => ipcRenderer.invoke('auth-google-cancel'),
   login: (email: string, password: string, totpCode?: string) =>
     ipcRenderer.invoke('auth-login', { email, password, totpCode }),
   signup: (input: { name: string; email: string; password: string }) => ipcRenderer.invoke('auth-signup', input),

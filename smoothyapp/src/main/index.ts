@@ -66,6 +66,9 @@ import {
   getAuthState,
   login,
   signup,
+  getAuthProviders,
+  loginWithGoogle,
+  cancelGoogleSignIn,
   logout,
   refreshUserData,
   getTrialStatus,
@@ -181,6 +184,7 @@ ipcMain.handle('set-studio-enabled', (_, value) => {
     const result = appPreferences.setStudioEnabled(value);
     if (before !== result.studioEnabled) studioPreferenceChanged();
     if (!result.studioEnabled) {
+      cancelGoogleSignIn();
       studioToolsService?.cancel(); studioSourceService.cancel(); chatService?.reset(); shortsJobController?.abort(); disconnectFromWebsite();
     }
     return { success: true, ...result };
@@ -946,6 +950,21 @@ ipcMain.handle('export-subtitles', async () => {
 });
 
 // Auth handlers
+ipcMain.handle('auth-get-providers', () => appPreferences.snapshot().studioEnabled ? getAuthProviders() : { google: false });
+ipcMain.handle('auth-google-cancel', () => { cancelGoogleSignIn(); return { success: true }; });
+ipcMain.handle('auth-google-login', async () => {
+  if (!appPreferences.snapshot().studioEnabled) return { success: false, error: 'Studio AI is turned off in Settings.' };
+  const result = await loginWithGoogle(url => shell.openExternal(url));
+  if (result.success) {
+    trackTool('auth_login');
+    mainWindow?.show(); mainWindow?.focus();
+    if (appPreferences.snapshot().studioEnabled) {
+      const token = await generateConnectionToken();
+      if (token && appPreferences.snapshot().studioEnabled) { saveConnectionToken(token); await connectToWebsite(); }
+    }
+  }
+  return result;
+});
 ipcMain.handle('auth-login', async (_, { email, password, totpCode }) => {
   if (!appPreferences.snapshot().studioEnabled) return { success: false, error: 'Studio AI is turned off in Settings.' };
   const result = await login(email, password, totpCode);

@@ -24,12 +24,15 @@ jobs:
       - name: Verify source run and draft
         run: |
           gh run view "$BUILD_RUN_ID" --repo "$GITHUB_REPOSITORY" --json conclusion,workflowName,headBranch,headSha > /tmp/source-run.json
-          gh release view "$DRAFT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft > /tmp/draft.json
+          gh release view "$DRAFT_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,targetCommitish > /tmp/draft.json
           python3 - <<'PY'
-          import json,os
+          import json,os,subprocess
           run=json.load(open('/tmp/source-run.json'))
           assert run['conclusion']=='success' and run['workflowName']=='Build Linux' and run['headBranch']=='main',run
-          assert json.load(open('/tmp/draft.json'))['isDraft'], 'Refusing to modify a public release'
+          draft=json.load(open('/tmp/draft.json'))
+          assert draft['isDraft'], 'Refusing to modify a public release'
+          source=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert run['headSha']==source==draft['targetCommitish'], 'Build, checked-out source and draft must match'
           version=json.load(open('smoothyapp/package.json'))['version']
           assert os.environ['DRAFT_RELEASE_TAG']=='v'+version
           print('Verified native build:',run['headSha'])

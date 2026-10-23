@@ -6,6 +6,7 @@
  */
 
 import Store from 'electron-store';
+import { browserGoogleSignIn } from './browser-auth';
 
 const isDev = process.env.NODE_ENV === 'development';
 const API_BASE = process.env.SMOOTHY_API_URL || (isDev ? 'http://localhost:4321' : 'https://smoothyedit.com');
@@ -55,6 +56,53 @@ const store = new Store();
 
 // Callbacks for notifying renderer of auth changes
 let authEpoch = 0;
+let googleController: AbortController | null = null;
+
+export function cancelGoogleSignIn(): void {
+  authEpoch++;
+  googleController?.abort();
+  googleController = null;
+}
+
+function beginSignIn(): number {
+  cancelGoogleSignIn();
+  return authEpoch;
+}
+
+export async function getAuthProviders(signal?: AbortSignal): Promise<{ google: boolean; error?: string }> {
+  try {
+    const response = await fetch(`${API_BASE}/api/auth/providers`, { redirect: 'error', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error();
+    const data = await response.json();
+    return { google: data.google === true };
+  } catch { return { google: false, error: 'Google sign-in is unavailable right now. Please use email or try again.' }; }
+}
+
+export async function loginWithGoogle(openExternal: (url: string) => Promise<unknown>): Promise<LoginResult> {
+  const stamp = beginSignIn();
+  const controller = new AbortController();
+  googleController = controller;
+  try {
+    const providers = await getAuthProviders(controller.signal);
+    if (stamp !== authEpoch || controller.signal.aborted) return { success: false, error: 'Sign-in was canceled.' };
+    if (!providers.google) return { success: false, error: providers.error || 'Google sign-in is not available yet. Please use email.' };
+    const session = await browserGoogleSignIn({ apiBase: API_BASE, openExternal, signal: controller.signal });
+    // Read the actual account through the signed credential before persisting it.
+    const response = await fetch(`${API_BASE}/api/auth/me`, { headers: { Authorization: `Bearer ${session.sessionToken}` }, redirect: 'error', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(20000)]) });
+    if (!response.ok) throw new Error('Could not verify your Smoothy account. Please try again.');
+    const { user } = await response.json();
+    if (user?.id !== session.userId || typeof user.email !== 'string' || !user.email || !['free', 'pro'].includes(user.tier)) throw new Error('The sign-in service returned an invalid account.');
+    if (stamp !== authEpoch || controller.signal.aborted) return { success: false, error: 'Sign-in was canceled.' };
+    const account: User = { id: user.id, email: user.email, name: typeof user.name === 'string' ? user.name : null, tier: user.tier, isAdmin: user.isAdmin === true, emailVerified: user.emailVerified === true };
+    store.set('user', account);
+    store.set('sessionToken', session.sessionToken);
+    store.set('jwt', account.id);
+    notifyAuthChange();
+    return { success: true, user: account };
+  } catch (error) {
+    return { success: false, error: controller.signal.aborted ? 'Sign-in was canceled.' : error instanceof Error ? error.message : 'Could not complete Google sign-in. Please try again.' };
+  } finally { if (googleController === controller) googleController = null; }
+}
 
 let authChangeCallback: ((state: AuthState) => void) | null = null;
 
@@ -99,7 +147,7 @@ export async function login(
   password: string,
   totpCode?: string
 ): Promise<LoginResult> {
-  const stamp = ++authEpoch;
+  const stamp = beginSignIn();
   try {
     if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password || email.length > 254 || password.length > 256) return { success: false, error: 'Enter your email and password.' };
     const response = await fetch(`${API_BASE}/api/auth/login`, {
@@ -149,7 +197,7 @@ export async function login(
 
 /** Create a free account through the existing web API, then obtain a signed desktop session. */
 export async function signup(input: { name?: string; email?: string; password?: string }): Promise<LoginResult & { accountCreated?: boolean }> {
-  const stamp = ++authEpoch;
+  const stamp = beginSignIn();
   try {
     const { email, password, name = '' } = input || {};
     if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || email.length > 254) return { success: false, error: 'Enter a valid email address.' };
@@ -179,7 +227,7 @@ export async function signup(input: { name?: string; email?: string; password?: 
  * Logout the current user
  */
 export function logout(): void {
-  authEpoch++;
+  cancelGoogleSignIn();
   store.delete('user');
   store.delete('jwt');
   store.delete('sessionToken');

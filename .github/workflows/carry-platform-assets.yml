@@ -10,6 +10,11 @@ on:
         description: Existing draft patch release
         required: true
         default: v2.1.1
+      platforms:
+        description: Platforms to preserve unchanged
+        type: choice
+        options: [mac-linux, windows]
+        default: mac-linux
 permissions:
   contents: write
 concurrency:
@@ -23,6 +28,7 @@ jobs:
       GH_REPO: ${{ github.repository }}
       SOURCE_TAG: ${{ inputs.source_tag }}
       RELEASE_TAG: ${{ inputs.release_tag }}
+      CARRY_PLATFORMS: ${{ inputs.platforms }}
     steps:
       - name: Validate releases and expected artifacts
         run: |
@@ -36,8 +42,14 @@ jobs:
           source=json.load(open('source.json')); target=json.load(open('target.json'))
           assert not source['isDraft'] and target['isDraft']
           assert source['tagName']!=target['tagName']
-          assets=[a for a in source['assets'] if 'mac' in a['name'] or 'linux' in a['name']]
-          assert assets and any(a['name']=='latest-mac.yml' for a in assets)
+          platform=os.environ['CARRY_PLATFORMS']
+          assert platform in ['mac-linux','windows']
+          if platform=='windows':
+              assets=[a for a in source['assets'] if a['name']=='latest.yml' or a['name'].endswith(('.exe','.exe.blockmap'))]
+              assert len(assets)==3 and any(a['name']=='latest.yml' for a in assets)
+          else:
+              assets=[a for a in source['assets'] if 'mac' in a['name'] or 'linux' in a['name']]
+              assert assets and any(a['name']=='latest-mac.yml' for a in assets)
           for asset in assets:
               assert os.path.basename(asset['name'])==asset['name']
               assert asset['state']=='uploaded' and asset['digest'].startswith('sha256:')
@@ -45,7 +57,11 @@ jobs:
           PY
       - name: Download and verify unchanged platform artifacts
         run: |
-          gh release download "$SOURCE_TAG" --pattern '*mac*' --pattern '*linux*' --dir carry
+          if [ "$CARRY_PLATFORMS" = windows ]; then
+            gh release download "$SOURCE_TAG" --pattern '*.exe' --pattern '*.exe.blockmap' --pattern 'latest.yml' --dir carry
+          else
+            gh release download "$SOURCE_TAG" --pattern '*mac*' --pattern '*linux*' --dir carry
+          fi
           python3 - <<'PY'
           import hashlib,json,pathlib
           for asset in json.load(open('expected.json')):
@@ -62,7 +78,7 @@ jobs:
       - name: Copy only to the draft and verify remote digests
         run: |
           test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
-          gh release upload "$RELEASE_TAG" carry/* --clobber
+          gh release upload "$RELEASE_TAG" carry/*
           gh release view "$RELEASE_TAG" --json assets > uploaded.json
           python3 - <<'PY'
           import json

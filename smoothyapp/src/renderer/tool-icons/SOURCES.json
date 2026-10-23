@@ -3,16 +3,22 @@
   "version": "0.468.0",
   "website": "https://lucide.dev",
   "license": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/LICENSE",
+  "note": "Glyph choices mirror the website app mockup (web/src/components/MiniApp.svelte). Captions, AI Photos and Chat keep distinct glyphs because the mockup reuses one bubble/image icon for two tools.",
   "icons": {
     "multicam": {
-      "icon": "panels-top-left",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/panels-top-left.svg",
-      "sha256": "321a2a5500f2b814a2e62eb73c4b01dc65c7334fe2e6f7d77517239383e26bb1"
+      "icon": "monitor",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/monitor.svg",
+      "sha256": "d1a443233345724859de8e4fb48968ba91e885e12ddbd710701548bd91b39428"
     },
     "silence": {
-      "icon": "audio-lines",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/audio-lines.svg",
-      "sha256": "3942b8a5d6bccc927a55f857f0d44b90e2663470cd2d569000c9b60c37578dfa"
+      "icon": "volume-x",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/volume-x.svg",
+      "sha256": "59b3477f34d36b7bdccde4ca162f4c93808d5c052c5aafd3e909b031c29201c5"
+    },
+    "local-audio": {
+      "icon": "audio-waveform",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/audio-waveform.svg",
+      "sha256": "d4b6f62b0d72b7ad223f9abeb51e64875e4533123d7898d07acfa74154eb14b3"
     },
     "captions": {
       "icon": "captions",
@@ -20,24 +26,24 @@
       "sha256": "5abaf98577eaa7989d1b955d32b50e8d8958619f774280f3925d34b39f23ab22"
     },
     "compressor": {
-      "icon": "file-archive",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/file-archive.svg",
-      "sha256": "50adc280c84fcde3a62288e91a049557bb15ab3162fcb9533f4e2f821eaad7dd"
+      "icon": "shrink",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/shrink.svg",
+      "sha256": "cb474c603545297822c641aae9e55523af4f5368f9e68b4b0464dc1126b1ee4f"
     },
     "assets": {
-      "icon": "images",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/images.svg",
-      "sha256": "21646fbbc3c17a32033f581806ee466a41607dd308e2e321ba8daa7d583f0349"
+      "icon": "image",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/image.svg",
+      "sha256": "619c9db58c879dce6250376ba67d9c9102ca6dbb3b1efb9294c9f180e22273a5"
     },
     "stock": {
-      "icon": "clapperboard",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/clapperboard.svg",
-      "sha256": "d6dca06e880bde6f384df9d68b589d464e85ee70deba0e3d2f1852f77beb15e5"
+      "icon": "film",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/film.svg",
+      "sha256": "85cfa80821b34f512bd401a1249957c9f2f612497602ecc31dff39517823ee52"
     },
     "audio": {
-      "icon": "music-2",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/music-2.svg",
-      "sha256": "fd3e51e40de1d9c5b1872030467fc1e181592072c3a70854133e060b134c3661"
+      "icon": "music",
+      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/music.svg",
+      "sha256": "8721b8a3594219c1313c4083049e5a5c049f49c47b1cd93fdb61d52a0803e42b"
     },
     "studio-text": {
       "icon": "layout-dashboard",

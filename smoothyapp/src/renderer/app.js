@@ -38,6 +38,8 @@ const state = {
   activeNLE: null,
   pendingUpdateNotes: null,
   updateModalOpen: false,
+  updateModalPreview: false,
+  updatePreview: null,
   appVersion: null,
   updateState: { status: 'idle', version: null, percent: 0, notes: null, notesLoading: false },
   captionSource: 'sequence',
@@ -529,13 +531,17 @@ async function handleLogout() {
 }
 
 function setupEventListeners() {
-  document.getElementById('update-bar-close').addEventListener('click', skipPendingUpdate);
-  document.getElementById('update-bar-btn').addEventListener('click', () => showUpdateModal(state.updateState.version));
+  document.getElementById('update-bar-close').addEventListener('click', () => skipPendingUpdate(!!state.updatePreview));
+  document.getElementById('update-bar-install').addEventListener('click', () => installPendingUpdate(!!state.updatePreview));
+  document.getElementById('update-bar-btn').addEventListener('click', () => showUpdateModal((state.updatePreview || state.updateState).version, !!state.updatePreview));
+  new ResizeObserver(syncUpdateBannerHeight).observe(document.getElementById('update-bar'));
+  document.getElementById('dev-update-preview-toggle').addEventListener('change', event => setUpdatePreview(event.target.checked));
+  document.getElementById('dev-update-preview-state').addEventListener('change', () => setUpdatePreview(true));
   document.getElementById('update-modal-close').addEventListener('click', closeUpdateModal);
-  document.getElementById('update-modal-install').addEventListener('click', installPendingUpdate);
-  document.getElementById('update-modal-later').addEventListener('click', skipPendingUpdate);
+  document.getElementById('update-modal-install').addEventListener('click', () => installPendingUpdate(state.updateModalPreview));
+  document.getElementById('update-modal-later').addEventListener('click', () => skipPendingUpdate(state.updateModalPreview));
   document.getElementById('update-modal-release-link').addEventListener('click', () => {
-    if (state.updateState.version) window.electronAPI.openExternal(`https://github.com/alibahrawy/smoothyapp/releases/tag/v${encodeURIComponent(state.updateState.version)}`);
+    if (!state.updateModalPreview && state.updateState.version) window.electronAPI.openExternal(`https://github.com/alibahrawy/smoothyapp/releases/tag/v${encodeURIComponent(state.updateState.version)}`);
   });
   document.getElementById('update-modal').addEventListener('click', event => {
     if (event.target.id === 'update-modal') closeUpdateModal();
@@ -884,7 +890,7 @@ function setupEventListeners() {
   settingsLinkedinBtn.addEventListener('click', () => window.electronAPI.openExternal('https://www.linkedin.com/in/alibahrawy/'));
   settingsWebsiteBtn.addEventListener('click', () => window.electronAPI.openExternal('https://www.alibahrawy.com/'));
 
-  // Logs tab
+  // Dev tab logs
   if (logsClearBtn) {
     logsClearBtn.addEventListener('click', () => {
       if (logsContainer) logsContainer.innerHTML = '';
@@ -941,12 +947,13 @@ async function setupPreferenceEvents() {
   }
 }
 
-// The Logs tab is hidden by default and only shown from Settings → Advanced.
+// Preserve the stored Logs preference; the tab now also contains local UI previews.
 function applyLogsVisibility(show) {
   const navItem = document.querySelector('.nav-item[data-tab="logs"]');
   const tab = document.getElementById('tab-logs');
   if (navItem) navItem.classList.toggle('hidden', !show);
   if (tab) tab.classList.toggle('hidden', !show);
+  if (!show && state.updatePreview) setUpdatePreview(false);
 
   if (!show && state.currentTab === 'logs') {
     const fallback = document.querySelector('.nav-item[data-tab="multicam"]');
@@ -2198,33 +2205,13 @@ function applyUpdateState(data) {
   if (!data?.status) return;
   state.updateState = data;
   state.pendingUpdateNotes = data.notes || null;
+  // Real download/restart progress always takes precedence over a local preview.
+  if (state.updatePreview && ['downloading', 'downloaded', 'installing'].includes(data.status)) setUpdatePreview(false);
   renderUpdateState();
   renderSettingsUpdateNotes(data.version, data.notes);
-  if (state.updateModalOpen) {
-    if (data.version) document.getElementById('update-modal-version').textContent = data.version;
-    renderUpdateModalNotes(data.version, data.notes);
-  }
 }
 
-function renderUpdateState() {
-  const { status, version, percent, error } = state.updateState;
-  const updateBar = document.getElementById('update-bar');
-  const updateText = document.getElementById('update-bar-text');
-  const updateBtn = document.getElementById('update-bar-btn');
-  const busy = ['checking', 'downloading', 'installing'].includes(status);
-  const visible = ['available', 'downloading', 'downloaded', 'installing'].includes(status) || (status === 'error' && version);
-  checkUpdateBtn.disabled = busy || status === 'dev-build';
-  checkUpdateBtn.classList.toggle('hidden', status === 'dev-build');
-  document.getElementById('settings-update-help').textContent = status === 'dev-build'
-    ? 'This local preview does not receive automatic updates. Update checks are enabled in the published app.'
-    : 'SmoothyEdit checks for updates on startup and every six hours. Downloads and installation only start when you choose. Skip any version and keep using the one you have.';
-  checkUpdateBtn.textContent = status === 'checking' ? 'Checking…' : 'Check for Updates';
-  settingsInstallUpdateBtn.classList.toggle('hidden', !version || status === 'checking');
-  settingsInstallUpdateBtn.textContent = status === 'skipped' ? 'View skipped update' : 'View update';
-  updateBar.classList.toggle('hidden', !visible);
-  updateBtn.textContent = 'See what’s new';
-  document.getElementById('update-bar-close').disabled = busy;
-
+function updateMessage({ status, version, percent, error }) {
   const messages = {
     idle: `v${state.appVersion || '?'}`,
     checking: 'Checking for updates…',
@@ -2237,18 +2224,72 @@ function renderUpdateState() {
     error: `Update failed${error ? `: ${error}` : '. Try again later.'}`,
     'dev-build': 'Local preview · automatic updates unavailable'
   };
-  settingsUpdateStatus.textContent = messages[status] || messages.idle;
-  updateText.textContent = status === 'available' ? `Update v${version} available` : (messages[status] || messages.idle);
+  return messages[status] || messages.idle;
+}
+
+function updateActionLabel({ status, percent }) {
+  return status === 'downloading' ? `Downloading… ${percent}%` : status === 'installing' ? 'Restarting…' : status === 'downloaded' || percent === 100 ? 'Restart & Install' : status === 'error' ? 'Try again' : 'Update';
+}
+
+function syncUpdateBannerHeight() {
+  const bar = document.getElementById('update-bar');
+  document.documentElement.style.setProperty('--update-bar-height', `${Math.ceil(bar.getBoundingClientRect().height)}px`);
+}
+
+function renderUpdateState() {
+  const { status, version } = state.updateState;
+  const busy = ['checking', 'downloading', 'installing'].includes(status);
+  checkUpdateBtn.disabled = busy || status === 'dev-build';
+  checkUpdateBtn.classList.toggle('hidden', status === 'dev-build');
+  document.getElementById('settings-update-help').textContent = status === 'dev-build'
+    ? 'This local preview does not receive automatic updates. Update checks are enabled in the published app.'
+    : 'SmoothyEdit checks for updates on startup and every six hours. Downloads and installation only start when you choose. Skip any version and keep using the one you have.';
+  checkUpdateBtn.textContent = status === 'checking' ? 'Checking…' : 'Check for Updates';
+  settingsInstallUpdateBtn.classList.toggle('hidden', !version || status === 'checking');
+  settingsInstallUpdateBtn.textContent = status === 'skipped' ? 'View skipped update' : 'View update';
+  settingsUpdateStatus.textContent = updateMessage(state.updateState);
+
+  const banner = state.updatePreview || state.updateState;
+  const bannerBusy = ['checking', 'downloading', 'installing'].includes(banner.status);
+  const visible = ['available', 'downloading', 'downloaded', 'installing'].includes(banner.status) || (banner.status === 'error' && banner.version);
+  document.getElementById('update-bar').classList.toggle('hidden', !visible);
+  document.getElementById('update-bar-text').textContent = banner.status === 'available' ? `Update v${banner.version} available` : updateMessage(banner);
+  document.getElementById('update-preview-label').classList.toggle('hidden', !state.updatePreview);
+  const update = document.getElementById('update-bar-install');
+  update.textContent = updateActionLabel(banner);
+  update.disabled = bannerBusy || !banner.version;
+  document.getElementById('update-bar-close').disabled = bannerBusy;
+  syncUpdateBannerHeight();
+
   if (state.updateModalOpen) {
-    const ready = status === 'downloaded' || percent === 100;
+    const modal = state.updateModalPreview ? state.updatePreview : state.updateState;
+    if (!modal) { closeUpdateModal(); return; }
+    const modalBusy = ['checking', 'downloading', 'installing'].includes(modal.status);
+    document.getElementById('update-modal-version').textContent = modal.version || '';
+    document.getElementById('update-modal-release-link').classList.toggle('hidden', state.updateModalPreview);
+    renderUpdateModalNotes(modal.version, modal.notes, modal.notesLoading);
     const install = document.getElementById('update-modal-install');
-    install.disabled = busy || !version;
-    install.textContent = status === 'downloading' ? `Downloading… ${percent}%` : status === 'installing' ? 'Restarting…' : ready ? 'Restart & Install' : 'Install update';
+    install.disabled = modalBusy || !modal.version;
+    install.textContent = updateActionLabel(modal);
     const skip = document.getElementById('update-modal-later');
-    skip.disabled = busy || status === 'skipped' || !version;
-    skip.textContent = status === 'skipped' ? 'Skipped' : 'Skip this version';
-    document.getElementById('update-modal-status').textContent = messages[status] || '';
+    skip.disabled = modalBusy || modal.status === 'skipped' || !modal.version;
+    skip.textContent = modal.status === 'skipped' ? 'Skipped' : 'Skip this version';
+    document.getElementById('update-modal-status').textContent = state.updateModalPreview ? `Development preview · ${updateMessage(modal)}` : updateMessage(modal);
   }
+}
+
+function setUpdatePreview(enabled) {
+  if (state.updateModalOpen && state.updateModalPreview) closeUpdateModal();
+  const allowed = enabled && !['downloading', 'downloaded', 'installing'].includes(state.updateState.status);
+  document.getElementById('dev-update-preview-toggle').checked = allowed;
+  document.getElementById('dev-update-preview-state').disabled = !allowed;
+  state.updatePreview = allowed ? {
+    status: document.getElementById('dev-update-preview-state').value,
+    version: '2.2.0-preview', percent: 42, notesLoading: false,
+    notes: '## Development preview\n- Sample release notes for reviewing the update banner.\n- These controls simulate downloading and restarting.',
+    error: 'Sample connection error. Try again.'
+  } : null;
+  renderUpdateState();
 }
 
 /**
@@ -2273,15 +2314,15 @@ function renderSettingsUpdateNotes(version, notes) {
 }
 
 let updateReturnFocus = null;
-function showUpdateModal(version) {
+function showUpdateModal(version, preview = false) {
   if (!version) return;
   if (!state.updateModalOpen) updateReturnFocus = document.activeElement;
   state.updateModalOpen = true;
+  state.updateModalPreview = preview;
   document.querySelector('.app-container').inert = true;
   settingsModal.inert = true;
   document.getElementById('update-modal-version').textContent = version;
   document.getElementById('update-modal').classList.remove('hidden');
-  renderUpdateModalNotes(version, state.pendingUpdateNotes);
   renderUpdateState();
   document.getElementById('update-modal-close').focus();
 }
@@ -2289,6 +2330,7 @@ function showUpdateModal(version) {
 function closeUpdateModal() {
   document.getElementById('update-modal').classList.add('hidden');
   state.updateModalOpen = false;
+  state.updateModalPreview = false;
   settingsModal.inert = false;
   document.querySelector('.app-container').inert = !settingsModal.classList.contains('hidden');
   if (updateReturnFocus?.getClientRects().length) updateReturnFocus.focus();
@@ -2296,7 +2338,12 @@ function closeUpdateModal() {
   else settingsBtn.focus();
 }
 
-async function skipPendingUpdate() {
+async function skipPendingUpdate(preview = false) {
+  if (preview) {
+    setUpdatePreview(false);
+    document.getElementById('dev-update-preview-toggle').focus();
+    return;
+  }
   try {
     const result = await window.electronAPI.skipUpdate(state.updateState.version);
     if (result?.success) closeUpdateModal();
@@ -2304,20 +2351,28 @@ async function skipPendingUpdate() {
   } catch { closeUpdateModal(); showError('Could not save your update choice. Please try again.'); }
 }
 
-async function installPendingUpdate() {
+async function installPendingUpdate(preview = false) {
+  if (preview) {
+    const update = state.updatePreview;
+    if (!update || ['checking', 'downloading', 'installing'].includes(update.status)) return;
+    update.status = update.status === 'downloaded' ? 'installing' : 'downloading';
+    document.getElementById('dev-update-preview-state').value = update.status;
+    renderUpdateState();
+    return;
+  }
   try {
     const result = await window.electronAPI.installUpdate(state.updateState.version);
     if (result?.error) { closeUpdateModal(); showError(result.error); }
   } catch { closeUpdateModal(); showError('Could not start the update. Please try again.'); }
 }
 
-function renderUpdateModalNotes(version, notes) {
+function renderUpdateModalNotes(version, notes, notesLoading = false) {
   const body = document.getElementById('update-modal-body');
   body.innerHTML = '';
   if (notes) { renderMarkdownInto(body, notes); return; }
   const p = document.createElement('p');
   p.className = 'update-empty';
-  p.textContent = state.updateState.notesLoading ? 'Loading fixes and new features…' : 'Release notes are unavailable right now. Open the release page to see the fixes and new features.';
+  p.textContent = notesLoading ? 'Loading fixes and new features…' : 'Release notes are unavailable right now. Open the release page to see the fixes and new features.';
   body.appendChild(p);
 }
 

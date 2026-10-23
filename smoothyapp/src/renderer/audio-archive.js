@@ -49,7 +49,7 @@ export function initAudioArchive({ onSaved, player, community, onFavorite, onArt
     const added = state.tracks.find(item => !loaded.has(item.id));
     if (added) select(added);
   }
-  function select(track) {
+  function select(track, autoplay = true) {
     if (!track || state.downloading) return;
     const actions = navigation(track);
     if (!state.tracks.some(item => item.id === track.id)) { previewSaved(track, true, actions); refreshNavigation(); return; }
@@ -57,9 +57,14 @@ export function initAudioArchive({ onSaved, player, community, onFavorite, onArt
     player.show(track, {
       save: () => save(false), send: () => save(true),
       ...actions,
-      error: () => message('This archived track is unavailable right now. Choose another track or retry later.', true),
-    });
+      error: () => { if (!state.downloading) message('This archived track is unavailable right now. Choose another track or retry later.', true); },
+    }, autoplay);
     message(''); update();
+  }
+  function download(track) {
+    if (state.downloading || !track) return;
+    if (state.selected?.id !== track.id || player.current()?.id !== track.id) select(track, false);
+    save(false);
   }
   function render(preserveRows = false) {
     const data = community(), favorites = new Set(data.favorites || []), staff = new Set(data.staffPicks || []);
@@ -68,6 +73,7 @@ export function initAudioArchive({ onSaved, player, community, onFavorite, onArt
     const existing = preserveRows ? new Map([...results.children].map(row => [row.dataset.id, row])) : new Map();
     const nextRows = rows.map(track => existing.get(track.id) || trackRow({ ...track, staffPick: staff.has(track.id), favoriteCount: data.counts?.[track.id] || 0 }, {
       select, favorite: onFavorite, artist: onArtist, selected: player.current()?.id === track.id, busy: state.downloading, starred: favorites.has(locals.includes(track) ? 'local:' + track.id : track.id),
+      downloadColumn: true, download: locals.includes(track) ? null : row => download(row),
     }));
     if (preserveRows) {
       const retained = new Set(nextRows);

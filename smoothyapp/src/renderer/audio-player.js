@@ -13,13 +13,22 @@ function playbackIcon(button, kind) {
   button.dataset.icon = kind;
   button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor">${playbackIcons[kind]}</svg>`;
 }
-export function trackRow(track, { select, favorite, artist, selected, busy = false, starred = false }) {
+export function trackRow(track, { select, favorite, artist, selected, busy = false, starred = false, download = null, downloadColumn = false }) {
   const row = document.createElement('tr'); row.className = 'audio-track'; row.dataset.id = track.id;
   row.dataset.favoriteId = favoriteId(track);
   row.classList.toggle('selected', selected);
   const cell = (text, name = '') => { const td = document.createElement('td'); td.className = name; td.textContent = text; row.append(td); return td; };
   const play = document.createElement('button'); play.type = 'button'; play.className = 'audio-row-play'; play.dataset.title = track.title; playbackIcon(play, 'play'); play.setAttribute('aria-label', 'Play ' + track.title); play.disabled = busy; play.addEventListener('click', () => select(track)); cell('', 'audio-play-cell').append(play);
   const star = document.createElement('button'); star.type = 'button'; star.className = 'audio-star'; star.textContent = starred ? '★' : '☆'; star.setAttribute('aria-pressed', String(starred)); star.setAttribute('aria-label', (starred ? 'Remove favorite: ' : 'Favorite: ') + track.title); star.title = `${track.favoriteCount || 0} community favorites`; star.disabled = busy; star.addEventListener('click', () => favorite(track)); cell('', 'audio-star-cell').append(star);
+  if (downloadColumn) {
+    const slot = cell('', 'audio-download-cell');
+    if (download) {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'audio-row-download';
+      button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>';
+      button.setAttribute('aria-label', 'Download ' + track.title + ' MP3'); button.title = 'Download this MP3'; button.disabled = busy;
+      button.addEventListener('click', () => download(track)); slot.append(button);
+    }
+  }
   const title = document.createElement('button'); title.type = 'button'; title.className = 'audio-track-title'; title.disabled = busy;
   const name = document.createElement('strong'); name.textContent = track.title; title.append(name);
   if (track.staffPick) { const badge = document.createElement('span'); badge.className = 'audio-pick-badge'; badge.textContent = 'Staff pick'; title.append(badge); }
@@ -105,6 +114,7 @@ export function initAudioPlayer({ isConnected, onFavorite, onArtist }) {
     el('artist').disabled = busy || !track?.artist?.trim() || !onArtist;
     el('artist').setAttribute('aria-label', track?.artist ? 'Show all tracks by ' + track.artist : 'Artist not supplied');
     el('save').disabled = busy || !actions.save; el('save').classList.toggle('hidden', !actions.save);
+    el('save').setAttribute('aria-busy', String(Boolean(busy && actions.save)));
     el('send').disabled = busy || !actions.send || !isConnected();
     el('details').classList.toggle('hidden', !actions.details); el('details').disabled = busy;
     el('star').disabled = !track; const starred = track && favorites.has(favoriteId(track));

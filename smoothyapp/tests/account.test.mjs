@@ -1,13 +1,14 @@
-import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build, transform } from 'esbuild';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
-const bundle = await build({entryPoints:[fileURLToPath(new URL('../src/main/auth-service.ts', import.meta.url))],bundle:true,platform:'node',format:'cjs',write:false,plugins:[{name:'store',setup(b){b.onResolve({filter:/^electron-store$/},()=>({path:'store',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:`export default class Store {get(k){return globalThis.saved.get(k)}set(k,v){globalThis.saved.set(k,v)}delete(k){globalThis.saved.delete(k)}}`}));}}]});
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+const bundle = await build({entryPoints:[fileURLToPath(new URL('../src/main/auth-service.ts',import.meta.url))],bundle:true,platform:'node',format:'cjs',write:false,plugins:[{name:'store',setup(b){b.onResolve({filter:/^electron-store$/},()=>({path:'store',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:`export default class Store {get(k){return globalThis.saved.get(k)}set(k,v){globalThis.saved.set(k,v)}delete(k){globalThis.saved.delete(k)}}`}));}}]});
 function fixture(respond) {
   const saved=new Map(), calls=[];
-  const context={module:{exports:{}},saved,process:{env:{}},AbortSignal,console:{log(){},error(){}},fetch:async(url,options={})=>{calls.push({url,options});return respond(new URL(url).pathname,options);}};
+  const context={module:{exports:{}},require:createRequire(import.meta.url),Buffer,URL,setTimeout,clearTimeout,saved,process:{env:{}},AbortSignal,AbortController,console:{log(){},error(){}},fetch:async(url,options={})=>{calls.push({url,options});return respond(new URL(url).pathname,options);}};
   vm.createContext(context);vm.runInContext(bundle.outputFiles[0].text,context);
   return {api:context.module.exports,saved,calls};
 }

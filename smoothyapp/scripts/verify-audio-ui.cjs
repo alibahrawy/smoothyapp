@@ -84,14 +84,23 @@ app.whenReady().then(async()=>{
  const until=async code=>{for(let i=0;i<80;i++){if(await js(code))return;await pause(50);}assert.ok(await js(code),code);};
  try {
  await win.loadFile(process.env.SMOOTHY_TEST_RENDERER||path.join(root,'out/renderer/index.html'));await pause(150);
- await js(`document.querySelector('[data-tab="audio"]').click()`);await pause(80);
+ await js(`window.mediaActions={};const register=navigator.mediaSession.setActionHandler.bind(navigator.mediaSession);navigator.mediaSession.setActionHandler=(name,handler)=>{mediaActions[name]=handler;register(name,handler)};true`);
+ await js(`document.querySelector('[data-tab="audio"]').click()`);await until(`document.querySelectorAll('#audio-archive-results tr').length`);
  assert.equal(await js(`document.querySelectorAll('#audio-archive-results tr').length`),40);
  const initialSeed=await js(`window.electronAPI.__calls().filter(call=>call.name==='audioArchiveSearch').at(-1).args[0].shuffleSeed`);
  assert.ok(Number.isInteger(initialSeed)&&initialSeed>=0&&initialSeed<=0xFFFFFFFF);
- assert.deepEqual(await js(`Array.from(document.querySelectorAll('#audio-archive-panel th')).slice(2).map(el=>el.textContent)`),['Track title','Genre','Mood','Artist','Duration','License type']);
+ assert.deepEqual(await js(`Array.from(document.querySelectorAll('#audio-archive-panel th')).slice(3).map(el=>el.textContent)`),['Track title','Genre','Mood','Artist','Duration','License type']);
+ assert.equal(await js(`document.querySelectorAll('#audio-archive-results .audio-row-download').length`),40);
+ assert.ok(await js(`Array.from(document.querySelectorAll('#audio-archive-results .audio-row-download')).every(button=>button.getAttribute('aria-label').startsWith('Download ')&&button.getAttribute('aria-label').endsWith(' MP3')&&button.title==='Download this MP3')`));
+ await js(`document.querySelector('#audio-archive-results .audio-row-download').click()`);await pause(80);
+ assert.ok(await js(`window.electronAPI.__calls().some(call=>call.name==='audioArchiveDownload'&&call.args[0].id==='archive-0')`));
+ assert.match(await js(`document.getElementById('audio-archive-status').textContent`),/Downloading MP3/);
+ assert.equal(await js(`document.getElementById('audio-dock-save').classList.contains('hidden')`),false);
+ await js(`document.getElementById('audio-archive-cancel').click()`);await pause(80);
+ assert.match(await js(`document.getElementById('audio-archive-status').textContent`),/canceled/);
  assert.equal(await js(`document.querySelectorAll('#audio-archive-results script').length`),0);
  // Exercise registered OS handlers, focused keyboard buttons and actual natural endings.
- await js(`window.mediaActions={};const register=navigator.mediaSession.setActionHandler.bind(navigator.mediaSession);navigator.mediaSession.setActionHandler=(name,handler)=>{mediaActions[name]=handler;register(name,handler);};document.querySelector('#audio-archive-results .audio-row-play').click()`);
+ await js(`document.querySelector('#audio-archive-results .audio-row-play').click()`);
  await until(`document.getElementById('audio-dock-player').currentTime>.1`);
  assert.equal(await js(`navigator.mediaSession.metadata.title`),'<script>Jazz</script>');
  await js(`mediaActions.pause();mediaActions.pause()`);assert.equal(await js(`document.getElementById('audio-dock-player').paused`),true);
@@ -143,7 +152,7 @@ app.whenReady().then(async()=>{
  assert.match(await js(`document.getElementById('audio-sharing-status').textContent`),/Previously shared votes/);
  await js(`document.getElementById('audio-share-favorites').click()`);await pause(50);
  assert.equal(await js(`document.getElementById('audio-share-favorites').checked`),true);
- await js(`document.getElementById('audio-info-close').click()`);await pause(50);
+ await js(`document.getElementById('audio-info-close').click()`);await until(`document.activeElement.id==='audio-info-open'`);
  assert.equal(await js(`document.activeElement.id`),'audio-info-open');
  const bottom=await js(`(()=>{const row=document.querySelector('#audio-archive-results tr:last-child');row.scrollIntoView({block:'center'});const button=row.querySelector('.audio-row-play');button.focus({preventScroll:true});window.bottomRow=row;window.bottomButton=button;const before={scroll:document.querySelector('#tab-audio .content-scroll').scrollTop,height:document.querySelector('.audio-player-dock').getBoundingClientRect().height};button.click();return before;})()`);
  assert.ok(bottom.scroll>500);

@@ -41,7 +41,7 @@ app.whenReady().then(async () => {
     await js(`document.body.classList.add('platform-windows')`);
     await js(`Promise.all([400,500,600,700].map(weight=>document.fonts.load(weight+' 14px Bunch')))`);
     await js(`document.fonts.ready`);
-    assert.equal(await js(`document.querySelectorAll('.sidebar-nav .nav-icon svg[data-icon]').length`),11);
+    assert.equal(await js(`document.querySelectorAll('.sidebar-nav .nav-icon svg[data-icon]').length`),12);
     const families=await js(`['body','.nav-label','#autocut-btn','select','input'].map(selector=>({selector,family:getComputedStyle(document.querySelector(selector)).fontFamily}))`);
     for(const item of families) assert.match(item.family,/^Bunch|^"Bunch"/);
     const client=win.webContents.debugger;client.attach('1.3');await client.sendCommand('DOM.enable');await client.sendCommand('CSS.enable');

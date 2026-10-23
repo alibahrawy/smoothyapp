@@ -1,5 +1,9 @@
 # smoothyapp — Agent Notes
 
+## SmoothyApp 2.2 Mac/Linux publication authorized — 2026-10-23
+
+The owner explicitly requested signing the new app and publishing SmoothyApp **2.2** for **macOS and Linux**, and will build Windows on their Windows PC. This supersedes the 2026-10-22 local-only hold for this release and authorizes scoped source commits/pushes, Developer ID signing / Apple notarization, native Linux builds and verified **2.2.0** publication, plus the mandatory website changelog/deployment. Preserve Windows **2.1.1** installer/blockmap/`latest.yml` unchanged until the owner supplies Windows 2.2. Preserve prior releases and the already published SmoothyREC 1.1.1.
+
 ## Windows 2.1.1 patch release authorized — 2026-10-20
 
 The owner requested fixing the Settings title-bar/navigation overlap and publishing Windows **2.1.1** with the Multicam frame-0/timeline-start fix. Related commits/pushes, Windows installer/updater publication and mandatory website changelog deployment are authorized. Carry forward verified Mac/Linux **2.1.0** artifacts and metadata without renaming or rebuilding them as 2.1.1.

@@ -102,7 +102,7 @@ body {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   grid-template-rows: var(--titlebar-height) minmax(0, 1fr);
-  height: 100vh;
+  height: calc(100vh - var(--update-bar-height, 0px));
   overflow: hidden;
 }
 
@@ -1985,9 +1985,9 @@ body.platform-macos {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 8px 16px;
   flex-wrap: wrap;
-  padding: 8px 16px;
+  padding: 10px 16px;
   font-size: var(--font-size-sm);
   font-weight: 600;
   z-index: 9999;
@@ -1998,32 +1998,36 @@ body.platform-macos {
 }
 
 .update-bar .btn {
-  background: var(--foreground);
-  color: var(--background);
-  border: none;
-  padding: 4px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: var(--font-size-xs);
-  font-weight: 600;
+  min-height: 36px;
+  padding: 8px 12px;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.2;
+  text-transform: none;
+  white-space: nowrap;
+  box-shadow: none;
 }
-
-.update-bar .btn:hover {
-  opacity: 0.9;
+.update-bar-actions { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+.update-bar-message { display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+#update-bar-text { overflow-wrap: anywhere; }
+.update-bar .update-action-primary {
+  min-width: 104px;
+  padding-inline: 20px;
+  background: #171b18;
+  color: #fff;
+  font-weight: 700;
 }
-
-.update-bar-close {
-  background: none;
-  border: none;
-  color: var(--bg-primary);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 0 4px;
-  opacity: 0.7;
-}
-
-.update-bar-close:hover {
-  opacity: 1;
+.update-bar .update-action-primary:hover:not(:disabled) { background: #2c352e; }
+.update-bar .update-action-quiet { background: transparent; color: #263b2c; font-weight: 500; }
+.update-bar .update-action-quiet:hover:not(:disabled) { background: rgba(23, 27, 24, 0.08); }
+.update-bar .btn:focus-visible { outline: 2px solid #171b18; outline-offset: 3px; }
+.update-preview-label { border: 1px solid currentColor; border-radius: 4px; padding: 1px 5px; font-size: 10px; }
+.dev-preview-state { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
+.dev-preview-state select { width: auto; max-width: 100%; }
+@media (max-width: 680px) {
+  .update-bar-message { flex-basis: 100%; text-align: center; }
 }
 
 /* Update available modal */
@@ -3530,6 +3534,7 @@ body {
 /* Keep Settings' header below the window controls; only the options scroll. */
 #settings-modal {
   display: block;
+  bottom: var(--update-bar-height, 0px);
   overflow: hidden;
   background: var(--background);
   backdrop-filter: none;
@@ -3838,6 +3843,10 @@ body:not(.window-expanded) .audio-table .audio-title-cell { min-width: 120px; wi
 @keyframes audio-loading { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .audio-row-play[data-icon="loading"] svg, #audio-dock-play[data-icon="loading"] svg { animation: none; } }
 .audio-table .audio-play-cell, .audio-table .audio-star-cell { width: 36px; padding-right: 0; }
+.audio-table .audio-download-cell { width: 36px; padding-right: 0; }
+.audio-row-download { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--tab-accent) 34%, var(--background-secondary)); color: var(--foreground); cursor: pointer; transition: background .15s; }
+.audio-row-download svg { width: 16px; height: 16px; }
+.audio-row-download:hover { background: color-mix(in srgb, var(--tab-accent) 62%, var(--background-secondary)); }
 .audio-star { background: transparent; border: 0; color: var(--foreground-secondary); font-size: 25px; line-height: 1; padding: 2px; cursor: pointer; }
 .audio-star[aria-pressed="true"] { color: #ab6b13; }
 .audio-duration-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -3918,6 +3927,10 @@ body:not(.window-expanded) .audio-table .audio-title-cell { min-width: 120px; wi
 .audio-dock-footer > p { flex: 1 1 100px; min-width: 0; margin: 0; font-size: 10px; }
 #audio-dock-license { font-size: 10px; color: var(--foreground-muted); }
 .audio-dock-footer .stock-text-button { font-size: 11px; }
+.audio-dock-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; min-height: 32px; }
+.audio-dock-actions .btn { min-height: 32px; padding: 6px 12px; font-size: 12px; }
+.audio-dock-actions .btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+.audio-dock-actions .stock-text-button { font-size: 11px; }
 #audio-status { font-size: 10px; margin: 8px 0 0; }
 #audio-status:empty, #audio-archive-status:empty { display: none; }
 #tab-audio button:disabled { opacity: .4; cursor: default; }
@@ -3938,6 +3951,7 @@ body:not(.window-expanded) .audio-table .audio-title-cell { min-width: 120px; wi
   .audio-dock-volume { order: 4; }
   .audio-player-dock { padding: 10px 14px; }
   .audio-dock-footer { gap: 10px; margin-top: 8px; }
+  .audio-dock-actions { margin-left: 0; flex-basis: 100%; justify-content: flex-end; }
 }
 
 /* Optional cloud workspace. */
@@ -4065,6 +4079,33 @@ body:not(.window-expanded) .audio-table .audio-title-cell { min-width: 120px; wi
 #account-verification-status { min-height: 32px; }
 .account-verify-btn { flex-shrink: 0; border: 0; border-radius: 6px; background: var(--background); color: var(--foreground); padding: 5px 7px; font: inherit; font-size: 10px; cursor: pointer; }
 .account-verify-btn:focus-visible { outline: 2px solid var(--ring); }
+.account-intro { color:var(--foreground-muted); font-size:12px; margin:0 0 18px; }
+.account-google-btn { width:100%; min-height:44px; display:flex; align-items:center; justify-content:center; gap:12px; border:1px solid var(--border); border-radius:10px; background:var(--background); color:var(--foreground); font-weight:600; }
+.account-google-btn:hover:enabled { background:var(--input-bg); border-color:var(--foreground-muted); }
+.account-google-btn img { flex-shrink:0; }
+.account-google-status { text-align:center; font-size:11px; margin:9px 0 0; }
+.account-divider { display:flex; align-items:center; gap:12px; margin:20px 0; color:var(--foreground-muted); font-size:11px; }
+.account-divider::before,.account-divider::after { content:""; flex:1; height:1px; background:var(--border); }
+.account-password-label { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+.account-password-label .stock-text-button { font-size:11px; white-space:nowrap; }
+.account-password-wrap { position:relative; }
+.account-password-wrap input { padding-right:42px !important; }
+#account-password-toggle { position:absolute; right:4px; top:4px; bottom:4px; width:34px; display:grid; place-items:center; background:transparent; color:var(--foreground-muted); border:0; border-radius:7px; cursor:pointer; }
+#account-password-toggle:hover { background:var(--input-bg); }
+.login-footer { border:1px solid var(--border); border-radius:12px; background:var(--input-bg); margin-top:20px; padding:13px; }
+.login-footer p { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.account-switch-btn { display:inline-flex; align-items:center; justify-content:center; gap:12px; min-height:36px; padding:0 14px; border:1px solid var(--border); border-radius:8px; background:var(--background); color:var(--foreground); text-decoration:none; font-weight:700; white-space:nowrap; }
+.account-switch-btn:hover { border-color:var(--foreground-muted); }
+.account-free-note { text-align:center; font-size:11px; margin:14px 0 0; }
+#account-google-waiting p { line-height:1.6; margin-bottom:16px; }
+#account-google-cancel { width:100%; margin-top:10px; }
+.account-browser-title { font-size:14px; font-weight:600; }
+.account-google-section.hidden,.account-google-status:empty { display:none; }
+.login-modal .modal-header { gap:12px; }
+.login-modal .modal-header h3 { flex:1; }
+.account-header-switch { flex-shrink:0; border:1px solid var(--border); background:var(--input-bg); color:var(--foreground); padding:7px 10px; border-radius:8px; font:inherit; font-size:11px; font-weight:650; cursor:pointer; }
+.login-modal :is(button,a):focus-visible { outline:2px solid var(--ring); outline-offset:3px; }
+@media(max-height:600px) { .account-intro { margin-bottom:12px; } .account-divider { margin:14px 0; } .account-google-btn { min-height:40px; } .account-free-note { margin-top:10px; } }
 @media(max-height:600px) { .login-modal { padding: 16px; } .login-modal .modal-header { margin-bottom: 12px; } .login-form { gap: 8px; } .login-form label { margin-bottom: 4px; font-size: 11px; } .login-form input[type="email"], .login-form input[type="password"], .login-form input[type="text"] { padding: 8px; font-size: 12px; } .login-footer { margin-top: 10px; padding-top: 10px; } .sidebar-collapsed .account-verify-btn { width: 25px; padding: 3px; font-size: 0; } .sidebar-collapsed .account-verify-btn::after { content: "✉"; font-size: 13px; } }
 
 .sidebar-collapsed .user-info:has(.account-verify-btn:not(.hidden)) { flex-wrap: wrap; }
