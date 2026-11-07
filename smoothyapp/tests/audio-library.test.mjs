@@ -4,7 +4,7 @@ import {build} from 'esbuild';
 import {mkdtemp,writeFile,readFile,readdir,rm,mkdir,symlink} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-const output=await build({entryPoints:[new URL('../src/main/audio-library.ts',import.meta.url).pathname],bundle:true,platform:'node',format:'esm',write:false});
+const output=await build({entryPoints:[process.getBuiltinModule('node:url').fileURLToPath(new URL('../src/main/audio-library.ts', import.meta.url))],bundle:true,platform:'node',format:'esm',write:false});
 const {AudioLibrary}=await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
 const bytes=Buffer.alloc(512,1);
 async function fixture(action){const dir=await mkdtemp(path.join(os.tmpdir(),'smoothy-audio-'));const downloads=path.join(dir,'downloads');await mkdir(downloads);let now=0;const library=new AudioLibrary(path.join(dir,'library'),async()=>{},()=>now);await library.load();try{await action({library,downloads,dir,tick:()=>{now+=4000;}});}finally{await rm(dir,{recursive:true,force:true});}}

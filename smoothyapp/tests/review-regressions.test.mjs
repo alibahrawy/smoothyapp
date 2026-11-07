@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 async function moduleAt(relative) {
-  const output = await build({ entryPoints: [new URL(relative, import.meta.url).pathname], bundle: true, platform: 'node', format: 'esm', write: false });
+  const output = await build({ entryPoints: [process.getBuiltinModule('node:url').fileURLToPath(new URL(relative, import.meta.url))], bundle: true, platform: 'node', format: 'esm', write: false });
   return import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
 }
 const { formatCaptions } = await moduleAt('../src/main/captions/caption-formatter.ts');

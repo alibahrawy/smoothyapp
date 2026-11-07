@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 
-const output = await build({ entryPoints: [new URL('../src/main/captions/whisper-service.ts', import.meta.url).pathname], bundle: true,
+const output = await build({ entryPoints: [process.getBuiltinModule('node:url').fileURLToPath(new URL('../src/main/captions/whisper-service.ts', import.meta.url))], bundle: true,
   format: 'cjs', platform: 'node', packages: 'external', write: false, plugins: [{ name: 'native-fixture', setup(builder) {
     const stubs = {
       './model-manager': `export const ensureModelDownloaded=async()=>globalThis.fixture.model,getModelFilePath=()=>globalThis.fixture.model,isMoulsotModel=()=>false;`,

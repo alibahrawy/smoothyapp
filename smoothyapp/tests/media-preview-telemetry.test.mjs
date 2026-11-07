@@ -4,7 +4,7 @@ import { build, transform } from 'esbuild';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 
-const output = await build({ entryPoints: [new URL('../src/renderer/audio-player.js', import.meta.url).pathname], bundle: true, format: 'cjs', write: false });
+const output = await build({ entryPoints: [process.getBuiltinModule('node:url').fileURLToPath(new URL('../src/renderer/audio-player.js', import.meta.url))], bundle: true, format: 'cjs', write: false });
 function fixture() {
   const nodes = new Map(), reports = [], handlers = new Map(), documentEvents = new Map();
   const mediaSession = { metadata: null, playbackState: 'none', setActionHandler: (name, fn) => handlers.set(name, fn), setPositionState(state) { this.position = state; } };

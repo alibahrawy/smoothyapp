@@ -4,7 +4,7 @@ import { build } from 'esbuild';
 import { createRequire } from 'node:module';
 import vm from 'node:vm';
 import fs from 'node:fs';
-const bundle = await build({ entryPoints: [new URL('../src/renderer/photo-credit-estimate.js', import.meta.url).pathname], bundle: true, platform: 'node', format: 'cjs', write: false });
+const bundle = await build({ entryPoints: [process.getBuiltinModule('node:url').fileURLToPath(new URL('../src/renderer/photo-credit-estimate.js', import.meta.url))], bundle: true, platform: 'node', format: 'cjs', write: false });
 const module = { exports: {} }; vm.runInNewContext(bundle.outputFiles[0].text, { module, exports: module.exports, require: createRequire(import.meta.url) });
 const { estimatePhotoCredits: estimate, formatPhotoEstimate: format } = module.exports;
 const catalog = JSON.parse(fs.readFileSync(new URL('../src/shared/photo-catalog.json', import.meta.url)));

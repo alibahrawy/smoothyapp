@@ -1,5 +1,11 @@
 # smoothyapp — Agent Notes
 
+## Windows 3.0.0 published — 2026-11-07
+
+The owner built the Windows x64 **3.0.0** installer locally from `release/3.0.0` (`91e01ac`, CEP 1.6.3) and asked to fix Windows updates returning **404**. `SmoothyEdit-Setup-3.0.0.exe` (290,726,941 bytes, SHA-256 `173ec616e9b3d3ec66e4c3a6806107e410fdea8f07a66e2d42962e294657f2ec`), its blockmap and the 3.0.0 `latest.yml` were uploaded to **v3.0.0**, replacing the carried-over 2.2.0 Windows files. The v3.0.0 Mac/Linux assets and every prior release are unchanged. The Windows installer and updater are **unsigned**, as with 2.2.0.
+
+The Windows-only test portability fix is committed with this note: `fileURLToPath` replaces `new URL(…, import.meta.url).pathname` for esbuild entry points (that form yields `/C:/…` on Windows) and `agent-bridge.test.mjs` uses the win32 `ffprobe-static` bin path. `node --test tests` on Windows now loads every test: **406 tests, 391 pass, 11 skipped, 4 fail** — the four are `EPERM` `fs.symlink` fixtures that need Developer Mode, not product failures.
+
 ## Windows 2.2.0 built and published — 2026-10-23
 
 The owner requested updating the local checkout to the last pushed source, building the new Windows app 2.2 and publishing it to the website and GitHub. Windows x64 **2.2.0** was built from `46b0975` plus packaging commit `4f99ce5`, which excludes the tracked CEP `.debug` debug-port file from packages. The unsigned installer, blockmap and `latest.yml` were uploaded to the existing **v2.2.0** release; Mac/Linux 2.2.0 artifacts were preserved unchanged and the prior Windows 2.1.1 files remain. The mandatory website changelog was updated for Windows availability and deployed. This supersedes the "owner will build Windows" handoff for this release.

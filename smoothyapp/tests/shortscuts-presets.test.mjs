@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const nodeRequire = createRequire(import.meta.url);
 const output = await build({
-  entryPoints: [new URL('../src/main/shortscuts/premiere-presets.ts', import.meta.url).pathname],
+  entryPoints: [process.getBuiltinModule('node:url').fileURLToPath(new URL('../src/main/shortscuts/premiere-presets.ts', import.meta.url))],
   bundle: true,
   platform: 'node',
   format: 'cjs',

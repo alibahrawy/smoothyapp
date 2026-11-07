@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const output = await build({ entryPoints: [new URL('../src/main/captions/media-input.ts', import.meta.url).pathname], bundle: true,
+const output = await build({ entryPoints: [process.getBuiltinModule('node:url').fileURLToPath(new URL('../src/main/captions/media-input.ts', import.meta.url))], bundle: true,
   format: 'esm', platform: 'node', write: false });
 const { validateCaptionMediaPath } = await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
 
