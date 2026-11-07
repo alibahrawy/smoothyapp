@@ -63,18 +63,9 @@ app.whenReady().then(async () => {
   try {
     await win.loadFile(process.env.SMOOTHY_TEST_RENDERER || path.join(root, 'out/renderer/index.html')); await pause(350);
     win.webContents.debugger.attach('1.3'); await js(`document.querySelector('[data-tab="captions"]').click()`); await pause(90);
-    const noticeVisible = () => js(`!document.getElementById('caption-update-notice').classList.contains('hidden')`);
     const reloadCaptions = async () => { await win.loadFile(process.env.SMOOTHY_TEST_RENDERER || path.join(root, 'out/renderer/index.html')); await pause(350); await js(`document.querySelector('[data-tab="captions"]').click()`); };
     assert.equal(await js(`document.getElementById('multicam-update-notice')`), null);
-    assert.equal(await noticeVisible(), true);
-    assert.match(await js(`document.getElementById('caption-update-notice').textContent`), /Arabic.*Large v3 Turbo/s);
-    await js(`localStorage.setItem('smoothyedit:multicam-beta:1.5.1:dismissed','true')`); await reloadCaptions();
-    assert.equal(await noticeVisible(), true);
-    for (const label of ['Discord', 'X', 'Instagram']) await js(`Array.from(document.querySelectorAll('[data-caption-support]')).find(a=>a.textContent===${JSON.stringify(label)}).click()`);
-    assert.deepEqual(calls.filter(c => c.channel === 'open-external').map(c => c.args[0]), ['https://discord.gg/KmJRqUZzDe', 'https://x.com/alibahrawy34', 'https://www.instagram.com/alibahrawy34/']);
-    await click('caption-update-dismiss'); assert.equal(await noticeVisible(), false);
-    assert.equal(await js(`document.activeElement.id`), 'caption-language-select');
-    await reloadCaptions(); assert.equal(await noticeVisible(), false);
+    assert.equal(await js(`document.getElementById('caption-update-notice')`), null);
     assert.equal(starts.length, 0); assert.equal(language, 'ar'); assert.equal(model, 'ggml-base.bin');
     assert.equal(calls.filter(c => /^set-|generate|track|telemetry/.test(c.channel)).length, 0);
     await js(`localStorage.removeItem('smoothyedit:arabic-captions:2026-10-09:dismissed')`); await reloadCaptions();

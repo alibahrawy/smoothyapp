@@ -1,4 +1,3 @@
-import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
@@ -6,7 +5,7 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 
 async function load(relative) {
-  const result = await build({ entryPoints: [fileURLToPath(new URL(relative, import.meta.url))], bundle: true, format: 'esm', platform: 'node', write: false });
+  const result = await build({ entryPoints: [new URL(relative, import.meta.url).pathname], bundle: true, format: 'esm', platform: 'node', write: false });
   return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`);
 }
 const pref = await load('../src/main/app-preferences.ts');
@@ -91,7 +90,7 @@ test('disabling Studio rejects new cloud work and aborts the current signal; re-
 
 function fixture(options = {}) {
   const f = { owner: 'a', enabled: true, calls: [], history: [], tracked: [], ...options };
-  const service = studio.createStudioService({ owner: () => f.owner, enabled: () => f.enabled, track: id => f.tracked.push(id), verifyAccess: async mode => { if (f.pro === false && studio.studioProModes.includes(mode)) throw Error('Studio Pro required'); }, request: async (...args) => { f.calls.push(args); if (f.request) return f.request(...args); if (f.failure) throw Error(f.failure); return JSON.stringify({ draft: 'Idea' }); }, saveHistory: async (...args) => { if (f.historyFailure) throw Error('Offline'); f.history.push(args); } });
+  const service = studio.createStudioService({ owner: () => f.owner, enabled: () => f.enabled, track: id => f.tracked.push(id), verifyAccess: async mode => { if (f.pro === false && studio.studioProModes.includes(mode)) throw Error('Smoothy Pro required'); }, request: async (...args) => { f.calls.push(args); if (f.request) return f.request(...args); if (f.failure) throw Error(f.failure); return JSON.stringify({ draft: 'Idea' }); }, saveHistory: async (...args) => { if (f.historyFailure) throw Error('Offline'); f.history.push(args); } });
   return { f, service };
 }
 const input = (mode = 'title') => ({ mode, subtitleText: '00:00:01,000 --> 00:00:05,000\nA real transcript', fileName: 'Interview.srt', ...(mode === 'broll' && { videoType: 'Interview', brollCategories: ['stock footage', 'graphics'] }), ...(mode === 'condense' && { duration: 60 }) });
@@ -139,7 +138,7 @@ test('drafts render every JSON structure as readable text, keeping HTML inert an
 });
 
 test('desktop labels/descriptions stay identical to the web Pick a Tool catalog when its source is present', async t => {
-  const source = process.env.SMOOTHY_STUDIO_WEB_SOURCE || fileURLToPath(new URL('../../web/src/components/dashboard/toolPrefs.ts', import.meta.url));
+  const source = process.env.SMOOTHY_STUDIO_WEB_SOURCE || new URL('../../web/src/components/dashboard/toolPrefs.ts', import.meta.url).pathname;
   let text; try { text = await fs.readFile(source, 'utf8'); } catch { t.skip('Standalone app checkout; web source not bundled'); return; }
   const { transform } = await import('esbuild'); const ctx = { module: { exports: {} } };
   vm.runInNewContext((await transform(text, { loader: 'ts', format: 'cjs' })).code, ctx);

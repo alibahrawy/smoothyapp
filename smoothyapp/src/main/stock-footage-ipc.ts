@@ -68,4 +68,5 @@ export function registerStockFootage(deps: {
   });
   ipcMain.handle('stock-cancel-download', () => { downloadController?.abort(); return { success: true }; });
   app.on('before-quit', () => { searchController?.abort(); downloadController?.abort(); });
+  return { service, folder: getFolder };
 }

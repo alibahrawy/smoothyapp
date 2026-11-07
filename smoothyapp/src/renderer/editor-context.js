@@ -4,7 +4,8 @@ export const editorPool=()=>selected==='resolve'?'Media Pool':'Project panel';
 export const editorText=text=>selected==='resolve'?text.replace(/Premiere(?: Pro)?/g,'DaVinci Resolve').replace(/Project panel/g,'Media Pool').replace(/Premiere-ready/g,'editor-ready'):text;
 export function setEditorContext(editor){const next=editor==='resolve'?'resolve':'premiere',changed=next!==selected;selected=next;return changed;}
 export function updateEditorLabels(){
-  for(const el of document.querySelectorAll('[data-editor-copy]'))el.textContent=editorText(el.dataset.editorCopy).replace('send it straight to your DaVinci Resolve timeline','import it into Resolve’s Media Pool');
+  // Status lines (…-status-text) carry live connection state written by app.js; resetting them here showed "Waiting for Premiere…" while connected.
+  for(const el of document.querySelectorAll('[data-editor-copy]:not([id$="status-text"])'))el.textContent=editorText(el.dataset.editorCopy).replace('send it straight to your DaVinci Resolve timeline','import it into Resolve’s Media Pool');
   for(const el of document.querySelectorAll('[data-editor-send]')){
     const text=[...el.childNodes].findLast(node=>node.nodeType===3 && node.textContent.trim());
     if(text)text.textContent=' Send to '+editorName();else el.append('Send to '+editorName());

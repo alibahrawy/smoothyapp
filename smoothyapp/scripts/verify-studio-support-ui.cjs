@@ -24,7 +24,7 @@ const idea='Useful idea', results={
  blog:{blogPost:{headline:idea,metaDescription:'A useful article',introduction:'An opening paragraph',sections:[{heading:'Getting started',content:'The full story',subSections:[{heading:'Next step',content:'A practical tip'}]}],keyTakeaways:['Practice'],conclusion:'Keep editing',seoKeywords:['editing'],suggestedTags:['video']}},
  sfx:{sfxCues:[{timestamp:'00:01',subtitle:'The reveal',sfxType:'impact',sfxName:idea,description:'A soft hit',intensity:'low',rationale:'Emphasize the moment'}]}
 };
-const service=createStudioService({owner:()=>user?.id||null,enabled:()=>preferences.snapshot().studioEnabled,verifyAccess:async mode=>{if(['thumbnail','broll','twitter','blog','sfx'].includes(mode)&&user?.tier!=='pro')throw Error('Studio Pro required');},track:id=>usage.push(id),saveHistory:async(...args)=>calls.push({kind:'saveHistory',args}),request:async(route,body)=>{
+const service=createStudioService({owner:()=>user?.id||null,enabled:()=>preferences.snapshot().studioEnabled,verifyAccess:async mode=>{if(['thumbnail','broll','twitter','blog','sfx'].includes(mode)&&user?.tier!=='pro')throw Error('Smoothy Pro required');},track:id=>usage.push(id),saveHistory:async(...args)=>calls.push({kind:'saveHistory',args}),request:async(route,body)=>{
   calls.push({kind:'cloud',route,body});if(rejectNext){rejectNext=false;throw Error('No credits remaining');}if(delayed)return new Promise(resolve=>{delayed.resolve=resolve;});
   return JSON.stringify(results[body.analysisMode||body.mode]);
 }});

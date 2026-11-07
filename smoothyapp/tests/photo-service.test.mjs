@@ -47,7 +47,7 @@ test('text/reference generation uses the web API, validates settings, keeps cred
   const f = fixture();
   const result = await f.service.run({ action: 'generate', aspectRatio: '1:1', prompt: 'Sky', model: 'invalid', imageSize: '4K', aspectRatio: '1:1' });
   const body = f.calls[0].options.body;
-  assert.equal(body.model, 'openai/gpt-image-2.5-flare'); assert.equal(body.imageSize, undefined); assert.equal(body.aspectRatio, '1:1'); assert.equal(body.imageType, 'text-to-image'); assert.deepEqual(body.images, []);
+  assert.equal(body.model, 'openai/gpt-image-2.6-flare'); assert.equal(body.imageSize, undefined); assert.equal(body.aspectRatio, '1:1'); assert.equal(body.imageType, 'text-to-image'); assert.deepEqual(body.images, []);
   assert.match(result.photo.previewUrl, /^smoothy-photo:\/\/image\/[0-9a-f-]{36}$/); assert.equal(result.photo.imageUrl, undefined);
   assert.deepEqual(f.usage, ['photos_generate']);
   await f.service.run({ action: 'edit', aspectRatio: '1:1', references: [imageUrl], prompt: 'Blue sky', model: 'openai/gpt-5-image-mini', imageSize: '4K', subject: 'A person in a red shirt' });

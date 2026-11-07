@@ -1,0 +1,317 @@
+/**
+ * SmoothyEdit shared design scale. Loaded after every other stylesheet so one
+ * set of sizes wins over the older per-tab overrides.
+ *
+ *   Page title   20px / 650        Card heading 15px / 600
+ *   Body         13px              Small        12px
+ *   Button       36px tall, 8px radius (main action 44px)
+ *   Field        36px tall, 8px radius
+ *   Card         16px padding, 16px radius
+ */
+:root {
+  --ds-title: 20px;
+  --ds-heading: 15px;
+  --ds-body: 13px;
+  --ds-small: 12px;
+  --ds-control-h: 36px;
+  --ds-action-h: 44px;
+  --ds-radius: 8px;
+  --ds-card-radius: 16px;
+  --ds-card-pad: 16px;
+}
+
+/* Page titles: one size, whatever the tab calls its heading. */
+.tab-content h1,
+#tab-community .community-head h2,
+.pro-lock-card h2 {
+  font-size: var(--ds-title);
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+/* Cards: one heading size, no decorative dot, one radius and padding. */
+.app-container .section {
+  padding: var(--ds-card-pad);
+  border-radius: var(--ds-card-radius);
+  animation: none;
+}
+.app-container .section h2 {
+  font-size: var(--ds-heading);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.app-container .section h2::before { display: none; }
+
+/* Secondary text. */
+.app-container :is(.help-text, .empty-message, .footer-status, .footer-action-note, .track-clips) {
+  font-size: var(--ds-small);
+  line-height: 1.5;
+}
+
+/* Buttons: one height and radius. */
+.app-container .btn {
+  min-height: var(--ds-control-h);
+  padding: 0 16px;
+  border-radius: var(--ds-radius);
+  font-size: var(--ds-body);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.app-container .btn.btn-small { min-height: var(--ds-control-h); padding: 0 14px; font-size: var(--ds-body); border-radius: var(--ds-radius); }
+.app-container .btn.btn-large,
+.app-container .footer-buttons--primary .btn {
+  min-height: var(--ds-action-h);
+  padding: 0 20px;
+  font-size: 14px;
+  border-radius: var(--ds-radius);
+  letter-spacing: 0;
+}
+.app-container .footer-buttons--secondary .btn { min-height: var(--ds-control-h); font-size: var(--ds-body); }
+.app-container .btn-primary:hover:not(:disabled) { transform: none; }
+
+/* Fields. */
+.app-container :is(.select-input, .text-input, select, input[type="text"], input[type="number"], input[type="search"]):not(.audio-search, [type="range"]) {
+  min-height: var(--ds-control-h);
+  border-radius: var(--ds-radius);
+  font-size: var(--ds-body);
+}
+
+/* Small "i" that holds detail text so cards stay short. */
+.info-tip {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  border: 1px solid var(--border-light);
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  font-style: normal;
+  line-height: 1;
+  color: var(--foreground-muted);
+  cursor: help;
+  vertical-align: middle;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.info-tip:hover, .info-tip:focus-visible { color: var(--foreground); border-color: var(--foreground-muted); outline: none; }
+
+/* Kickers above headings repeat the heading; hide them. */
+.agentic-preview-head .agentic-overline,
+.agentic-notes-head .agentic-overline,
+.agentic-side-card > .agentic-overline { display: none; }
+
+/* Compact one-line notice (Arabic captions). */
+
+/* Disabled main actions read as disabled, not as pale versions of the active color. */
+.app-container .btn-primary:disabled,
+.app-container .btn-primary[disabled] {
+  background: var(--background-tertiary);
+  color: var(--foreground-muted);
+  box-shadow: none;
+  border: 1px solid var(--border);
+  opacity: 1;
+}
+
+/* Narrower expanded sidebar (collapsed stays 80px via .sidebar-collapsed). */
+:root { --sidebar-width: 196px; }
+/* The footer icons need the room; the version is shown in Settings. */
+#sidebar-version { display: none; }
+.sidebar:not(.sidebar-collapsed) .footer-actions { justify-content: space-around; }
+/* Compact sidebar footer so the tool list gets the room. */
+.app-container:not(.sidebar-collapsed) .sidebar .sidebar-footer { padding: 10px 14px 8px; gap: 6px; }
+.app-container:not(.sidebar-collapsed) .sidebar .user-info { padding: 8px 10px; }
+.app-container:not(.sidebar-collapsed) .sidebar .user-info .user-details { flex-direction: row; align-items: center; gap: 8px; min-width: 0; }
+.app-container:not(.sidebar-collapsed) .sidebar .user-info .user-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Audio Library: fit the narrower layout and use one icon-button size. */
+body:not(.window-expanded) .audio-table { min-width: 560px; }
+.audio-table td, .audio-table th { padding-left: 8px; padding-right: 8px; }
+.app-container :is(.audio-row-play, .audio-row-download, .audio-star) { width: 32px; height: 32px; }
+
+/* One card, not two: while the connect guide is showing, the empty
+   "Active Sequence" card says the same thing, so hide it. */
+.premiere-guide:not(.hidden) ~ section:has(.sequence-info) { display: none; }
+
+/* One-row action bar for single-action tabs: status on the left, button on the right. */
+.app-container .content-footer:has(> .btn-large) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 16px;
+  row-gap: 2px;
+  padding: 12px var(--spacing-xl);
+}
+.app-container .content-footer:has(> .btn-large) > :is(.footer-action-note, .footer-status) {
+  grid-column: 1;
+  margin: 0;
+  text-align: left;
+}
+.app-container .content-footer:has(> .btn-large) > .btn-large {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  width: auto;
+  min-width: 200px;
+  white-space: nowrap;
+}
+.app-container .content-footer:has(> .btn-large) > .btn:not(.btn-large) { grid-column: 1; justify-self: start; }
+@media (max-width: 760px) {
+  .app-container .content-footer:has(> .btn-large) { grid-template-columns: 1fr; }
+  .app-container .content-footer:has(> .btn-large) > .btn-large { grid-column: 1; grid-row: auto; width: 100%; }
+}
+
+/* Checkbox rows keep the box next to its label; track pickers are wide enough to read. */
+.app-container .checkbox-label { justify-content: flex-start; }
+.app-container .tracks-list select { min-width: 128px; }
+
+/* Slider labels: text and info tip together on the left, value on the right. */
+.app-container .form-group label:has(.value-display) { justify-content: flex-start; }
+.app-container .form-group label .value-display { margin-left: auto; }
+
+/* ===== Agent view: Frame.io-style review in the Smoothy theme (player left, notes for the AI right) ===== */
+#tab-agentic.active { display: flex; flex-direction: column; }
+#tab-agentic .agentic-review {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(260px, 34%, 340px);
+  background: var(--background);
+  color: var(--foreground);
+}
+#tab-agentic .agentic-stage {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 18px 18px;
+  overflow-y: auto;
+}
+#tab-agentic .agentic-stage-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+#tab-agentic .agentic-stage-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+#tab-agentic .agentic-stage-title h2 { margin: 0; font-size: var(--ds-heading); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#tab-agentic .agentic-stage-title h2::before { display: none; }
+#tab-agentic .agentic-link-chip {
+  padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  background: var(--background-tertiary); color: var(--foreground-muted); white-space: nowrap;
+}
+#tab-agentic .agentic-link-chip[data-linked="true"] { background: color-mix(in oklab, var(--primary) 35%, white); color: var(--accent); }
+#tab-agentic .agentic-preview-actions { display: flex; gap: 8px; }
+#tab-agentic .agentic-preview-frame { border-radius: var(--ds-card-radius); background: #000; border: 1px solid var(--border); overflow: hidden; }
+
+/* Scrub bar with note markers underneath */
+#tab-agentic .agentic-scrub-row { align-items: flex-start; gap: 10px; }
+#tab-agentic .agentic-scrub-wrap { position: relative; flex: 1; min-width: 0; padding-bottom: 28px; }
+#tab-agentic .agentic-scrub-wrap input[type="range"] { width: 100%; }
+#tab-agentic .agentic-markers { position: absolute; left: 0; right: 0; bottom: 2px; height: 22px; pointer-events: none; }
+#tab-agentic .agentic-marker {
+  position: absolute; top: 0; transform: translateX(-50%);
+  width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%;
+  display: grid; place-items: center; pointer-events: auto; cursor: pointer;
+  font-size: 9px; font-weight: 700; color: var(--primary-foreground); background: var(--primary);
+  box-shadow: 0 0 0 2px var(--background);
+}
+#tab-agentic .agentic-marker[data-author="agent"] { background: #D4C2FF; }
+#tab-agentic .agentic-marker[data-status="resolved"] { opacity: 0.4; }
+#tab-agentic .agentic-time-readout { color: var(--foreground-muted); }
+#tab-agentic .agentic-markup-bar { border-top: 1px solid var(--border); padding-top: 10px; }
+#tab-agentic .agentic-markup-bar .agentic-overline { text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; }
+#tab-agentic .agentic-preview-note { color: var(--foreground-muted); margin: 0; }
+
+/* Notes panel */
+#tab-agentic .agentic-comments {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--background-secondary);
+  border-left: 1px solid var(--border);
+}
+#tab-agentic .agentic-comments-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; font-size: var(--ds-body); }
+#tab-agentic .agentic-comments-head strong { font-weight: 600; }
+#tab-agentic .agentic-count { color: var(--foreground-muted); font-size: var(--ds-small); }
+#tab-agentic .agentic-notes { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+#tab-agentic .agentic-empty { padding: 20px 16px; color: var(--foreground-muted); text-align: center; }
+#tab-agentic .agentic-note { padding: 12px 14px; border-radius: 12px; background: var(--background); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+#tab-agentic .agentic-note[data-status="resolved"] { opacity: 0.55; }
+#tab-agentic .agentic-note-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+#tab-agentic .agentic-avatar {
+  width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 10px; font-weight: 700; color: var(--primary-foreground); background: var(--primary); flex: none;
+}
+#tab-agentic .agentic-avatar[data-author="agent"] { background: #D4C2FF; }
+#tab-agentic .agentic-note-author { font-size: var(--ds-body); font-weight: 600; text-transform: none; letter-spacing: 0; }
+#tab-agentic .agentic-note-age { font-size: var(--ds-small); color: var(--foreground-muted); }
+#tab-agentic .agentic-note-number { margin-left: auto; font-size: var(--ds-small); color: var(--foreground-muted); }
+#tab-agentic .agentic-note-body { margin: 0; font-size: var(--ds-body); line-height: 1.5; color: var(--foreground-secondary); white-space: pre-wrap; }
+#tab-agentic .agentic-tc-chip {
+  display: inline-block; padding: 1px 7px; border: 0; border-radius: 6px;
+  font: 600 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: color-mix(in oklab, var(--warning) 28%, white); color: oklch(0.42 0.08 75);
+}
+#tab-agentic button.agentic-tc-chip { cursor: pointer; }
+#tab-agentic .agentic-note-replies { margin-top: 8px; padding-left: 10px; border-left: 2px solid var(--border); display: grid; gap: 4px; font-size: var(--ds-small); color: var(--foreground-secondary); }
+#tab-agentic .agentic-note-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+#tab-agentic .agentic-note-link { background: none; border: 0; padding: 0; color: var(--foreground-muted); font-size: var(--ds-small); font-weight: 600; cursor: pointer; text-transform: none; letter-spacing: 0; }
+#tab-agentic .agentic-note-link:hover { color: var(--foreground); }
+#tab-agentic .agentic-resolve { background: none; border: 0; padding: 2px; color: var(--foreground-muted); cursor: pointer; border-radius: 50%; }
+#tab-agentic .agentic-resolve:hover { color: var(--foreground); }
+#tab-agentic .agentic-resolve[data-done="true"] { color: var(--success); }
+#tab-agentic .agentic-note-reply-form { display: flex; gap: 6px; margin-top: 8px; }
+#tab-agentic .agentic-note-reply-form input { flex: 1; min-height: var(--ds-control-h); border-radius: var(--ds-radius); border: 1px solid var(--border); background: var(--input-bg); color: var(--foreground); padding: 0 10px; }
+#tab-agentic .agentic-flash { margin: 0 12px 6px; padding: 6px 10px; border-radius: var(--ds-radius); background: var(--background-tertiary); color: var(--foreground-secondary); font-size: var(--ds-small); }
+
+/* Composer */
+#tab-agentic .agentic-note-composer { padding: 12px; border-top: 1px solid var(--border); display: grid; gap: 8px; background: var(--background-secondary); box-shadow: none; border-radius: 0; margin: 0; }
+#tab-agentic .agentic-composer-row { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: 12px; background: var(--input-bg); border: 1px solid var(--border); }
+#tab-agentic .agentic-composer-row textarea { flex: 1; min-width: 0; resize: none; border: 0; outline: 0; background: transparent; color: var(--foreground); font: inherit; font-size: var(--ds-body); line-height: 1.5; }
+#tab-agentic .agentic-composer-row textarea::placeholder { color: var(--foreground-muted); }
+#tab-agentic .agentic-note-actions { display: flex; align-items: center; gap: 10px; }
+#tab-agentic .agentic-check { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ds-small); color: var(--foreground-muted); }
+#tab-agentic .agentic-for-ai { margin-left: auto; padding: 3px 9px; border-radius: 999px; background: #EAE2FF; color: oklch(0.42 0.12 290); font-size: 11px; font-weight: 600; }
+#tab-agentic .agentic-send { width: var(--ds-control-h); height: var(--ds-control-h); border: 0; border-radius: var(--ds-radius); display: grid; place-items: center; background: var(--primary); color: var(--primary-foreground); cursor: pointer; }
+#tab-agentic .agentic-send:disabled { opacity: 0.45; cursor: default; }
+
+@media (max-width: 720px) {
+  #tab-agentic .agentic-review { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+  #tab-agentic .agentic-comments { border-left: 0; border-top: 1px solid var(--border); }
+}
+
+/* Groups hidden by the workspace switcher stay hidden even where the group sets its own display. */
+.channel-group[hidden] { display: none !important; }
+.editor-logo-agentic { display: grid; place-items: center; color: var(--foreground); }
+
+/* Settings → Agent: the moved controls sit flat inside the settings groups. */
+.settings-pane[data-pane="agent"] .section { padding: 0; border: 0; box-shadow: none; background: transparent; }
+.settings-pane[data-pane="agent"] .section > h2,
+.settings-pane[data-pane="agent"] .agentic-notes-head h2,
+.settings-pane[data-pane="agent"] .agentic-overline { display: none; }
+.settings-pane[data-pane="agent"] .agentic-status-card { box-shadow: none; margin-bottom: 12px; }
+.settings-pane[data-pane="agent"] .checkbox-label { margin-top: 4px; }
+
+/* Tab accents the tab itself lacked */
+#tab-local-audio { --tab-accent: #A8D8FF; --cleanup-mint: #A8D8FF; }
+#tab-shortscuts { --tab-accent: #C2E67F; }
+.stock-heading h1 { display: none; }
+.stock-heading:has(#stock-powered.hidden) { display: none; }
+
+/* ---- Sidebar: credits on top, Pro mark, unread badge, arrangeable tools ---- */
+.sidebar-tools-header .nav-credits { margin: 0 6px 0 auto; padding: 3px 9px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.sidebar-collapsed .sidebar-tools-header .nav-credits { display: none; }
+.sidebar-collapsed .nav-item .pro-badge { display: none; }
+.nav-item { position: relative; }
+.nav-item.is-dragging { opacity: 0.45; }
+.nav-item.drop-before::before, .nav-item.drop-after::after { content: ""; position: absolute; left: 10px; right: 10px; height: 2px; border-radius: 2px; background: var(--text-primary, #23302d); }
+.nav-item.drop-before::before { top: -2px; }
+.nav-item.drop-after::after { bottom: -2px; }
+.nav-order-menu { position: fixed; z-index: 1000; min-width: 150px; padding: 5px; border: 1px solid var(--border); border-radius: 10px; background: #fff; box-shadow: 0 12px 32px rgb(0 0 0 / 0.14); }
+.nav-order-menu button { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.nav-order-menu button:hover:not(:disabled) { background: var(--background-tertiary, #efede6); }
+.nav-order-menu button:disabled { opacity: 0.35; cursor: default; }
+/* Unread count next to Community; sits on the icon when the sidebar is collapsed. */
+.community-nav-badge { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #23302d; color: #fff; font-size: 11px; font-weight: 700; line-height: 20px; text-align: center; }
+.community-nav-badge.hidden { display: none; }
+.sidebar-collapsed .community-nav-badge { position: absolute; top: 2px; right: 6px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px; line-height: 16px; box-shadow: 0 0 0 2px var(--background, #faf9f5); }
+.nav-group-header:has(.nav-credits:not(.hidden)) .nav-group-title { display: none; }
+.sidebar-tools-header .nav-credits { margin: 0 auto 0 0; }

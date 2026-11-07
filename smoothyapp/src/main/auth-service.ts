@@ -1,8 +1,8 @@
 /**
  * Auth Service for SmoothyEdit Electron App
  * Handles optional Studio authentication + local/cloud feature gating.
- * All local features are free forever (MIT, no account).
- * Only cloud AI features (Best Shorts, export-audio) require Studio Pro.
+ * Core local tools are free (no account). Cloud AI features and the
+ * ShortsCuts / Agent tools require Smoothy Pro.
  */
 
 import Store from 'electron-store';
@@ -47,9 +47,16 @@ interface FeatureAccess {
 
 // Feature definitions — new vision: all local free forever, cloud AI gated.
 // Local (free, no account): autocut/multicam, silence-removal, captions, compressor, sequence-info
-// Cloud (Studio Pro): bestshorts, export-audio
+// Cloud (Smoothy Pro): bestshorts, export-audio
 const CLOUD_AI_FEATURES = ['bestshorts', 'export-audio'];
-const LOCAL_FREE_FEATURES = ['autocut', 'silence-removal', 'sequence-info', 'captions', 'compressor'];
+// Desktop features that need an active Pro subscription (checked in the main process).
+export const PRO_FEATURES = ['agent'] as const;
+export type ProFeature = (typeof PRO_FEATURES)[number];
+// A signed-in Pro user keeps access for this long without re-verifying the plan,
+// so a paying user is never locked out by a short offline spell.
+const PRO_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+// ShortsCuts is usable on every plan; the main process limits free decks to six keys.
+const LOCAL_FREE_FEATURES = ['autocut', 'silence-removal', 'sequence-info', 'captions', 'compressor', 'shortscuts'];
 
 // Store instance
 const store = new Store();
@@ -95,6 +102,7 @@ export async function loginWithGoogle(openExternal: (url: string) => Promise<unk
     if (stamp !== authEpoch || controller.signal.aborted) return { success: false, error: 'Sign-in was canceled.' };
     const account: User = { id: user.id, email: user.email, name: typeof user.name === 'string' ? user.name : null, tier: user.tier, isAdmin: user.isAdmin === true, emailVerified: user.emailVerified === true };
     store.set('user', account);
+    markTierChecked();
     store.set('sessionToken', session.sessionToken);
     store.set('jwt', account.id);
     notifyAuthChange();
@@ -102,6 +110,23 @@ export async function loginWithGoogle(openExternal: (url: string) => Promise<unk
   } catch (error) {
     return { success: false, error: controller.signal.aborted ? 'Sign-in was canceled.' : error instanceof Error ? error.message : 'Could not complete Google sign-in. Please try again.' };
   } finally { if (googleController === controller) googleController = null; }
+}
+
+function markTierChecked(): void {
+  store.set('tierCheckedAt', Date.now());
+}
+
+/** True for a signed-in Pro account whose plan was verified within the grace window. */
+export function hasPro(): boolean {
+  const user = store.get('user') as User | null;
+  if (!user || user.tier !== 'pro' || !store.get('jwt')) return false;
+  let checkedAt = Number(store.get('tierCheckedAt'));
+  if (!Number.isFinite(checkedAt) || checkedAt <= 0) {
+    // Sessions saved before this check existed: start the grace window now.
+    checkedAt = Date.now();
+    store.set('tierCheckedAt', checkedAt);
+  }
+  return Date.now() - checkedAt < PRO_GRACE_MS;
 }
 
 let authChangeCallback: ((state: AuthState) => void) | null = null;
@@ -178,6 +203,7 @@ export async function login(
     // API calls (sent as a Bearer header); `jwt` is kept for older code paths.
     if (stamp !== authEpoch) return { success: false, error: 'Sign-in was canceled.' };
     store.set('user', user);
+    markTierChecked();
     if (data.sessionToken) {
       store.set('sessionToken', data.sessionToken);
     }
@@ -231,6 +257,7 @@ export function logout(): void {
   store.delete('user');
   store.delete('jwt');
   store.delete('sessionToken');
+  store.delete('tierCheckedAt');
   console.log('[Auth] Logged out');
   notifyAuthChange();
 }
@@ -275,6 +302,7 @@ export async function refreshUserData(): Promise<boolean> {
       isAdmin: data.user.isAdmin,
       emailVerified: data.user.emailVerified === true
     });
+    markTierChecked();
 
     console.log('[Auth] User data refreshed');
     notifyAuthChange();
@@ -285,12 +313,102 @@ export async function refreshUserData(): Promise<boolean> {
   }
 }
 
+export interface ProfileResult {
+  success: boolean;
+  error?: string;
+  name?: string;
+}
+
+/**
+ * Save the public display name shown in the community lobby and on the
+ * dashboard. Never derived from the email; the website enforces the same rule.
+ */
+export async function updateDisplayName(name: string): Promise<ProfileResult> {
+  const cleaned = typeof name === 'string'
+    ? name.replace(/[\u0000-\u001f\u007f\u200b-\u200f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 40)
+    : '';
+  if (cleaned.length < 2) return { success: false, error: 'Use a display name with 2 to 40 characters.' };
+  try {
+    const response = await fetch(`${API_BASE}/api/user/profile`, {
+      method: 'PATCH',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ name: cleaned }),
+      redirect: 'error',
+      signal: AbortSignal.timeout(20000),
+    });
+    const data = (await response.json().catch(() => ({}))) as { success?: boolean; name?: string; error?: string };
+    if (!response.ok || !data.success) {
+      return { success: false, error: data.error || 'Could not save your name.' };
+    }
+    const user = store.get('user') as User | null;
+    if (user) store.set('user', { ...user, name: data.name ?? cleaned });
+    notifyAuthChange();
+    return { success: true, name: data.name ?? cleaned };
+  } catch {
+    return { success: false, error: 'Could not reach SmoothyEdit. Please try again.' };
+  }
+}
+
+export interface AccountActionResult {
+  success: boolean;
+  error?: string;
+  message?: string;
+}
+
+/** Change the account password using the signed desktop session. */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<AccountActionResult> {
+  if (typeof currentPassword !== 'string' || !currentPassword) return { success: false, error: 'Enter your current password.' };
+  if (typeof newPassword !== 'string' || newPassword.length < 8 || newPassword.length > 256) {
+    return { success: false, error: 'Use a new password with 8 to 256 characters.' };
+  }
+  try {
+    const response = await fetch(`${API_BASE}/api/auth/change-password`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ currentPassword, newPassword }),
+      redirect: 'error',
+      signal: AbortSignal.timeout(20000),
+    });
+    const data = (await response.json().catch(() => ({}))) as { success?: boolean; error?: string; message?: string };
+    if (!response.ok || !data.success) {
+      return { success: false, error: data.error || 'Could not change your password.' };
+    }
+    return { success: true, message: data.message || 'Password updated.' };
+  } catch {
+    return { success: false, error: 'Could not reach SmoothyEdit. Please try again.' };
+  }
+}
+
+/**
+ * Delete the account (and its lobby messages) after verifying the password.
+ * A successful deletion clears the local session so the app returns to guest.
+ */
+export async function deleteAccount(password: string): Promise<AccountActionResult> {
+  if (typeof password !== 'string' || !password) return { success: false, error: 'Enter your password to confirm.' };
+  try {
+    const response = await fetch(`${API_BASE}/api/auth/delete-account`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ password }),
+      redirect: 'error',
+      signal: AbortSignal.timeout(25000),
+    });
+    const data = (await response.json().catch(() => ({}))) as { error?: string; message?: string };
+    if (!response.ok) {
+      return { success: false, error: data.error || 'Could not delete your account.' };
+    }
+    logout();
+    return { success: true, message: data.message || 'Your account was deleted.' };
+  } catch {
+    return { success: false, error: 'Could not reach SmoothyEdit. Please try again.' };
+  }
+}
+
 /**
  * Check if trial period has expired
  * @deprecated Trials removed. Always returns false.
  */
-export function isTrialExpired(): boolean {
-  return false;
+export function isTrialExpired(): boolean {  return false;
 }
 
 /**
@@ -316,14 +434,18 @@ export function getTrialStatus(): TrialStatus {
 
 /**
  * Check if a feature can be used — new vision:
- * local tools always allowed, cloud AI requires Studio Pro.
+ * local tools always allowed, cloud AI requires Smoothy Pro.
  */
 export function canUseFeature(feature: string): FeatureAccess {
   const { user } = getAuthState();
 
   // Pro users always have full access
-  if (user?.tier === 'pro') {
+  if (hasPro()) {
     return { allowed: true };
+  }
+
+  if ((PRO_FEATURES as readonly string[]).includes(feature)) {
+    return { allowed: false, reason: user ? 'pro-required' : 'login-required' };
   }
 
   // Local features free forever, no account needed
