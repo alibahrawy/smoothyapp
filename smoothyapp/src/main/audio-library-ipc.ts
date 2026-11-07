@@ -131,4 +131,5 @@ export async function registerAudioLibrary(deps: {
   }));
   ipcMain.handle('audio-library-show-folder', () => result(async () => { await shell.openPath(library.folder); return {}; }));
   app.on('before-quit', () => { stop(); clearInterval(communityTimer); download?.controller.abort(); });
+  return { library, archive, notify };
 }

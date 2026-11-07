@@ -1,0 +1,72 @@
+/* Community lobby — shared chat for every Smoothy editor */
+#tab-community .community-shell {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 16px 20px 18px;
+}
+
+.community-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex: none; }
+.community-kicker { display: inline-flex; align-items: center; gap: 7px; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--foreground-muted); }
+.community-kicker::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--primary); }
+.community-head h2 { margin: 7px 0 4px; font-size: 20px; font-weight: 650; letter-spacing: -.03em; }
+.community-head .help-text { margin: 0; max-width: 560px; }
+.community-head-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.community-presence { display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px; border: 1px solid var(--border); border-radius: 999px; font-size: 10px; font-weight: 700; color: var(--foreground-muted); white-space: nowrap; }
+.community-presence-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--foreground-muted); }
+.community-presence[data-status="online"] { color: var(--success); border-color: color-mix(in oklch, var(--success) 35%, var(--border)); }
+.community-presence[data-status="online"] .community-presence-dot { background: var(--success); box-shadow: 0 0 0 3px color-mix(in oklch, var(--success) 16%, transparent); }
+.community-presence[data-status="connecting"] { color: var(--primary); }
+.community-presence[data-status="connecting"] .community-presence-dot { background: var(--primary); animation: community-pulse 1.2s ease-in-out infinite; }
+.community-presence[data-status="offline"] { color: var(--error); border-color: color-mix(in oklch, var(--error) 30%, var(--border)); }
+.community-presence[data-status="offline"] .community-presence-dot { background: var(--error); }
+@keyframes community-pulse { 50% { opacity: .35; } }
+
+.community-guest { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; padding: 10px 12px; border: 1px solid color-mix(in oklch, var(--primary) 28%, var(--border)); border-radius: 12px; background: color-mix(in oklch, var(--primary) 7%, var(--background-secondary)); font-size: 11px; line-height: 1.5; flex: none; }
+.community-guest span { flex: 1; min-width: 180px; }
+
+.community-feed { display: flex; flex: 1; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; padding: 4px 2px 6px; }
+.community-day { align-self: center; margin: 10px 0 6px; padding: 3px 10px; border-radius: 999px; background: var(--background-secondary); color: var(--foreground-muted); font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.community-msg { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 9px; padding: 6px 8px; border-radius: 10px; }
+.community-msg.is-grouped { padding-top: 1px; }
+.community-msg:hover { background: var(--background-secondary); }
+.community-msg.is-own { background: color-mix(in oklch, var(--primary) 6%, transparent); }
+.community-avatar { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--border); border-radius: 10px; background: var(--background-tertiary); color: var(--foreground-secondary); font-size: 11px; font-weight: 700; }
+.community-avatar.is-spacer { border: 0; background: transparent; }
+.community-msg[data-guest="true"] .community-avatar { color: var(--foreground-muted); background: color-mix(in oklch, var(--foreground-muted) 10%, var(--background)); }
+.community-msg[data-guest="false"] .community-avatar { color: var(--foreground); background: color-mix(in oklch, var(--primary) 22%, var(--background)); border-color: color-mix(in oklch, var(--primary) 28%, var(--border)); }
+/* Grouped continuations keep the indent but hide the avatar chip. Placed after
+   the guest/member colour rules so it wins on specificity. */
+.community-msg .community-avatar.is-spacer { border-color: transparent; background: transparent; }
+.community-msg-body { min-width: 0; }
+.community-msg-head { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; margin-bottom: 2px; }
+.community-msg-head strong { font-size: 12px; font-weight: 700; letter-spacing: -.01em; }
+.community-chip { padding: 2px 6px; border-radius: 999px; background: var(--background-tertiary); color: var(--foreground-muted); font-size: 8px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.community-chip.is-guest { background: color-mix(in oklch, #ffd88a 38%, var(--background)); color: #6d5518; }
+.community-chip.is-pro { background: color-mix(in oklch, var(--primary) 32%, var(--background)); color: var(--foreground); }
+.community-msg-time { color: var(--foreground-muted); font-size: 9px; }
+.community-msg-text { margin: 0; font-size: 12.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.community-empty { display: grid; gap: 7px; max-width: 430px; margin: auto; padding: 26px 24px; text-align: center; }
+.community-empty h3 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -.02em; }
+.community-empty p { margin: 0; color: var(--foreground-muted); font-size: 11.5px; line-height: 1.6; }
+
+.community-composer { display: flex; flex-direction: column; gap: 6px; flex: none; padding: 10px 12px; border: 1px solid var(--border); border-radius: 14px; background: var(--background-secondary); transition: border-color .15s ease; }
+.community-composer:focus-within { border-color: color-mix(in oklch, var(--primary) 45%, var(--border)); }
+.community-composer textarea { min-height: 40px; max-height: 120px; padding: 2px; border: 0; outline: 0; resize: none; background: transparent; color: var(--foreground); font: inherit; font-size: 12.5px; line-height: 1.5; }
+.community-composer textarea:disabled { color: var(--foreground-muted); }
+.community-composer-bar { display: flex; align-items: center; gap: 8px; }
+.community-hint { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--foreground-muted); font-size: 9.5px; }
+.community-hint[data-tone="error"] { color: var(--error); }
+.community-count { color: var(--foreground-muted); font-size: 9.5px; font-variant-numeric: tabular-nums; }
+.community-count[data-over="true"] { color: var(--error); }
+
+.community-nav-dot { width: 6px; height: 6px; margin-left: auto; border-radius: 50%; background: var(--primary); box-shadow: 0 0 6px color-mix(in oklch, var(--primary) 70%, transparent); }
+
+@media (max-width: 720px) {
+  .community-head { flex-direction: column; gap: 10px; }
+  .community-head-actions { width: 100%; justify-content: flex-start; }
+  .community-shell { padding: 12px 14px 14px; }
+}

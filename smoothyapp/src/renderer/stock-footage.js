@@ -168,7 +168,7 @@ export function initStockFootage({ isConnected }) {
     el('provider').querySelector('[value="pixabay"]').hidden = !data.pixabayEnabled;
     refreshSource();
     el('folder-path').textContent = settings.folder; el('folder-path').title = settings.folder;
-    message('search-status', 'Search for a subject, place, or mood to find your next shot.'); update();
+    message('search-status', 'Search for footage.'); update();
   }).catch(() => message('action-status', 'Could not load download settings. Restart the app and retry.', true));
   update();
   return { isBusy: () => data.downloading || data.importing };

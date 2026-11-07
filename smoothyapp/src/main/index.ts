@@ -9,6 +9,8 @@ import { app, BrowserWindow, ipcMain, shell, dialog, Menu, clipboard } from 'ele
 import { autoUpdater } from 'electron-updater';
 import './assets-image-ipc';
 import { registerLocalAudio } from './local-audio-ipc';
+import { registerAgentic } from './agent/agent-service';
+import { getFFmpegPath, getFFprobePath } from './ffmpeg-path';
 import { windowChromeOptions, setWindowTitlebarColor } from './window-chrome';
 import { createUpdateService } from './update-service';
 import Store from 'electron-store';
@@ -46,8 +48,14 @@ import {
 } from './nle-router';
 import {
   getConnectionStatus as getPremiereConnectionStatus,
-  setBridgeToken
+  setBridgeToken,
+  getShortsCutsCatalog,
+  applyShortsCut,
+  captureShortsCutPreset
 } from './websocket-server';
+import { createShortsCutsService } from './shortscuts/service';
+import { createCommunityService } from './community-service';
+import { listPremierePresets, getPremierePreset } from './shortscuts/premiere-presets';
 import {
   setWebsiteCallbacks,
   saveConnectionToken,
@@ -71,8 +79,12 @@ import {
   cancelGoogleSignIn,
   logout,
   refreshUserData,
+  updateDisplayName,
+  changePassword,
+  deleteAccount,
   getTrialStatus,
   canUseFeature,
+  hasPro,
   setAuthChangeCallback,
   generateConnectionToken
 } from './auth-service';
@@ -118,6 +130,7 @@ import type { StudioShort } from './web-api';
 import { runShortsAnalysis, type ShortsAnalysisConfig } from './shorts-service';
 import { registerStockFootage } from './stock-footage-ipc';
 import { registerAudioLibrary } from './audio-library-ipc';
+import { createLibraryService, createSpeechService } from './agent/edit-services';
 import { registerPhotos } from './photo-ipc';
 import { registerStudioTools } from './studio-ipc';
 import { createStudioSourceService } from './studio-source-service';
@@ -144,6 +157,28 @@ const isMac = process.platform === 'darwin';
 const isWindows = process.platform === 'win32';
 const isLinux = process.platform === 'linux';
 const store = new Store();
+const shortsCuts = createShortsCutsService({
+  store,
+  applyToPremiere: (item) => applyShortsCut({
+    kind: item.kind,
+    target: item.target,
+    edge: item.edge,
+    duration: item.duration,
+    preset: item.preset,
+  }),
+  readCatalog: getShortsCutsCatalog,
+  capturePreset: captureShortsCutPreset,
+  connected: () => getActiveNLE() !== 'resolve' && getPremiereConnectionStatus(),
+  editor: () => getActiveNLE() || (getPremiereConnectionStatus() ? 'premiere' : 'none'),
+  allowed: hasPro,
+  track: trackTool,
+  onState: (state) => { if (mainWindow) mainWindow.webContents.send('shortscuts-state', state); },
+});
+const community = createCommunityService({
+  store,
+  track: trackTool,
+  onState: (state) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('community-state', state); },
+});
 const resolveHandoff = createResolveHandoff({
   directory: path.join(app.getPath('userData'), 'resolve-handoff'),
   scriptDirectory: resolveScriptDirectory(process.platform, app.getPath('appData'), os.homedir()),
@@ -165,12 +200,77 @@ ipcMain.handle('resolve-receive-cancel',()=>resolveReceive.cancel());
 ipcMain.handle('resolve-receive-copy-command',()=>{const script=resolveReceive.snapshot().connectorPath;if(script)shell.showItemInFolder(script);return {success:!!script};});
 ipcMain.handle('resolve-receive-show-file',()=>{const file=resolveReceive.snapshot().file;if(file && fs.existsSync(file))shell.showItemInFolder(file);return {success:!!file};});
 ipcMain.handle('resolve-send-result',async()=>{const file=getResolveOutput();if(!file)return {success:false,error:'Export a Resolve timeline first.'};const result=await resolveReceive.send({kind:'timeline',file});if(result.success)trackTool('resolve_timeline_send');return result;});
-app.on('before-quit',()=>resolveReceive.close());
+app.on('before-quit',()=>{ resolveReceive.close(); shortsCuts.dispose(); community.dispose(); });
 const appPreferences = createAppPreferences(store, () => mainWindow?.webContents.send('app-preferences-changed', appPreferences.snapshot()), trackTool);
 configureStudioPreference(() => appPreferences.snapshot().studioEnabled);
 let studioToolsService: ReturnType<typeof registerStudioTools> | null = null;
 let chatService: ReturnType<typeof registerChat> | null = null;
 ipcMain.handle('get-app-preferences', () => appPreferences.snapshot());
+
+ipcMain.handle('shortscuts-state', () => shortsCuts.state());
+// An explicit click on a locked screen's Upgrade button (not merely opening the tab).
+ipcMain.handle('pro-upgrade-click', (_, feature?: unknown) => {
+  if (feature === 'shortscuts' || feature === 'agent') trackTool(`pro_upgrade_${feature}`);
+  return { success: true };
+});
+ipcMain.handle('community-state', () => community.state());
+ipcMain.handle('community-connect', () => community.connect());
+ipcMain.handle('community-send', (_, body) => community.send(body));
+ipcMain.handle('community-disconnect', () => { community.disconnect(); return community.state(); });
+ipcMain.handle('shortscuts-set-capturing', (_, value) => {
+  try { return { success: true, state: shortsCuts.setCapturing(value) }; }
+  catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not pause shortcuts.' }; }
+});
+ipcMain.handle('shortscuts-save-deck', async (_, deck) => {
+  try { return { success: true, state: await shortsCuts.saveDeck(deck) }; }
+  catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not save the ShortsCuts deck.' }; }
+});
+ipcMain.handle('shortscuts-set-server', async (_, value) => {
+  try { return { success: true, state: await shortsCuts.setServer(value) }; }
+  catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not update the phone remote.' }; }
+});
+ipcMain.handle('shortscuts-rotate-token', async () => {
+  try { return { success: true, state: await shortsCuts.rotateToken() }; }
+  catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not create a new code.' }; }
+});
+ipcMain.handle('shortscuts-catalog', async () => {
+  try { return { success: true, catalog: await shortsCuts.catalog() }; }
+  catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not load Premiere effects.' }; }
+});
+ipcMain.handle('shortscuts-presets', (_, refresh?: unknown) => {
+  try {
+    const result = listPremierePresets(refresh === true);
+    return { success: true, presets: result.presets, errors: result.errors };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not read Premiere presets.' }; }
+});
+ipcMain.handle('shortscuts-preset', (_, id?: unknown) => {
+  try {
+    if (typeof id !== 'string' || !/^[a-f0-9]{20}$/.test(id)) return { success: false, error: 'Choose a Premiere preset again.' };
+    const preset = getPremierePreset(id);
+    if (!preset) return { success: false, error: 'That preset is no longer available. Refresh the list.' };
+    return { success: true, preset: { name: preset.name, folder: preset.folder, mediaType: preset.preset.mediaType, components: preset.preset.components, animated: preset.preset.animated } };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not read that Premiere preset.' }; }
+});
+ipcMain.handle('shortscuts-apply', async (_, id) => {
+  try { return await shortsCuts.applyFromPanel(typeof id === 'string' ? id : ''); }
+  catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not apply that shortcut.' }; }
+});
+ipcMain.handle('shortscuts-capture-preset', async () => {
+  try { return { success: true, state: await shortsCuts.capturePreset() }; }
+  catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not capture that preset.' }; }
+});
+ipcMain.handle('shortscuts-open-remote', async () => {
+  const url = shortsCuts.state().server.pageUrl;
+  if (!url) return { success: false, error: 'Start the phone remote first.' };
+  try { await shell.openExternal(url); return { success: true, url }; }
+  catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not open the remote URL.' }; }
+});
+ipcMain.handle('shortscuts-copy-remote', () => {
+  const url = shortsCuts.state().server.pageUrl;
+  if (!url) return { success: false, error: 'Start the phone remote first.' };
+  clipboard.writeText(url);
+  return { success: true, url };
+});
 for (const [channel, save] of [
   ['save-chat-writing-prompt', (value: unknown) => appPreferences.saveChatWritingPrompt(value)],
   ['reset-chat-writing-prompt', () => appPreferences.resetChatWritingPrompt()],
@@ -191,13 +291,14 @@ ipcMain.handle('set-studio-enabled', (_, value) => {
   } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not save preferences.' }; }
 });
 const liveEditorConnected = () => getActiveNLE() === 'resolve' || getConnectionStatus();
-registerStockFootage({ store, window: () => mainWindow, connected: liveEditorConnected, editor: getActiveNLE, importToPremiere: importStockFootageToNLE });
+const stockHandles = registerStockFootage({ store, window: () => mainWindow, connected: liveEditorConnected, editor: getActiveNLE, importToPremiere: importStockFootageToNLE });
 let compressorEventsBound = false;
 
 let updateService: ReturnType<typeof createUpdateService> | null = null;
 
 // Whether a caption/transcription job is currently running (for cancellation).
 let captionsJobActive = false;
+let audioLibraryHandles: Awaited<ReturnType<typeof registerAudioLibrary>> | null = null;
 let captionJobController: AbortController | null = null;
 let shortsJobController: AbortController | null = null;
 
@@ -546,8 +647,8 @@ if (isWindows) {
 app.whenReady().then(async () => {
   // Register the media protocol before loading the renderer. A window loaded
   // earlier keeps a URL loader without this scheme and every preview fails.
-  await registerAudioLibrary({ store, window: () => mainWindow, connected: liveEditorConnected, editor: getActiveNLE, importToPremiere: importAudioLibraryToNLE }).catch(error => console.error('[Audio Library]', error));
-  registerLocalAudio(() => mainWindow);
+  audioLibraryHandles = await registerAudioLibrary({ store, window: () => mainWindow, connected: liveEditorConnected, editor: getActiveNLE, importToPremiere: importAudioLibraryToNLE }).catch(error => { console.error('[Audio Library]', error); return null; });
+  const localAudioService = registerLocalAudio(() => mainWindow);
   registerPhotos({ window: () => mainWindow, connected: liveEditorConnected, editor: getActiveNLE, importToPremiere: (file,editor) => importImageToNLE(file, 5,editor) });
   studioToolsService = registerStudioTools(() => mainWindow, () => appPreferences.snapshot().studioEnabled);
   chatService = registerChat(() => mainWindow, () => appPreferences.snapshot().studioEnabled, () => appPreferences.snapshot().chatWritingPrompt || undefined, store);
@@ -569,7 +670,14 @@ app.whenReady().then(async () => {
   // Set up auth state change callback
   setAuthChangeCallback((state) => {
     mainWindow?.webContents.send('auth-state-change', state);
+    // A sign-in, upgrade or sign-out can change Pro access to ShortsCuts and the Agent.
+    shortsCuts.refreshEntitlement();
+    mainWindow?.webContents.send('pro-access-changed', { shortscutsUnlimited: hasPro(), agent: hasPro() });
   });
+  // Re-verify the plan at launch and every 6 hours so upgrades and cancellations are picked up.
+  const verifyPlan = () => { if (getAuthState().isLoggedIn) void refreshUserData().catch(() => {}); };
+  setTimeout(verifyPlan, 5_000);
+  setInterval(verifyPlan, 6 * 60 * 60 * 1000).unref();
 
   // Authenticate the local Premiere bridge with a per-install secret before
   // the server starts accepting connections.
@@ -585,6 +693,7 @@ app.whenReady().then(async () => {
       const nle = getActiveNLE();
       sendLog('info', nle === 'resolve' ? `Resolve XML ${connected ? 'loaded' : 'not loaded'}` : `Premiere Pro bridge ${connected ? 'connected' : 'disconnected'}`);
       mainWindow?.webContents.send('connection-change', { connected, nle });
+      shortsCuts.notify();
     },
     onSequenceInfo: (info) => {
       mainWindow?.webContents.send('sequence-info', info);
@@ -689,7 +798,32 @@ app.whenReady().then(async () => {
     connectToWebsite();
   }
 
+  registerAgentic({
+    store,
+    appVersion: app.getVersion(),
+    userData: app.getPath('userData'),
+    ffmpeg: getFFmpegPath(),
+    ffprobe: getFFprobePath(),
+    getSequenceInfo,
+    requestSequenceInfo,
+    getActiveNLE,
+    isEditorConnected: getConnectionStatus,
+    addMarkers: addMarkersToSequence,
+    clearMarkers: clearMarkersFromSequence,
+    audioService: localAudioService,
+    window: () => mainWindow,
+    trackTool,
+    allowed: hasPro,
+    edit: {
+      speech: createSpeechService({ store, isBusy: () => captionsJobActive || whisperService.isTranscribing() }),
+      library: audioLibraryHandles
+        ? createLibraryService({ archive: audioLibraryHandles.archive, library: audioLibraryHandles.library, stock: stockHandles.service, stockFolder: stockHandles.folder, trackTool, libraryChanged: audioLibraryHandles.notify })
+        : null
+    }
+  });
+
   createWindow();
+  shortsCuts.init();
 
   // Keep the Premiere Pro CEP panel in sync with the app. On macOS the panel
   // only reaches users via this install path; on Windows the NSIS installer
@@ -1018,8 +1152,32 @@ ipcMain.handle('auth-get-state', () => {
   return getAuthState();
 });
 
-ipcMain.handle('auth-refresh', async () => {
-  return await refreshUserData();
+ipcMain.handle('auth-refresh', async () => {  return await refreshUserData();
+});
+
+ipcMain.handle('auth-update-name', async (_, name: unknown) => {
+  const result = await updateDisplayName(typeof name === 'string' ? name : '');
+  if (result.success) trackTool('profile_name_save');
+  return result;
+});
+
+ipcMain.handle('auth-change-password', async (_, { currentPassword, newPassword }: { currentPassword?: unknown; newPassword?: unknown }) => {
+  const result = await changePassword(
+    typeof currentPassword === 'string' ? currentPassword : '',
+    typeof newPassword === 'string' ? newPassword : '',
+  );
+  if (result.success) trackTool('account_password_change');
+  return result;
+});
+
+ipcMain.handle('auth-delete-account', async (_, password: unknown) => {
+  const result = await deleteAccount(typeof password === 'string' ? password : '');
+  if (result.success) {
+    trackTool('account_delete');
+    chatService?.reset();
+    disconnectFromWebsite();
+  }
+  return result;
 });
 
 // Deprecated: trials removed, kept for renderer compat (always free-forever)
@@ -2032,7 +2190,7 @@ ipcMain.handle('get-active-nle', () => {
 });
 
 ipcMain.handle('set-active-nle', (_, nle: 'premiere' | 'resolve' | null) => {
-  try { if(resolveSourceLoading || captionsJobActive || shortsJobController || studioSourceService.isBusy())throw new Error('Wait for the source operation to finish before switching editors.');setActiveNLE(nle); return { success: true, activeNLE: getActiveNLE() }; }
+  try { if(resolveSourceLoading || captionsJobActive || shortsJobController || studioSourceService.isBusy())throw new Error('Wait for the source operation to finish before switching editors.');setActiveNLE(nle); shortsCuts.notify(); return { success: true, activeNLE: getActiveNLE() }; }
   catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not switch editor.' }; }
 });
 

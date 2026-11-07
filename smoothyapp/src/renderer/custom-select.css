@@ -1,0 +1,66 @@
+/* Smoothy's own dropdown menu (see custom-select.js). Shown in the top layer as a popover. */
+.smoothy-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius, 10px);
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: 0 12px 32px -10px var(--shadow-color, rgb(0 0 0 / 18%)), 0 2px 8px var(--shadow-color, rgb(0 0 0 / 12%));
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.3;
+  outline: none;
+  scrollbar-width: thin;
+  animation: smoothy-menu-in 110ms cubic-bezier(.2, .8, .2, 1);
+}
+.smoothy-menu[data-side='top'] { animation-name: smoothy-menu-in-up; }
+.smoothy-menu::backdrop { background: transparent; }
+
+.smoothy-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 5px 12px 5px 6px;
+  border-radius: calc(var(--radius, 10px) - 4px);
+  cursor: default;
+  user-select: none;
+  white-space: nowrap;
+}
+.smoothy-menu-item.is-active { background: var(--background-hover); }
+.smoothy-menu-item.is-selected { font-weight: 650; }
+.smoothy-menu-item.is-disabled { opacity: 0.45; }
+.smoothy-menu-item.is-disabled.is-active { background: transparent; }
+
+.smoothy-menu-check { display: inline-flex; flex: 0 0 16px; justify-content: center; color: var(--foreground); visibility: hidden; }
+.smoothy-menu-item.is-selected .smoothy-menu-check { visibility: visible; }
+
+.smoothy-menu-icon { flex: 0 0 20px; width: 20px; height: 20px; border-radius: 5px; object-fit: contain; }
+svg.smoothy-menu-icon { color: currentColor; }
+
+.smoothy-menu-label { overflow: hidden; text-overflow: ellipsis; }
+
+.smoothy-menu-group {
+  padding: 8px 10px 4px 30px;
+  color: var(--foreground-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.smoothy-menu [role='group'] + [role='group'] { margin-top: 2px; border-top: 1px solid var(--border); }
+
+.smoothy-menu-separator { height: 1px; margin: 4px 6px; background: var(--border); }
+
+/* Show the menu is open on the editor switcher. */
+.editor-switcher.menu-open { background: var(--sidebar-hover, var(--background-hover)); }
+
+@keyframes smoothy-menu-in { from { opacity: 0; transform: translateY(-3px) scale(.985); } }
+@keyframes smoothy-menu-in-up { from { opacity: 0; transform: translateY(3px) scale(.985); } }
+@media (prefers-reduced-motion: reduce) { .smoothy-menu { animation: none; } }

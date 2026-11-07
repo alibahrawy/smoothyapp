@@ -48,7 +48,7 @@ if (typeof JSON === 'undefined') {
   };
 }
 
-var SMOOTHY_CEP_HOST_VERSION = "20261020-multicam-append-track-v33";
+var SMOOTHY_CEP_HOST_VERSION = "20261101-shortscuts-v38";
 
 function getSmoothyCepHostVersion() {
   return SMOOTHY_CEP_HOST_VERSION;
@@ -1972,5 +1972,427 @@ function addSilenceMarkers(silenceSegmentsJSON) {
 
   } catch (e) {
     return JSON.stringify({ success: false, error: e.message });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ShortsCuts — apply effects, transitions and captured presets to the selected
+// clips. QE DOM is used only for the operations Premiere does not expose in the
+// standard DOM; component values are set through the standard DOM afterwards.
+// ---------------------------------------------------------------------------
+
+function smoothyShortsCutsArray(value) {
+  var out = [];
+  if (!value) return out;
+  if (typeof value.length === "number") {
+    for (var i = 0; i < value.length; i++) out.push(String(value[i]));
+  } else if (typeof value.numItems === "number") {
+    for (var j = 0; j < value.numItems; j++) out.push(String(value[j]));
+  }
+  return out;
+}
+
+function smoothyShortsCutsSelected(seq, video) {
+  var pairs = [], tracks = video ? seq.videoTracks : seq.audioTracks;
+  if (!tracks) return pairs;
+  for (var t = 0; t < tracks.numTracks; t++) {
+    var track = tracks[t], clips = track.clips;
+    if (!clips) continue;
+    for (var c = 0; c < clips.numItems; c++) {
+      var clip = clips[c], selected = false;
+      try {
+        selected = typeof clip.isSelected === "function" ? !!clip.isSelected() : !!clip.isSelected;
+      } catch (e) {
+        selected = false;
+      }
+      if (selected) pairs.push({ track: t, index: c, clip: clip });
+    }
+  }
+  return pairs;
+}
+
+function smoothyShortsCutsTrackItems(qeTrack) {
+  var items = [], count = 0;
+  try {
+    count = qeTrack.numItems || 0;
+  } catch (e) {
+    count = 0;
+  }
+  if (!count) {
+    while (count < 5000 && qeTrack.getItemAt(count)) count++;
+  }
+  for (var i = 0; i < count; i++) {
+    var item = null;
+    try {
+      item = qeTrack.getItemAt(i);
+    } catch (e) {
+      item = null;
+    }
+    if (!item) continue;
+    var type = "";
+    try {
+      type = String(item.type || "").toLowerCase();
+    } catch (e) {
+      type = "";
+    }
+    if (type === "empty" || (type !== "" && type !== "clip")) continue;
+    items.push(item);
+  }
+  return items;
+}
+
+function smoothyShortsCutsQeClip(seq, qeSeq, video, trackIndex, standardIndex) {
+  var qeTrack = null;
+  try {
+    qeTrack = video ? qeSeq.getVideoTrackAt(trackIndex) : qeSeq.getAudioTrackAt(trackIndex);
+  } catch (e) {
+    qeTrack = null;
+  }
+  if (!qeTrack) return null;
+  var items = smoothyShortsCutsTrackItems(qeTrack);
+  return items[standardIndex] || null;
+}
+
+function smoothyShortsCutsFindName(names, wanted) {
+  if (!wanted) return null;
+  var target = String(wanted).toLowerCase(), prefix = null, contains = null;
+  for (var i = 0; i < names.length; i++) {
+    var value = String(names[i]).toLowerCase();
+    if (value === target) return String(names[i]);
+    if (!prefix && value.indexOf(target) === 0) prefix = String(names[i]);
+    if (!contains && value.indexOf(target) >= 0) contains = String(names[i]);
+  }
+  // Newer Premiere builds suffix some legacy effects, e.g. "Mosaic (Legacy)".
+  return prefix || contains;
+}
+
+function smoothyShortsCutsAddEffect(qeClip, video, name) {
+  app.enableQE();
+  var list = smoothyShortsCutsArray(video ? qe.project.getVideoEffectList() : qe.project.getAudioEffectList());
+  var resolved = smoothyShortsCutsFindName(list, name) || name;
+  var effect = null;
+  try {
+    effect = video ? qe.project.getVideoEffectByName(resolved) : qe.project.getAudioEffectByName(resolved);
+  } catch (e) {
+    effect = null;
+  }
+  if (!effect) {
+    try {
+      effect = video ? qe.project.getVideoEffectByName(resolved, true) : qe.project.getAudioEffectByName(resolved, true);
+    } catch (e2) {
+      effect = null;
+    }
+  }
+  if (!effect) throw new Error('Premiere could not find the effect "' + name + '". Refresh the catalog and add it again.');
+  if (video) {
+    if (typeof qeClip.addVideoEffect !== "function") throw new Error("This Premiere version cannot add video effects.");
+    qeClip.addVideoEffect(effect);
+  } else {
+    if (typeof qeClip.addAudioEffect !== "function") throw new Error("This Premiere version cannot add audio effects.");
+    qeClip.addAudioEffect(effect);
+  }
+}
+
+function smoothyShortsCutsTransitionDuration(seconds, fps) {
+  var rate = Number(fps) > 0 ? Number(fps) : 25;
+  var totalFrames = Math.max(1, Math.round(Math.max(0.05, Math.min(10, Number(seconds) || 0.5)) * rate));
+  var wholeSeconds = Math.floor(totalFrames / rate);
+  var frames = Math.round(totalFrames - wholeSeconds * rate);
+  if (frames >= Math.round(rate)) { wholeSeconds++; frames = 0; }
+  return String(wholeSeconds) + "." + (frames < 10 ? "0" : "") + frames;
+}
+
+function smoothyShortsCutsAddTransition(qeClip, video, name, atEnd, seconds, fps) {
+  app.enableQE();
+  var transition = null;
+  if (name) {
+    var list = smoothyShortsCutsArray(video ? qe.project.getVideoTransitionList() : qe.project.getAudioTransitionList());
+    var resolved = smoothyShortsCutsFindName(list, name) || name;
+    try {
+      transition = video ? qe.project.getVideoTransitionByName(resolved) : qe.project.getAudioTransitionByName(resolved);
+    } catch (e) {
+      transition = null;
+    }
+    if (!transition) throw new Error('Premiere could not find the transition "' + name + '". Refresh the catalog and add it again.');
+  }
+  var duration = smoothyShortsCutsTransitionDuration(seconds, fps);
+  if (typeof qeClip.addTransition !== "function") throw new Error("This Premiere version cannot add transitions.");
+  try {
+    qeClip.addTransition(transition, atEnd, duration);
+    return;
+  } catch (e) {
+    // Older builds accept an extra argument; make one compatibility attempt.
+  }
+  try {
+    qeClip.addTransition(transition, atEnd, duration, 1);
+    return;
+  } catch (e2) {
+    throw new Error("Premiere could not add that transition at this edit point.");
+  }
+}
+
+function smoothyShortsCutsValue(value) {
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "string") return value;
+  if (value && typeof value.length === "number" && value.length > 0 && value.length <= 16) {
+    var array = [];
+    for (var i = 0; i < value.length; i++) {
+      var number = Number(value[i]);
+      if (!isFinite(number)) return null;
+      array.push(number);
+    }
+    return array;
+  }
+  return null;
+}
+
+function smoothyShortsCutsComponent(clip, matchName) {
+  var found = null;
+  for (var i = 0; i < clip.components.numItems; i++) {
+    var component = clip.components[i];
+    if (String(component.matchName) === String(matchName)) found = component;
+  }
+  return found;
+}
+
+function smoothyShortsCutsConvertValue(name, value, seq) {
+  if (value && typeof value.length === "number" && value.length === 2 && (name === "Position" || name === "Anchor Point")) {
+    try {
+      if (Math.abs(Number(value[0])) <= 10 && Math.abs(Number(value[1])) <= 10) {
+        var settings = seq.getSettings();
+        return [Number(value[0]) * Number(settings.videoFrameWidth), Number(value[1]) * Number(settings.videoFrameHeight)];
+      }
+    } catch (e) {
+      // Use the raw value if the sequence frame size is unavailable.
+    }
+  }
+  return value;
+}
+
+function smoothyShortsCutsApplyKeyframes(component, name, keyframes, clip, seq) {
+  if (!keyframes || !keyframes.length) return 0;
+  var base = Number(clip.start.ticks) || 0;
+  var minimum = null;
+  for (var t = 0; t < keyframes.length; t++) {
+    var value = Number(keyframes[t].time);
+    if (!isFinite(value)) continue;
+    if (minimum === null || value < minimum) minimum = value;
+  }
+  if (minimum === null) return 0;
+  try {
+    component.setTimeVarying(true);
+  } catch (e) {
+    return 0;
+  }
+  var applied = 0;
+  for (var i = 0; i < keyframes.length; i++) {
+    var ticks = base + (Number(keyframes[i].time) - minimum);
+    var current = smoothyShortsCutsConvertValue(name, keyframes[i].value, seq);
+    try {
+      var time = new Time();
+      time.ticks = String(ticks);
+      component.addKey(time);
+      component.setValueAtKey(time, current, true);
+      applied++;
+    } catch (error) {
+      try {
+        component.addKey(ticks);
+        component.setValueAtKey(ticks, current, true);
+        applied++;
+      } catch (fallbackError) {
+        // Skip this keyframe; the remaining keyframes can still be useful.
+      }
+    }
+  }
+  return applied;
+}
+
+function smoothyShortsCutsSetProperties(component, properties, clip, seq) {
+  var applied = 0;
+  for (var i = 0; i < properties.length; i++) {
+    var wanted = properties[i], target = null;
+    for (var j = 0; j < component.properties.numItems; j++) {
+      var property = component.properties[j];
+      if (String(property.displayName) === String(wanted.name)) {
+        target = property;
+        break;
+      }
+    }
+    if (!target) continue;
+    try {
+      if (wanted.keyframes && wanted.keyframes.length) {
+        if (smoothyShortsCutsApplyKeyframes(target, wanted.name, wanted.keyframes, clip, seq) > 0) applied++;
+      } else {
+        target.setValue(smoothyShortsCutsConvertValue(wanted.name, wanted.value, seq), true);
+        applied++;
+      }
+    } catch (e) {
+      // A property can be read-only or unavailable in this Premiere build.
+    }
+  }
+  return applied;
+}
+
+function smoothyShortsCutsIsIntrinsic(matchName) {
+  return matchName === "AE.ADBE Motion" || matchName === "AE.ADBE Opacity" || matchName === "audioVolume";
+}
+
+function smoothyShortsCutsApplyPreset(seq, qeSeq, payload) {
+  var preset = payload.preset;
+  if (!preset || !preset.components || !preset.components.length) {
+    return JSON.stringify({ success: false, error: "This preset has no components. Capture it again." });
+  }
+  var video = preset.mediaType !== "audio";
+  var pairs = smoothyShortsCutsSelected(seq, video);
+  if (!pairs.length) {
+    return JSON.stringify({ success: false, error: video ? "Select one or more video clips." : "Select one or more audio clips." });
+  }
+  var appliedClips = 0, failedClips = 0, details = [];
+  for (var p = 0; p < pairs.length; p++) {
+    var pair = pairs[p];
+    var qeClip = smoothyShortsCutsQeClip(seq, qeSeq, video, pair.track, pair.index);
+    if (!qeClip) {
+      failedClips++;
+      if (details.length < 4) details.push("Could not map the selected clip on track " + (pair.track + 1) + ".");
+      continue;
+    }
+    var clipApplied = 0;
+    for (var c = 0; c < preset.components.length; c++) {
+      var component = preset.components[c];
+      if (!component.matchName || component.matchName === "AE.ADBE Time Remapping") continue;
+      try {
+        var intrinsic = smoothyShortsCutsIsIntrinsic(component.matchName);
+        var target = intrinsic ? smoothyShortsCutsComponent(pair.clip, component.matchName) : null;
+        if (!intrinsic) {
+          for (var existing = pair.clip.components.numItems - 1; existing >= 0; existing--) {
+            var old = pair.clip.components[existing];
+            if (String(old.matchName) !== String(component.matchName)) continue;
+            try {
+              old.remove();
+            } catch (e) {
+              if (!target) target = old;
+            }
+          }
+          if (!target) {
+            smoothyShortsCutsAddEffect(qeClip, video, component.displayName || component.matchName);
+            target = smoothyShortsCutsComponent(pair.clip, component.matchName);
+          }
+        }
+        if (!target) continue;
+        var values = smoothyShortsCutsSetProperties(target, component.properties || [], pair.clip, seq);
+        if (values > 0) clipApplied++;
+      } catch (error) {
+        if (details.length < 4) details.push(error.message || "Could not apply one component.");
+      }
+    }
+    if (clipApplied > 0) appliedClips++;
+    else failedClips++;
+  }
+  var message = "Applied preset to " + appliedClips + (appliedClips === 1 ? " clip." : " clips.");
+  if (failedClips) message += " " + failedClips + " clip(s) could not be changed.";
+  return JSON.stringify({ success: appliedClips > 0, applied: appliedClips, failed: failedClips, message: message, details: details });
+}
+
+function getShortsCutsCatalog() {
+  try {
+    if (!app.project.activeSequence) return JSON.stringify({ success: false, error: "Open a sequence first." });
+    app.enableQE();
+    return JSON.stringify({
+      success: true,
+      videoEffects: smoothyShortsCutsArray(qe.project.getVideoEffectList()),
+      audioEffects: smoothyShortsCutsArray(qe.project.getAudioEffectList()),
+      videoTransitions: smoothyShortsCutsArray(qe.project.getVideoTransitionList()),
+      audioTransitions: smoothyShortsCutsArray(qe.project.getAudioTransitionList())
+    });
+  } catch (e) {
+    return JSON.stringify({ success: false, error: "Could not read the Premiere effects list: " + e.message });
+  }
+}
+
+function applyShortsCut(payloadJSON) {
+  try {
+    var payload = JSON.parse(payloadJSON);
+    var seq = app.project.activeSequence;
+    if (!seq) return JSON.stringify({ success: false, error: "Open a sequence first." });
+    app.enableQE();
+    var qeSeq = qe.project.getActiveSequence();
+    if (!qeSeq) return JSON.stringify({ success: false, error: "Could not read the active sequence." });
+    if (payload.kind === "preset") return smoothyShortsCutsApplyPreset(seq, qeSeq, payload);
+    var video = payload.kind === "video-effect" || payload.kind === "video-transition";
+    var pairs = smoothyShortsCutsSelected(seq, video);
+    if (!pairs.length) {
+      return JSON.stringify({ success: false, error: video ? "Select one or more video clips." : "Select one or more audio clips." });
+    }
+    var isTransition = payload.kind === "video-transition" || payload.kind === "audio-transition";
+    var sequenceFps = 25;
+    try { sequenceFps = 1 / seq.getSettings().videoFrameRate.seconds; } catch (fpsError) { sequenceFps = 25; }
+    var applied = 0, failed = 0, details = [];
+    for (var i = 0; i < pairs.length; i++) {
+      var pair = pairs[i];
+      var qeClip = smoothyShortsCutsQeClip(seq, qeSeq, video, pair.track, pair.index);
+      if (!qeClip) {
+        failed++;
+        if (details.length < 4) details.push("Could not map the selected clip on track " + (pair.track + 1) + ".");
+        continue;
+      }
+      try {
+        if (isTransition) {
+          var edges = payload.edge === "both" ? [false, true] : [payload.edge === "start" ? false : true];
+          for (var e = 0; e < edges.length; e++) {
+            smoothyShortsCutsAddTransition(qeClip, video, payload.target || "", edges[e], payload.duration, sequenceFps);
+          }
+          applied++;
+        } else {
+          smoothyShortsCutsAddEffect(qeClip, video, payload.target || "");
+          applied++;
+        }
+      } catch (error) {
+        failed++;
+        if (details.length < 4) details.push(error.message || "Premiere rejected the change.");
+      }
+    }
+    var noun = isTransition ? "transition" : "effect";
+    var message = "Applied " + (payload.target || (isTransition ? "the default transition" : noun)) + " to " + applied + (applied === 1 ? " clip." : " clips.");
+    if (failed) message += " " + failed + " clip(s) could not be changed.";
+    return JSON.stringify({ success: applied > 0, applied: applied, failed: failed, message: message, details: details });
+  } catch (e) {
+    return JSON.stringify({ success: false, error: "ShortsCuts failed: " + e.message });
+  }
+}
+
+function captureShortsCutPreset() {
+  try {
+    var seq = app.project.activeSequence;
+    if (!seq) return JSON.stringify({ success: false, error: "Open a sequence first." });
+    var videoPairs = smoothyShortsCutsSelected(seq, true);
+    var audioPairs = smoothyShortsCutsSelected(seq, false);
+    var mediaType = videoPairs.length ? "video" : (audioPairs.length ? "audio" : null);
+    var pair = mediaType === "video" ? videoPairs[0] : audioPairs[0];
+    if (!pair) return JSON.stringify({ success: false, error: "Select a clip with effects first." });
+    var components = [], total = 0;
+    for (var i = 0; i < pair.clip.components.numItems; i++) {
+      var component = pair.clip.components[i];
+      if (String(component.matchName) === "AE.ADBE Time Remapping") continue;
+      var properties = [];
+      try {
+        for (var j = 0; j < component.properties.numItems && total < 600; j++) {
+          var property = component.properties[j];
+          var value = smoothyShortsCutsValue(property.getValue());
+          if (value === null) continue;
+          properties.push({ name: String(property.displayName || ""), value: value });
+          total++;
+        }
+      } catch (e) {
+        // Skip properties this Premiere build cannot read.
+      }
+      components.push({
+        matchName: String(component.matchName || ""),
+        displayName: String(component.displayName || component.matchName || ""),
+        properties: properties
+      });
+    }
+    if (!components.length) return JSON.stringify({ success: false, error: "This clip has no readable effects to capture." });
+    return JSON.stringify({ success: true, name: String(pair.clip.name || "Selected clip"), mediaType: mediaType, components: components });
+  } catch (e) {
+    return JSON.stringify({ success: false, error: "Could not capture this preset: " + e.message });
   }
 }

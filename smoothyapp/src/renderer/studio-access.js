@@ -6,13 +6,13 @@ export function studioAccessNotice(host, getUser, signIn) {
   const text = document.createElement('p');
   const free = document.createElement('strong'); free.textContent = 'free';
   const credits = document.createElement('strong'); credits.textContent = '100 AI credits';
-  const upgrade = document.createElement('button'); upgrade.type = 'button'; upgrade.className = 'btn studio-access-button'; upgrade.textContent = 'View Studio Pro ↗';
+  const upgrade = document.createElement('button'); upgrade.type = 'button'; upgrade.className = 'btn studio-access-button'; upgrade.textContent = 'View Smoothy Pro ↗';
   upgrade.addEventListener('click', () => getUser() ? window.electronAPI.openExternal('https://smoothyedit.com/pricing') : signIn?.('signup'));
   notice.append(text, upgrade); host.prepend(notice);
   return () => {
     const user = getUser();
     notice.classList.toggle('hidden', user?.tier === 'pro');
     text.replaceChildren(user ? 'Your ' : 'Sign up for ', free, user ? ' account includes ' : ' and get ', credits, ' every month.');
-    upgrade.textContent = user ? 'View Studio Pro ↗' : 'Sign up for free';
+    upgrade.textContent = user ? 'View Smoothy Pro ↗' : 'Sign up for free';
   };
 }

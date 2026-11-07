@@ -13,10 +13,14 @@ import { initChat } from './chat.js';
 import { initStudioText } from './studio-text.js';
 import { initAccount } from './account.js';
 import { initAppPreferences } from './app-preferences.js';
+import { initShortsCuts } from './shortscuts.js';
+import { initCommunity } from './community.js';
+import { initAgentic } from './agentic.js';
 let photosTools = null;
 let chatTools = null;
 let studioTextTools = null;
 let accountTools = null;
+let agenticTools = null;
 let studioEnabled = true;
 let stockTools = null, audioTools = null;
 
@@ -193,11 +197,50 @@ const bestshortsLock = document.getElementById('bestshorts-lock');
 // Pin (Always on Top) DOM Elements
 const pinBtn = document.getElementById('pin-btn');
 
+// ========================================
+// Workspace: Premiere / Resolve / Agentic editing
+// ========================================
+
+const WORKSPACE_KEY = 'smoothyedit:workspace';
+const ALONGSIDE_KEY = 'smoothyedit:agent-alongside';
+let workspace = (() => { try { return localStorage.getItem(WORKSPACE_KEY) === 'agentic' ? 'agentic' : 'editor'; } catch { return 'editor'; } })();
+
+function syncEditorLogos() {
+  const agentic = workspace === 'agentic';
+  connectionStatus.querySelector('.editor-logo-premiere').classList.toggle('hidden', agentic || state.activeNLE === 'resolve');
+  connectionStatus.querySelector('.editor-logo-resolve').classList.toggle('hidden', agentic || state.activeNLE !== 'resolve');
+  connectionStatus.querySelector('.editor-logo-agentic').classList.toggle('hidden', !agentic);
+}
+
+function applyWorkspace(next, { activate = true } = {}) {
+  workspace = next === 'agentic' ? 'agentic' : 'editor';
+  try { localStorage.setItem(WORKSPACE_KEY, workspace); } catch {}
+  const agentic = workspace === 'agentic';
+  let alongside = false;
+  try { alongside = localStorage.getItem(ALONGSIDE_KEY) === 'true'; } catch {}
+  document.body.classList.toggle('workspace-agentic', agentic);
+  // The Agent view is reached only through the switcher, unless the user keeps it beside Premiere/Resolve.
+  const agentGroup = document.querySelector('[data-channel-group="agentic"]');
+  const editingGroup = document.querySelector('[data-channel-group="editing"]');
+  if (agentGroup) agentGroup.hidden = !(agentic || alongside);
+  if (editingGroup) editingGroup.hidden = agentic;
+  const select = document.getElementById('multicam-editor');
+  if (select) select.value = agentic ? 'agentic' : (state.activeNLE === 'resolve' ? 'resolve' : 'premiere');
+  syncEditorLogos();
+  if (activate) {
+    const active = document.querySelector('.tab-content.active')?.id;
+    if (agentic) document.querySelector('.nav-item[data-tab="agentic"]')?.click();
+    else if (active === 'tab-agentic' && !alongside) document.querySelector('.nav-item[data-tab="multicam"]')?.click();
+  }
+  updateConnection(state.isConnected, state.activeNLE);
+}
+
 // Initialize
 async function init() {
   setupWindowTitlebar();
   setupSidebar();
   setupSettingsLayout();
+  setupProfileSettings();
   accountTools = initAccount({ getUser: () => state.authState?.user, enabled: () => studioEnabled, onSignedIn: initAuth });
   setupEventListeners();
   setupElectronListeners();
@@ -205,7 +248,6 @@ async function init() {
   setupReviewUI();
   await setupPreferenceEvents();
   await initAppPreferences({ applyStudio: applyStudioPreference }).load();
-  setupCaptionUpdateNotice();
 
   // Initialize auth state
   await initAuth();
@@ -215,6 +257,7 @@ async function init() {
   if (status.nle) state.activeNLE = status.nle;
   updateConnection(status.connected, status.nle);
   updateNLESelectorUI();
+  applyWorkspace(workspace, { activate: workspace === 'agentic' });
   window.electronAPI.resolveHandoffStatus?.().then(applyResolveHandoffStatus).catch(() => {});
   if (status.sequenceInfo) {
     displaySequenceInfo(status.sequenceInfo);
@@ -249,6 +292,9 @@ async function init() {
   stockTools = initStockFootage({ isConnected: () => state.activeNLE==='resolve' || state.isConnected });
   audioTools = initAudioLibrary({ isConnected: () => state.activeNLE==='resolve' || state.isConnected });
   initLocalAudio();
+  initShortsCuts();
+  initCommunity({ signIn: openLoginModal });
+  agenticTools = initAgentic();
   chatTools = initChat({ getUser: () => studioEnabled ? state.authState?.user : null, signIn: openLoginModal, refreshCredits: refreshStudioCredits });
   photosTools = initPhotos({ getUser: () => studioEnabled ? state.authState?.user : null, signIn: openLoginModal, refreshCredits: refreshStudioCredits });
   studioTextTools = initStudioText({ getUser: () => state.authState?.user, enabled: () => studioEnabled, signIn: openLoginModal, refreshCredits: refreshStudioCredits,
@@ -285,8 +331,9 @@ function setupWindowTitlebar() {
 function updateWindowTitlebar() {
   const selected = document.querySelector('.nav-item.active');
   const studioTool = ['studio-text', 'bestshorts'].includes(state.currentTab) ? document.querySelector(`[data-studio-mode="${state.studioMode}"]`) : null;
-  const label = studioTool ? `Studio · ${studioTool.textContent.trim()}` : selected?.querySelector('.nav-label')?.textContent || 'SmoothyEdit';
-  const accent = studioTool ? getComputedStyle(studioTool).getPropertyValue('--tool-color').trim() : selected && getComputedStyle(selected).getPropertyValue('--tab-accent').trim();
+  const settingsOpen = !document.getElementById('settings-modal').classList.contains('hidden');
+  const label = settingsOpen ? 'Settings' : studioTool ? `Studio · ${studioTool.textContent.trim()}` : selected?.querySelector('.nav-label')?.textContent || 'SmoothyEdit';
+  const accent = settingsOpen ? '#E6E4DF' : studioTool ? getComputedStyle(studioTool).getPropertyValue('--tool-color').trim() : selected && getComputedStyle(selected).getPropertyValue('--tab-accent').trim();
   const titlebarColor = accent || '#E6E4DF';
   document.querySelector('.window-titlebar').style.setProperty('--window-accent', titlebarColor);
   window.electronAPI.setWindowTitlebarColor?.(titlebarColor)?.catch(() => {});
@@ -335,25 +382,14 @@ function applyStudioPreference(enabled, changed) {
   studioEnabled = enabled;
   document.querySelector('.app-container').classList.toggle('studio-disabled', !enabled);
   if (!enabled && ['photos', 'chat', 'studio-text', 'bestshorts'].includes(state.currentTab)) document.querySelector('.nav-item[data-tab="multicam"]').click();
+  if (!enabled) {
+    // Settings panes that rely on Studio disappear; fall back to General.
+    const activePane = document.querySelector('.settings-pane.active');
+    if (activePane?.hasAttribute('data-studio-only')) document.querySelector('[data-settings-pane="general"]')?.click();
+  }
   accountTools?.authChanged();
   if (changed) { photosTools?.authChanged(); chatTools?.authChanged(); studioTextTools?.authChanged(); if (enabled) refreshStudioCredits(); }
   document.getElementById('tool-search').dispatchEvent(new Event('input'));
-}
-
-function setupCaptionUpdateNotice() {
-  const notice = document.getElementById('caption-update-notice');
-  const dismissedKey = 'smoothyedit:arabic-captions:2026-10-19:dismissed';
-  let dismissed = false;
-  try { dismissed = localStorage.getItem(dismissedKey) === 'true'; } catch {}
-  notice.classList.toggle('hidden', dismissed);
-  document.getElementById('caption-update-dismiss').addEventListener('click', () => {
-    try { localStorage.setItem(dismissedKey, 'true'); } catch {}
-    notice.classList.add('hidden');
-    captionLanguageSelect.focus();
-  });
-  notice.querySelectorAll('[data-caption-support]').forEach(link => {
-    link.addEventListener('click', event => { event.preventDefault(); window.electronAPI.openExternal(link.href); });
-  });
 }
 
 function setupSidebar() {
@@ -442,30 +478,6 @@ function setupSidebar() {
   initSidebarScroll();
 }
 
-function setupSettingsLayout() {
-  const body = document.getElementById('settings-body');
-  const sections = [...body.children].filter(element => element.classList.contains('settings-section'));
-  const visibleSections = sections.filter(section => !section.classList.contains('hidden'));
-  const hiddenSections = sections.filter(section => section.classList.contains('hidden'));
-  const columns = [document.createElement('div'), document.createElement('div')];
-  columns.forEach(column => { column.className = 'settings-column'; });
-  let compact = null;
-  const arrange = () => {
-    const nextCompact = window.innerWidth <= 800;
-    if (nextCompact === compact) return;
-    compact = nextCompact;
-    if (compact) {
-      body.replaceChildren(...sections);
-      return;
-    }
-    columns[0].replaceChildren(...visibleSections.filter((_, index) => index % 2 === 0));
-    columns[1].replaceChildren(...visibleSections.filter((_, index) => index % 2 === 1));
-    body.replaceChildren(...columns, ...hiddenSections);
-  };
-  arrange();
-  window.addEventListener('resize', arrange);
-}
-
 // ========================================
 // Auth Functions
 // ========================================
@@ -498,7 +510,7 @@ function updateAuthUI() {
     document.getElementById('sidebar-user-initial').textContent = Array.from(displayName)[0]?.toUpperCase() || '?';
     userInfo.title = displayName;
     if (userPlan) {
-      userPlan.textContent = authState.user.tier === 'pro' ? 'Studio' : 'Free';
+      userPlan.textContent = authState.user.tier === 'pro' ? 'Pro' : 'Free';
     }
   } else {
     // Studio has one sign-in control; local tools need no account.
@@ -510,6 +522,7 @@ function updateAuthUI() {
   accountTools?.authChanged();
   photosTools?.authChanged(); chatTools?.authChanged();
   studioTextTools?.authChanged();
+  renderProfileSettings();
   requestAnimationFrame(() => document.querySelector('.sidebar-nav .nav-item.active')?.scrollIntoView({ block: 'nearest' }));
 }
 
@@ -573,6 +586,8 @@ function setupEventListeners() {
       document.getElementById(`tab-${tab}`).classList.add('active');
       if (tab === 'photos') photosTools?.activate();
       if (tab === 'chat') chatTools?.activate();
+      if (tab === 'agentic') agenticTools?.activate();
+      else agenticTools?.deactivate();
 
       // Update tabs if switching
       if (tab === 'silence' && state.sequenceInfo) {
@@ -800,7 +815,20 @@ function setupEventListeners() {
   document.getElementById('resolve-check-helper').addEventListener('click', async () => {
     applyResolveHandoffStatus(await window.electronAPI.resolveCheckHandoff());
   });
-  document.getElementById('multicam-editor').addEventListener('change', event => setActiveNLE(event.target.value));
+  document.getElementById('multicam-editor').addEventListener('change', event => {
+    const value = event.target.value;
+    if (value === 'agentic') { applyWorkspace('agentic'); return; }
+    applyWorkspace('editor');
+    setActiveNLE(value);
+  });
+  const alongside = document.getElementById('agentic-alongside');
+  if (alongside) {
+    alongside.checked = localStorage.getItem(ALONGSIDE_KEY) === 'true';
+    alongside.addEventListener('change', () => {
+      try { localStorage.setItem(ALONGSIDE_KEY, String(alongside.checked)); } catch {}
+      applyWorkspace(workspace, { activate: false });
+    });
+  }
   async function loadResolveSource(event) {
     const button = event.currentTarget; button.disabled = true;
     try {
@@ -1492,6 +1520,8 @@ function setupElectronListeners() {
     updateAuthUI();
     updateFeatureLocks();
     refreshStudioCredits();
+    // Let other tabs (e.g. Community) reconnect with the new identity.
+    window.dispatchEvent(new CustomEvent('smoothy-auth-changed'));
   });
 
   // Single brand theme — theme sync from the website is ignored.
@@ -1617,8 +1647,7 @@ function updateConnection(connected, nle) {
   state.isConnected = connected;
   if (nle) state.activeNLE = nle;
   const statusDot = connectionStatus.querySelector('.status-dot');
-  connectionStatus.querySelector('.editor-logo-premiere').classList.toggle('hidden', state.activeNLE === 'resolve');
-  connectionStatus.querySelector('.editor-logo-resolve').classList.toggle('hidden', state.activeNLE !== 'resolve');
+  syncEditorLogos();
   const changedEditor=setEditorContext(state.activeNLE);
   if(changedEditor){studioTextTools?.invalidateSource();state.currentShorts=[];}
   updateEditorLabels();
@@ -1633,7 +1662,11 @@ function updateConnection(connected, nle) {
   if (connectionNleLabel) {
     connectionNleLabel.textContent = nleName;
   }
-  const connectionLabel = state.activeNLE === 'resolve' ? (connected ? 'Ready' : 'Apply to connect') : (connected ? 'Connected' : 'Not connected');
+  let connectionLabel = state.activeNLE === 'resolve' ? (connected ? 'Ready' : 'Apply to connect') : (connected ? 'Connected' : 'Not connected');
+  if (workspace === 'agentic') {
+    connectionNleLabel.textContent = 'Agentic editing';
+    connectionLabel = `${nleName}: ${connected ? 'linked' : 'not linked'}`;
+  }
   document.getElementById('connection-state-label').textContent = connectionLabel;
   connectionStatus.setAttribute('aria-label', `${nleName}: ${connected ? 'Connected' : 'Not connected'}`);
   connectionStatus.title = `${nleName}: ${connected ? 'Connected' : 'Not connected'}`;
@@ -3280,13 +3313,213 @@ async function importCaptionsToPremiere() {
 // ========================================
 
 let settingsReturnFocus = null;
+let renderProfileSettings = () => {};
+
+function setupSettingsLayout() {
+  const nav = document.getElementById('settings-nav-list');
+  const search = document.getElementById('settings-search');
+  const panes = [...document.querySelectorAll('#settings-panes .settings-pane')];
+  const buttons = [...nav.querySelectorAll('[data-settings-pane]')];
+  const title = document.getElementById('settings-pane-title');
+  const description = document.getElementById('settings-pane-description');
+  const scroller = document.getElementById('settings-panes');
+
+  const select = (name) => {
+    const button = buttons.find((entry) => entry.dataset.settingsPane === name) || buttons[0];
+    if (!button) return;
+    buttons.forEach((entry) => {
+      const active = entry === button;
+      entry.classList.toggle('active', active);
+      entry.setAttribute('aria-current', active ? 'true' : 'false');
+    });
+    panes.forEach((pane) => pane.classList.toggle('active', pane.dataset.pane === button.dataset.settingsPane));
+    title.textContent = button.dataset.paneTitle || 'Settings';
+    description.textContent = button.dataset.paneDescription || '';
+    if (scroller) scroller.scrollTop = 0;
+  };
+
+  buttons.forEach((button) => button.addEventListener('click', () => select(button.dataset.settingsPane)));
+  search?.addEventListener('input', () => {
+    const query = search.value.trim().toLowerCase();
+    let first = null;
+    buttons.forEach((button) => {
+      const haystack = `${button.dataset.search || ''} ${button.textContent || ''}`.toLowerCase();
+      const visible = !query || haystack.includes(query);
+      button.classList.toggle('is-filtered-out', !visible);
+      if (visible && !first) first = button;
+    });
+    const current = buttons.find((button) => button.classList.contains('active'));
+    if (query && first && (!current || current.classList.contains('is-filtered-out'))) {
+      select(first.dataset.settingsPane);
+    }
+  });
+  select('general');
+}
+
+function setupProfileSettings() {
+  const avatar = document.getElementById('profile-avatar');
+  const nameDisplay = document.getElementById('profile-name-display');
+  const emailDisplay = document.getElementById('profile-email-display');
+  const planBadge = document.getElementById('profile-plan-badge');
+  const accountHelp = document.getElementById('profile-account-help');
+  const signedInOnly = document.getElementById('profile-signed-in');
+  const nameInput = document.getElementById('profile-name-input');
+  const nameSave = document.getElementById('profile-name-save');
+  const nameStatus = document.getElementById('profile-name-status');
+  const currentPassword = document.getElementById('profile-current-password');
+  const newPassword = document.getElementById('profile-new-password');
+  const confirmPassword = document.getElementById('profile-confirm-password');
+  const passwordSave = document.getElementById('profile-password-save');
+  const passwordStatus = document.getElementById('profile-password-status');
+  const forgotPassword = document.getElementById('profile-forgot-password');
+  const signoutButton = document.getElementById('profile-signout-btn');
+  const sessionStatus = document.getElementById('profile-session-status');
+  const deletePassword = document.getElementById('profile-delete-password');
+  const deleteConfirm = document.getElementById('profile-delete-confirm');
+  const deleteButton = document.getElementById('profile-delete-btn');
+  const deleteStatus = document.getElementById('profile-delete-status');
+  if (!nameInput || !signedInOnly) return;
+
+  const setStatus = (element, message, tone = 'info') => {
+    if (!element) return;
+    element.textContent = message || '';
+    element.dataset.tone = tone;
+  };
+
+  const clearPasswords = () => {
+    currentPassword.value = '';
+    newPassword.value = '';
+    confirmPassword.value = '';
+  };
+
+  const syncDeleteButton = () => {
+    deleteButton.disabled = !(deletePassword.value && deleteConfirm.checked);
+  };
+
+  renderProfileSettings = () => {
+    const user = state.authState?.user || null;
+    const signedIn = Boolean(user);
+    const displayName = (user?.name || 'Editor').trim();
+    avatar.textContent = Array.from(displayName)[0]?.toUpperCase() || 'E';
+    nameDisplay.textContent = signedIn ? (user.name || 'No name yet') : 'Guest';
+    emailDisplay.textContent = signedIn ? user.email : 'Not signed in';
+    const plan = signedIn ? (user.tier === 'pro' ? 'pro' : 'free') : 'guest';
+    planBadge.dataset.plan = plan;
+    planBadge.textContent = plan === 'pro' ? 'Pro' : plan === 'free' ? 'Free' : 'Guest';
+    signedInOnly.classList.toggle('hidden', !signedIn);
+    accountHelp.textContent = signedIn
+      ? 'Your display name is what other editors see in the community lobby. It is never your email address.'
+      : 'Sign in to choose the name other editors see, change your password and manage your account. You can keep chatting as a guest.';
+    if (!signedIn) {
+      nameInput.value = '';
+      clearPasswords();
+      deletePassword.value = '';
+      deleteConfirm.checked = false;
+      setStatus(nameStatus, '');
+      setStatus(passwordStatus, '');
+      setStatus(sessionStatus, '');
+      setStatus(deleteStatus, '');
+    } else if (document.activeElement !== nameInput) {
+      nameInput.value = user.name || '';
+    }
+    syncDeleteButton();
+  };
+
+  nameSave?.addEventListener('click', async () => {
+    const name = nameInput.value.trim();
+    if (name.length < 2) {
+      setStatus(nameStatus, 'Use a display name with 2 to 40 characters.', 'error');
+      return;
+    }
+    nameSave.disabled = true;
+    setStatus(nameStatus, 'Saving…');
+    try {
+      const result = await window.electronAPI.updateDisplayName(name);
+      if (!result.success) setStatus(nameStatus, result.error || 'Could not save your name.', 'error');
+      else setStatus(nameStatus, 'Saved. Other editors will see this name in the lobby.', 'success');
+    } catch {
+      setStatus(nameStatus, 'Could not save your name.', 'error');
+    } finally {
+      nameSave.disabled = false;
+    }
+  });
+
+  passwordSave?.addEventListener('click', async () => {
+    const current = currentPassword.value;
+    const next = newPassword.value;
+    if (!current) return setStatus(passwordStatus, 'Enter your current password.', 'error');
+    if (next.length < 8) return setStatus(passwordStatus, 'Use a new password with at least 8 characters.', 'error');
+    if (next !== confirmPassword.value) return setStatus(passwordStatus, 'The new passwords do not match.', 'error');
+    passwordSave.disabled = true;
+    setStatus(passwordStatus, 'Updating…');
+    try {
+      const result = await window.electronAPI.changePassword(current, next);
+      if (!result.success) setStatus(passwordStatus, result.error || 'Could not change your password.', 'error');
+      else {
+        clearPasswords();
+        setStatus(passwordStatus, result.message || 'Password updated.', 'success');
+      }
+    } catch {
+      setStatus(passwordStatus, 'Could not change your password.', 'error');
+    } finally {
+      passwordSave.disabled = false;
+    }
+  });
+
+  forgotPassword?.addEventListener('click', (event) => {
+    event.preventDefault();
+    window.electronAPI.openExternal('https://smoothyedit.com/forgot-password').catch(() => {
+      setStatus(passwordStatus, 'Open smoothyedit.com/forgot-password in your browser.', 'error');
+    });
+  });
+
+  signoutButton?.addEventListener('click', async () => {
+    signoutButton.disabled = true;
+    try {
+      await window.electronAPI.logout();
+      setStatus(sessionStatus, 'Signed out on this device.', 'success');
+    } catch {
+      setStatus(sessionStatus, 'Could not sign out.', 'error');
+    } finally {
+      signoutButton.disabled = false;
+    }
+  });
+
+  deletePassword?.addEventListener('input', syncDeleteButton);
+  deleteConfirm?.addEventListener('change', syncDeleteButton);
+  deleteButton?.addEventListener('click', async () => {
+    if (deleteButton.disabled) return;
+    deleteButton.disabled = true;
+    setStatus(deleteStatus, 'Deleting your account…');
+    try {
+      const result = await window.electronAPI.deleteAccount(deletePassword.value);
+      if (!result.success) {
+        setStatus(deleteStatus, result.error || 'Could not delete your account.', 'error');
+      } else {
+        deletePassword.value = '';
+        deleteConfirm.checked = false;
+        setStatus(deleteStatus, result.message || 'Your account was deleted.', 'success');
+      }
+    } catch {
+      setStatus(deleteStatus, 'Could not delete your account.', 'error');
+    } finally {
+      syncDeleteButton();
+    }
+  });
+
+  renderProfileSettings();
+}
+
 async function openSettings() {
   if (settingsModal.classList.contains('hidden')) settingsReturnFocus = document.activeElement;
   document.querySelector('.app-container').inert = true;
   settingsModal.classList.remove('hidden');
-  settingsBody.scrollTop = 0;
+  document.getElementById('settings-panes').scrollTop = 0;
   settingsCloseBtn.focus({ preventScroll: true });
   document.getElementById('settings-account-btn').textContent = state.authState?.user ? 'Open account' : 'Sign in';
+  renderProfileSettings();
+  document.querySelector('.window-titlebar')?.classList.add('settings-open');
+  updateWindowTitlebar();
 
   // Load saved token
   const token = await window.electronAPI.getConnectionToken();
@@ -3308,8 +3541,10 @@ async function openSettings() {
 
 function closeSettings() {
   settingsModal.classList.add('hidden');
+  document.querySelector('.window-titlebar')?.classList.remove('settings-open');
   document.querySelector('.app-container').inert = false;
   settingsReturnFocus?.focus();
+  updateWindowTitlebar();
 }
 
 async function saveToken() {
@@ -3453,10 +3688,10 @@ function updateNLESelectorUI() {
   const nle = state.activeNLE;
 
   // Update button states
-  document.getElementById('multicam-editor').value = nle === 'resolve' ? 'resolve' : 'premiere';
+  document.getElementById('multicam-editor').value = workspace === 'agentic' ? 'agentic' : (nle === 'resolve' ? 'resolve' : 'premiere');
   document.getElementById('resolve-workflow').classList.toggle('hidden', nle !== 'resolve');
   document.getElementById('resolve-dev-badge').classList.toggle('hidden', nle !== 'resolve');
-  document.getElementById('multicam-action-note').textContent = nle === 'resolve' ? 'Apply reads your current timeline, saves in SmoothyEdit Assets → Resolve, and opens the new edit in Resolve automatically.' : 'Cuts a duplicate with your nests, effects and continuous audio.';
+  document.getElementById('multicam-action-note').textContent = nle === 'resolve' ? 'Apply reads your current timeline, saves in SmoothyEdit Assets → Resolve, and opens the new edit in Resolve automatically.' : 'Works on a duplicate sequence.';
   [nleAutoBtn, nlePremiereBtn, nleResolveBtn].forEach(btn => {
     if (btn) btn.classList.remove('active');
   });
@@ -3819,7 +4054,7 @@ function updateCompressorUI() {
 
   if (compressorState.currentSourcePath) {
     dropSection.classList.add('hidden');
-    emptyGuide.classList.add('hidden');
+    emptyGuide?.classList.add('hidden');
     folderSection.classList.remove('hidden');
     filesSection.classList.remove('hidden');
     hardwareSection.classList.remove('hidden');
@@ -3872,7 +4107,7 @@ function updateCompressorUI() {
 
   } else {
     dropSection.classList.remove('hidden');
-    emptyGuide.classList.remove('hidden');
+    emptyGuide?.classList.remove('hidden');
     folderSection.classList.add('hidden');
     filesSection.classList.add('hidden');
     hardwareSection.classList.add('hidden');
@@ -4727,7 +4962,7 @@ function updateAssetsUI() {
   renderAssetsFileList();
   const tools = document.querySelector('.assets-tools-section');
   if (assetsState.items.length) assetsPreviewSection.after(tools); else document.getElementById('assets-input-section').before(tools);
-  document.getElementById('assets-local-note').textContent = assetsState.items.length ? 'Free, on your device · Remove backgrounds or upscale images 2× / 4×. Models download once; your images stay on this computer.' : 'Remove backgrounds or upscale images 2× / 4×, free on your device. Add an image below to start. Models download once; your images stay on this computer.';
+  document.getElementById('assets-local-note').textContent = assetsState.items.length ? 'Models download once. Images stay on this computer.' : 'Models download once. Images stay on this computer.';
   const enabled = assetsState.items.length > 0 && !assetsState.busy;
   document.getElementById('assets-input-section').classList.toggle('hidden', assetsState.items.length > 0);
   for (const id of ['assets-clear-btn', 'assets-replace-btn', 'assets-repaste-btn', 'assets-remove-background-btn', 'assets-upscale-btn', 'assets-upscale-factor', 'assets-restore-btn']) {
@@ -4737,7 +4972,7 @@ function updateAssetsUI() {
   document.getElementById('assets-process-cancel-btn').classList.toggle('hidden', !assetsState.processing);
   document.getElementById('assets-process-progress').classList.toggle('hidden', !assetsState.processing);
   document.getElementById('assets-preview-section').setAttribute('aria-busy', String(!!assetsState.processing));
-  assetsEmptyGuide.classList.toggle('hidden', assetsState.items.length > 0);
+  assetsEmptyGuide?.classList.toggle('hidden', assetsState.items.length > 0);
   [assetsConvertBtn, assetsSaveAsBtn, assetsSendBtn].forEach((btn) => {
     if (btn) btn.disabled = !enabled || (btn === assetsSendBtn && !(state.activeNLE==='resolve' || (state.isConnected && state.sequenceInfo?.hasSequence)));
   });

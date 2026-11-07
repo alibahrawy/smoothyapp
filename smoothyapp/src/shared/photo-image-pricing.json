@@ -147,12 +147,12 @@
     ],
     "google/gemini-nano-banana-2.1": [{ "billable": "output_image", "unit": "token", "cost_usd": 0.00003 }],
     "tencent/hy-image-v3.5-preview": [{ "billable": "output_image", "unit": "token", "cost_usd": 0.0000016 }],
-    "openai/gpt-image-2.5-sunburst": [
+    "openai/gpt-image-2.6-sunburst": [
       { "billable": "input_image", "unit": "token", "cost_usd": 0.000008 },
       { "billable": "input_text", "unit": "token", "cost_usd": 0.000005 },
       { "billable": "output_image", "unit": "token", "cost_usd": 0.00003 }
     ],
-    "openai/gpt-image-2.5-flare": [
+    "openai/gpt-image-2.6-flare": [
       { "billable": "input_image", "unit": "token", "cost_usd": 0.000008 },
       { "billable": "input_text", "unit": "token", "cost_usd": 0.000005 },
       { "billable": "output_image", "unit": "token", "cost_usd": 0.00003 }

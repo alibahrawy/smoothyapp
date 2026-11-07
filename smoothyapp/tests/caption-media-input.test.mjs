@@ -1,4 +1,3 @@
-import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { build } from 'esbuild';
@@ -6,19 +5,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const output = await build({ entryPoints: [fileURLToPath(new URL('../src/main/captions/media-input.ts', import.meta.url))], bundle: true,
+const output = await build({ entryPoints: [new URL('../src/main/captions/media-input.ts', import.meta.url).pathname], bundle: true,
   format: 'esm', platform: 'node', write: false });
 const { validateCaptionMediaPath } = await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
 
-test('picker and drops accept readable nonempty media with canonical Unicode paths', async (t) => {
+test('picker and drops accept readable nonempty media with canonical Unicode paths', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'smoothy-caption-media-'));
   try {
     const file = path.join(dir, 'تسجيل صوتي.MP3'); fs.writeFileSync(file, 'fixture');
-    const link = path.join(dir, 'linked.mp3');
-    try { fs.symlinkSync(file, link); } catch (error) {
-      if (error?.code === 'EPERM' || error?.code === 'EACCES') { t.skip('Windows symlink privileges are unavailable'); return; }
-      throw error;
-    }
+    const link = path.join(dir, 'linked.mp3'); fs.symlinkSync(file, link);
     assert.equal(await validateCaptionMediaPath(file), fs.realpathSync(file));
     assert.equal(await validateCaptionMediaPath(link), fs.realpathSync(file));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }

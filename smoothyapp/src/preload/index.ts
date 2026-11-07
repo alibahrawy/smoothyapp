@@ -110,8 +110,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   logout: () => ipcRenderer.invoke('auth-logout'),
   getAuthState: () => ipcRenderer.invoke('auth-get-state'),
   refreshAuth: () => ipcRenderer.invoke('auth-refresh'),
+  updateDisplayName: (name: string) => ipcRenderer.invoke('auth-update-name', name),
+  changePassword: (currentPassword: string, newPassword: string) => ipcRenderer.invoke('auth-change-password', { currentPassword, newPassword }),
+  deleteAccount: (password: string) => ipcRenderer.invoke('auth-delete-account', password),
   getTrialStatus: () => ipcRenderer.invoke('get-trial-status'),
   canUseFeature: (feature: string) => ipcRenderer.invoke('can-use-feature', feature),
+  proUpgradeClick: (feature: string) => ipcRenderer.invoke('pro-upgrade-click', feature),
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
 
   // Theme sync
@@ -242,6 +246,33 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('compressor-complete', (_, data) => callback(data));
   },
 
+  // Agent Bridge + Review
+  agentState: () => ipcRenderer.invoke('agent-state'),
+  agentSetEnabled: (enabled: boolean) => ipcRenderer.invoke('agent-set-enabled', enabled),
+  agentTools: () => ipcRenderer.invoke('agent-tools'),
+  agentSkill: () => ipcRenderer.invoke('agent-skill'),
+  agentCopy: (text: string) => ipcRenderer.invoke('agent-copy', text),
+  agentProject: (input?: any) => ipcRenderer.invoke('agent-project', input),
+  agentMedia: (input?: any) => ipcRenderer.invoke('agent-media', input),
+  agentFrame: (input?: any) => ipcRenderer.invoke('agent-frame', input),
+  agentProbe: (input?: any) => ipcRenderer.invoke('agent-probe', input),
+  agentPickFile: () => ipcRenderer.invoke('agent-pick-file'),
+  agentReviewList: (input?: any) => ipcRenderer.invoke('agent-review-list', input),
+  agentReviewAdd: (input: any) => ipcRenderer.invoke('agent-review-add', input),
+  agentReviewReply: (input: any) => ipcRenderer.invoke('agent-review-reply', input),
+  agentReviewResolve: (input: any) => ipcRenderer.invoke('agent-review-resolve', input),
+  agentReviewOpen: (input: any) => ipcRenderer.invoke('agent-review-open', input),
+  agentPreviewClear: () => ipcRenderer.invoke('agent-preview-clear'),
+  agentApprove: (id: string, allow: boolean) => ipcRenderer.invoke('agent-approve', { id, allow }),
+  agentOpenArtifact: (file: string) => ipcRenderer.invoke('agent-open-artifact', file),
+  agentArtifactData: (file: string) => ipcRenderer.invoke('agent-artifact-data', file),
+  agentJobList: () => ipcRenderer.invoke('agent-job-list'),
+  onAgentEvent: (callback: (data: any) => void) => {
+    const listener = (_: unknown, data: any) => callback(data);
+    ipcRenderer.on('agent-event', listener);
+    return () => ipcRenderer.removeListener('agent-event', listener);
+  },
+
   // Event listeners
   onConnectionChange: (callback: (data: any) => void) => {
     ipcRenderer.on('connection-change', (_, data) => callback(data));
@@ -251,6 +282,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onProgress: (callback: (data: any) => void) => {
     ipcRenderer.on('progress', (_, data) => callback(data));
+  },
+  shortscutsState: () => ipcRenderer.invoke('shortscuts-state'),
+  shortscutsSetCapturing: (value: boolean) => ipcRenderer.invoke('shortscuts-set-capturing', value),
+  shortscutsSaveDeck: (deck: unknown) => ipcRenderer.invoke('shortscuts-save-deck', deck),
+  shortscutsSetServer: (value: unknown) => ipcRenderer.invoke('shortscuts-set-server', value),
+  shortscutsRotateToken: () => ipcRenderer.invoke('shortscuts-rotate-token'),
+  shortscutsCatalog: () => ipcRenderer.invoke('shortscuts-catalog'),
+  shortscutsPresets: (refresh = false) => ipcRenderer.invoke('shortscuts-presets', refresh),
+  shortscutsPreset: (id: string) => ipcRenderer.invoke('shortscuts-preset', id),
+  shortscutsApply: (id: string) => ipcRenderer.invoke('shortscuts-apply', id),
+  shortscutsCapturePreset: () => ipcRenderer.invoke('shortscuts-capture-preset'),
+  shortscutsOpenRemote: () => ipcRenderer.invoke('shortscuts-open-remote'),
+  shortscutsCopyRemote: () => ipcRenderer.invoke('shortscuts-copy-remote'),
+  onShortsCutsState: (callback: (state: any) => void) => {
+    ipcRenderer.on('shortscuts-state', (_, state) => callback(state));
+  },
+  communityState: () => ipcRenderer.invoke('community-state'),
+  communityConnect: () => ipcRenderer.invoke('community-connect'),
+  communitySend: (body: string) => ipcRenderer.invoke('community-send', body),
+  communityDisconnect: () => ipcRenderer.invoke('community-disconnect'),
+  onCommunityState: (callback: (state: any) => void) => {
+    ipcRenderer.on('community-state', (_, state) => callback(state));
   },
   onAutoCutResult: (callback: (result: any) => void) => {
     ipcRenderer.on('autocut-result', (_, result) => callback(result));

@@ -164,6 +164,16 @@ export function sendCaptionsToPremiere(srtPath: string): Promise<any> {
   return bridgeRequests.request('importCaptions', 'captionsImported', { srtPath }, 60000);
 }
 
+export function getShortsCutsCatalog(): Promise<any> {
+  return bridgeRequests.request('getShortsCutsCatalog', 'shortsCutsCatalog', {}, 30000);
+}
+export function applyShortsCut(cut: unknown): Promise<any> {
+  return bridgeRequests.request('applyShortsCut', 'shortsCutApplied', { cut }, 30000);
+}
+export function captureShortsCutPreset(): Promise<any> {
+  return bridgeRequests.request('captureShortsCutPreset', 'shortsCutPresetCaptured', {}, 30000);
+}
+
 /**
  * Every clip on a track, with timeline offsets and source in/out points. The
  * renderer sends these so Multicam and Silence Removal analyse the whole

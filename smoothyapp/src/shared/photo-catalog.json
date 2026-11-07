@@ -1,8 +1,8 @@
 {
   "IMAGE_MODELS": [
     {
-      "id": "openai/gpt-image-2.5-flare",
-      "label": "GPT Image 2.5 Flare"
+      "id": "openai/gpt-image-2.6-flare",
+      "label": "GPT Image 2.6 Flare"
     },
     {
       "id": "openai/gpt-5-image-mini",
@@ -33,8 +33,8 @@
       "label": "GPT Image"
     },
     {
-      "id": "openai/gpt-image-2.5-sunburst",
-      "label": "GPT Image 2.5 Sunburst"
+      "id": "openai/gpt-image-2.6-sunburst",
+      "label": "GPT Image 2.6 Sunburst"
     },
     {
       "id": "openai/gpt-image-2",
@@ -177,7 +177,7 @@
       "label": "Riverflow V2 Fast"
     }
   ],
-  "DEFAULT_IMAGE_MODEL": "openai/gpt-image-2.5-flare",
+  "DEFAULT_IMAGE_MODEL": "openai/gpt-image-2.6-flare",
   "ASPECT_RATIOS": [
     "21:9",
     "16:9",
@@ -434,7 +434,7 @@
         "4K"
       ]
     },
-    "openai/gpt-image-2.5-sunburst": {
+    "openai/gpt-image-2.6-sunburst": {
       "supportsImageSize": false,
       "api": "images",
       "maxReferences": 6,
@@ -449,7 +449,7 @@
         "21:9"
       ]
     },
-    "openai/gpt-image-2.5-flare": {
+    "openai/gpt-image-2.6-flare": {
       "supportsImageSize": false,
       "api": "images",
       "maxReferences": 6,
@@ -850,8 +850,8 @@
     "google/gemini-3-pro-image": "Best quality",
     "openai/gpt-5.4-image-2": "OpenAI · reasoning and image generation",
     "openai/gpt-5-image": "OpenAI · top quality",
-    "openai/gpt-image-2.5-sunburst": "OpenAI · precision image generation and editing",
-    "openai/gpt-image-2.5-flare": "Default · latest OpenAI · fast image generation and editing",
+    "openai/gpt-image-2.6-sunburst": "OpenAI · precision image generation and editing",
+    "openai/gpt-image-2.6-flare": "Default · latest OpenAI · fast image generation and editing",
     "openai/gpt-image-2": "OpenAI · high-fidelity generation and editing",
     "openai/gpt-image-1-mini": "OpenAI · economical image generation",
     "openai/gpt-image-1": "OpenAI · detailed generation and editing",

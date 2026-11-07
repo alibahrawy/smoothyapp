@@ -5,8 +5,8 @@
       "id": "openai",
       "label": "OpenAI",
       "models": [
-        { "id": "openai/gpt-image-2.5-flare", "tier": "fast", "description": "Everyday generation · Default" },
-        { "id": "openai/gpt-image-2.5-sunburst", "tier": "precision", "description": "Detailed creative work · Same rates as Flare" }
+        { "id": "openai/gpt-image-2.6-flare", "tier": "fast", "description": "Everyday generation · Default" },
+        { "id": "openai/gpt-image-2.6-sunburst", "tier": "precision", "description": "Detailed creative work · Same rates as Flare" }
       ]
     },
     {

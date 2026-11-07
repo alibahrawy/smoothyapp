@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SmoothyEdit</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="shortscuts.css">
+  <link rel="stylesheet" href="community.css">
+  <link rel="stylesheet" href="agentic.css">
+  <link rel="stylesheet" href="design-system.css">
+  <link rel="stylesheet" href="custom-select.css">
 </head>
 <body>
   <aside id="resolve-receive-banner" class="resolve-receive-banner hidden" aria-label="DaVinci Resolve handoff">
@@ -18,13 +23,13 @@
     <aside class="sidebar">
       <!-- Tool channels scroll independently; account and connection stay pinned. -->
       <div class="sidebar-tools-header">
-        <div class="nav-group-label nav-group-header"><span class="nav-group-title">Your workspace</span><button type="button" id="sidebar-toggle-btn" class="settings-btn sidebar-toggle-btn" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="sidebar-nav" title="Collapse sidebar"><svg class="sidebar-toggle-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 17-5-5 5-5m7 10-5-5 5-5"/></svg></button></div>
+        <div class="nav-group-label nav-group-header"><span class="nav-group-title">Your workspace</span><span id="studio-credits-inline" class="nav-credits hidden">—</span><button type="button" id="sidebar-toggle-btn" class="settings-btn sidebar-toggle-btn" aria-label="Collapse sidebar" aria-expanded="true" aria-controls="sidebar-nav" title="Collapse sidebar"><svg class="sidebar-toggle-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 17-5-5 5-5m7 10-5-5 5-5"/></svg></button></div>
         <label class="tool-search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg><input type="search" id="tool-search" placeholder="Find a tool…" aria-label="Find a tool"><span aria-hidden="true" class="tool-search-shortcut">⌘K</span></label>
       </div>
       <div class="sidebar-tools-scroll">
       <nav class="sidebar-nav" id="sidebar-nav" aria-label="Tool channels">
 <section class="channel-group" data-channel-group="editing"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-editing"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">Editing</span></button><div class="channel-group-items" id="channels-editing"><a href="#" class="nav-item active" data-tab="multicam">
-          <span class="nav-icon"><svg aria-hidden="true" data-icon="monitor"
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="multicam"
   xmlns="http://www.w3.org/2000/svg"
   width="20"
   height="20"
@@ -35,9 +40,8 @@
   stroke-linecap="round"
   stroke-linejoin="round"
 >
-  <rect width="20" height="14" x="2" y="3" rx="2" />
-  <line x1="8" x2="16" y1="21" y2="21" />
-  <line x1="12" x2="12" y1="17" y2="21" />
+  <rect width="14" height="11" x="2" y="3" rx="2" />
+  <rect width="14" height="11" x="8" y="10" rx="2" fill="currentColor" />
 </svg>
 
           </span>
@@ -61,7 +65,7 @@
 
           </span>
           <span class="nav-label">Silence Removal</span>
-        </a><a href="#" class="nav-item" data-tab="local-audio" style="--tab-accent:#9FEAE2">
+        </a><a href="#" class="nav-item" data-tab="local-audio" style="--tab-accent:#A8D8FF">
           <span class="nav-icon"><svg aria-hidden="true" data-icon="audio-waveform" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2"/></svg></span><span class="nav-label">Audio Cleanup</span>
         </a><a href="#" class="nav-item" data-tab="captions">
           <span class="nav-icon"><svg aria-hidden="true" data-icon="captions"
@@ -80,6 +84,23 @@
 </svg>
           </span>
           <span class="nav-label">Captions</span>
+        </a><a href="#" class="nav-item" data-tab="shortscuts" style="--tab-accent:#C2E67F">
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="zap"
+  xmlns="http://www.w3.org/2000/svg"
+  width="20"
+  height="20"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" />
+</svg>
+
+          </span>
+          <span class="nav-label">ShortsCuts</span>
         </a><a href="#" class="nav-item" data-tab="compressor">
           <span class="nav-icon"><svg aria-hidden="true" data-icon="shrink"
   xmlns="http://www.w3.org/2000/svg"
@@ -119,6 +140,25 @@
 
           </span>
           <span class="nav-label">Assets</span>
+        </a></div></section><section class="channel-group" data-channel-group="agentic" hidden><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-agentic"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">Agentic</span></button><div class="channel-group-items" id="channels-agentic"><a href="#" class="nav-item" data-tab="agentic" style="--tab-accent:#B7A6FF" aria-label="Agentic · connect an MCP agent and review timecoded notes">
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="bot"
+  xmlns="http://www.w3.org/2000/svg"
+  width="20"
+  height="20"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M12 8V4H8" />
+  <rect width="16" height="12" x="4" y="8" rx="2" />
+  <path d="M2 14h2M20 14h2M15 13v2M9 13v2" />
+</svg>
+          </span>
+          <span class="nav-label">Agent</span>
+          <span class="agentic-nav-badge hidden" id="agentic-nav-badge" aria-hidden="true"></span>
         </a></div></section><section class="channel-group" data-channel-group="library"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-library"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">Library</span></button><div class="channel-group-items" id="channels-library"><a href="#" class="nav-item" data-tab="stock">
           <span class="nav-icon"><svg aria-hidden="true" data-icon="film"
   xmlns="http://www.w3.org/2000/svg"
@@ -160,7 +200,7 @@
 </svg>
 </span>
           <span class="nav-label">Audio Library</span>
-        </a></div></section><section class="channel-group" data-channel-group="studio" data-fold-key="ai-workspace"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-studio"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">AI</span><span id="studio-credits-inline" class="nav-credits hidden">—</span></button><div class="channel-group-items" id="channels-studio"><a href="#" class="nav-item" data-tab="studio-text" style="--tab-accent:#B0EC9C" aria-label="Dashboard · Studio · Shorts, Condense, Hooks, Titles, Descriptions, Thumbnails, B-roll, Social, Blog, SFX"><span class="nav-icon"><svg aria-hidden="true" data-icon="layout-dashboard"
+        </a></div></section><section class="channel-group" data-channel-group="studio" data-fold-key="ai-workspace"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-studio"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">AI</span></button><div class="channel-group-items" id="channels-studio"><a href="#" class="nav-item" data-tab="studio-text" style="--tab-accent:#B0EC9C" aria-label="Dashboard · Studio · Shorts, Condense, Hooks, Titles, Descriptions, Thumbnails, B-roll, Social, Blog, SFX"><span class="nav-icon"><svg aria-hidden="true" data-icon="layout-dashboard"
   xmlns="http://www.w3.org/2000/svg"
   width="20"
   height="20"
@@ -207,7 +247,23 @@
   <path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z" />
   <path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1" />
 </svg>
-</span><span class="nav-label">Chat</span></a></div></section><a href="#" class="nav-item hidden" data-tab="logs">
+</span><span class="nav-label">Chat</span></a></div></section><section class="channel-group" data-channel-group="community"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-community"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">Community</span></button><div class="channel-group-items" id="channels-community"><a href="#" class="nav-item" data-tab="community" style="--tab-accent:#D4C2FF" aria-label="Community chat"><span class="nav-icon"><svg aria-hidden="true" data-icon="users"
+  xmlns="http://www.w3.org/2000/svg"
+  width="20"
+  height="20"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+  <circle cx="9" cy="7" r="4" />
+  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+</svg>
+</span><span class="nav-label">Community</span><span class="community-nav-badge hidden" id="community-nav-dot" role="status"></span></a></div></section><a href="#" class="nav-item hidden" data-tab="logs">
           <span class="nav-icon"><svg aria-hidden="true" data-icon="terminal"
   xmlns="http://www.w3.org/2000/svg"
   width="20"
@@ -239,7 +295,7 @@
           <span id="sidebar-user-initial" class="sidebar-user-initial" aria-hidden="true"></span>
           <div class="user-details">
             <span id="user-name" class="user-name">Not logged in</span>
-            <span id="user-plan" class="user-plan">Studio</span>
+            <span id="user-plan" class="user-plan">Pro</span>
           </div>
           <button id="account-verify-btn" type="button" class="account-verify-btn hidden">Verify email ↗</button>
           <button id="logout-btn" class="logout-btn" title="Logout">
@@ -252,12 +308,14 @@
         </div>
 
         <div class="connection-status editor-switcher" id="connection-status">
-          <select id="multicam-editor" aria-label="Editing in" title="Switch editing app">
-            <option value="premiere">Premiere Pro</option>
-            <option value="resolve">DaVinci Resolve Free</option>
+          <select id="multicam-editor" aria-label="Editing in" title="Switch editing app" data-menu-anchor="#connection-status">
+            <option value="premiere" data-menu-icon-from=".editor-logo-premiere img">Premiere Pro</option>
+            <option value="resolve" data-menu-icon-from=".editor-logo-resolve img">DaVinci Resolve Free</option>
+            <option value="agentic" data-menu-icon-from=".editor-logo-agentic svg">Agentic editing</option>
           </select>
           <span class="editor-logo editor-logo-premiere" aria-hidden="true"><img src="./editor-logos/premiere-pro.svg" width="28" height="28" alt=""/></span>
           <span class="editor-logo editor-logo-resolve hidden" aria-hidden="true"><img src="./editor-logos/davinci-resolve.svg" width="28" height="28" alt=""/></span>
+          <span class="editor-logo editor-logo-agentic hidden" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4M9 14h.01M15 14h.01"/></svg></span>
           <span class="connection-status-icon" aria-hidden="true"><span class="status-dot disconnected"></span></span>
           <span class="connection-status-copy">
             <span class="status-label" id="connection-nle-label">Premiere Pro</span>
@@ -301,16 +359,11 @@
       <div class="tab-content" id="tab-local-audio">
         <div class="content-scroll">
           <div class="local-audio-shell">
-            <section class="local-audio-intro">
-              <h1>Audio Cleanup</h1>
-              <p class="help-text">Split any recording into <strong>Speech</strong> and <strong>Music</strong> — noise stays with the music. Turn on <strong>Enhanced</strong> to clean the speech and remove everything else.</p>
-            </section>
             <div class="local-audio-input" role="group" aria-label="Audio or video input">
-              <span class="local-audio-file-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 10v4m4-7v10m4-14v18m4-14v10m4-7v4m3-6v12"/></svg></span>
               <span id="local-audio-source" class="local-audio-source is-empty">Choose an audio or video file.</span>
               <button type="button" id="local-audio-pick" class="btn btn-secondary">Choose file</button>
             </div>
-            <div class="local-audio-notes"><p class="local-audio-note">Audio stays on your computer. No credits needed.</p>
+            <div class="local-audio-notes"><p class="local-audio-note">Splits speech from music. Enhanced also cleans the speech. Runs on your computer, no credits.</p>
             <p id="local-audio-setup-note" class="local-audio-note hidden">First setup downloads the local engine and models. GPU runtimes can be several GB.</p><p id="local-audio-device" class="local-audio-note"></p></div>
             <div id="local-audio-operation" class="local-audio-operation">
               <div id="local-audio-feedback" class="local-audio-feedback hidden">
@@ -334,7 +387,7 @@
         <div class="content-scroll studio-text-scroll">
           <section id="studio-text-signin" class="section"><h2>Your subtitles, more possibilities</h2><p class="help-text">Sign in to use your Studio credits and shared history. Local editing tools stay free.</p><button type="button" id="studio-text-signin-btn" class="btn btn-primary">Sign in</button></section>
           <div id="studio-text-workspace" class="hidden">
-            <section id="studio-text-pro" class="section hidden"><p class="help-text">This tool is part of Studio Pro. Your local editing tools stay free.</p><button type="button" id="studio-text-upgrade" class="btn btn-secondary btn-small">View Studio Pro ↗</button></section>
+            <section id="studio-text-pro" class="section hidden"><p class="help-text">This tool is part of Smoothy Pro. Your local editing tools stay free.</p><button type="button" id="studio-text-upgrade" class="btn btn-secondary btn-small">View Smoothy Pro ↗</button></section>
             <section id="studio-text-empty" class="studio-empty"><span class="studio-empty-icon" aria-hidden="true">✦</span><h2 id="studio-text-heading">Condense plan</h2><p id="studio-text-description" class="help-text"></p><span>Choose a tool above. Add your subtitles below to get started.</span></section>
             <section id="studio-text-result-section" class="section hidden"><div class="studio-source-heading"><h2 id="studio-text-result-heading">Your edit plan</h2><div class="studio-source-actions"><button type="button" id="studio-text-copy" class="btn btn-secondary btn-small">Copy</button><button type="button" id="studio-text-save" class="btn btn-secondary btn-small">Save TXT</button></div></div><p id="studio-text-result-help" class="help-text">Review these suggestions and make the edit yourself.</p><div id="studio-result-cards" class="studio-result-cards" aria-label="Formatted Studio result"></div><button id="studio-result-edit" type="button" class="stock-text-button studio-edit-toggle" aria-pressed="false">Edit as text</button><textarea id="studio-text-result" hidden class="studio-textarea studio-draft" aria-label="Editable Studio draft" rows="12"></textarea><label for="studio-text-refine" class="help-text">Refine this draft (uses Studio credits)</label><div class="studio-inline"><input id="studio-text-refine" class="text-input" maxlength="10000" placeholder="Make it shorter, change the tone…"><button type="button" id="studio-text-refine-btn" class="btn btn-secondary btn-small">Refine</button></div></section>
           </div>
@@ -410,6 +463,37 @@
         </div>
         <div id="chat-add-menu" class="photo-picker-popup chat-add-menu" popover><div class="photo-picker-list"><button type="button" id="chat-add-image">Add images</button><button type="button" id="chat-add-file">Add files</button></div><p class="photo-picker-footnote">Images, PDF, DOCX and text · up to 4 files / 10 MB each. Documents must contain readable text. Sent only when you send your message.</p></div>
       </div>
+      <div class="tab-content" id="tab-community">
+        <div class="status-bar status-idle"><span>Community</span></div>
+        <div class="community-shell">
+          <header class="community-head">
+            <div>
+              <h2>Community</h2>
+              <p class="help-text">Ask other editors. Text only: no links, pictures or spam.</p>
+            </div>
+            <div class="community-head-actions">
+              <span class="community-presence" id="community-presence" data-status="idle" role="status" aria-live="polite">
+                <span class="community-presence-dot" aria-hidden="true"></span>
+                <span id="community-presence-text">Not connected</span>
+              </span>
+              <button type="button" class="btn btn-secondary btn-small hidden" id="community-reconnect">Reconnect</button>
+            </div>
+          </header>
+          <p class="community-guest hidden" id="community-guest-banner">
+            <span id="community-guest-text">You’re chatting as a guest.</span>
+            <button type="button" class="btn btn-primary btn-small" id="community-signin">Sign in to keep your name</button>
+          </p>
+          <div class="community-feed" id="community-feed" role="log" aria-live="polite" aria-label="Community messages"></div>
+          <div class="community-composer">
+            <textarea id="community-input" rows="2" maxlength="500" placeholder="Ask a question or share what worked…" aria-label="Message the community" autocomplete="off"></textarea>
+            <div class="community-composer-bar">
+              <span class="community-hint" id="community-hint">Enter sends · Shift+Enter for a new line</span>
+              <span class="community-count" id="community-count">0/500</span>
+              <button type="button" class="btn btn-primary btn-small" id="community-send" disabled>Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="tab-content" id="tab-photos">
         <div class="status-bar status-idle">AI Photos</div>
         <div class="photo-workspace"><div class="photo-workspace-main">
@@ -469,7 +553,7 @@
         <div class="content-scroll audio-content-scroll">
           <section id="audio-archive-panel" role="tabpanel" aria-labelledby="audio-view-all">
             <form id="audio-archive-form" class="audio-filter-bar">
-              <span class="audio-filter-icon" aria-hidden="true">☷</span><input type="search" id="audio-archive-query" maxlength="200" aria-label="Search music by title or artist" placeholder="Search or filter library">
+              <span class="audio-filter-icon" aria-hidden="true">☷</span><input type="search" id="audio-archive-query" maxlength="200" aria-label="Search music by title or artist" placeholder="Search library">
               <label class="audio-compact-filter">Genre<select id="audio-archive-genre"><option value="all">All genres</option></select></label>
               <label class="audio-compact-filter">Mood<select id="audio-archive-mood"><option value="">All moods</option></select></label>
               <button class="stock-text-button" type="submit" id="audio-archive-search">Search</button>
@@ -538,10 +622,10 @@
         <div class="status-bar status-idle" id="stock-source-status">Stock Footage · All sources</div>
         <div class="content-scroll">
           <div class="stock-heading">
-            <div><h1>Find your next shot</h1><p class="help-text">Search free stock videos for your edit.</p></div>
+            <div><h1>Stock Footage</h1></div>
             <a href="https://commons.wikimedia.org" class="stock-powered hidden" id="stock-powered" data-stock-external><span>Source</span><strong id="stock-source-name">Wikimedia Commons ↗</strong></a>
           </div>
-          <p class="help-text" id="stock-source-note">Search Commons, Internet Archive, and NASA together. Check each clip’s usage terms. Quality and orientation filters require known dimensions.</p>
+          <p class="help-text" id="stock-source-note">Commons · Internet Archive · NASA. Check each clip’s usage terms.</p>
           <form class="stock-search-form" id="stock-search-form">
             <label class="stock-field stock-query" for="stock-query">Search videos<input type="search" id="stock-query" placeholder="Ocean, city at night, people working…" maxlength="200" required></label>
             <div class="stock-search-controls">
@@ -563,7 +647,7 @@
             </div>
             <p class="help-text" id="stock-premiere-note" data-editor-copy="Connect Premiere to import the video into your Project panel.">Connect Premiere to import the video into your Project panel.</p>
           </section>
-          <p class="help-text stock-search-status" id="stock-search-status" role="status" aria-live="polite">Search for a subject, place, or mood.</p>
+          <p class="help-text stock-search-status" id="stock-search-status" role="status" aria-live="polite">Search for footage.</p>
           <div class="stock-results" id="stock-results" aria-label="Stock footage search results"></div>
           <button type="button" class="btn btn-secondary hidden stock-more" id="stock-load-more">Load more videos</button>
           <div class="stock-folder"><span>Save to <span id="stock-folder-path"></span></span><button type="button" class="stock-text-button" id="stock-change-folder">Change folder</button></div>
@@ -613,8 +697,7 @@
 
           <!-- Audio Track to Speaker Mapping -->
           <section class="section">
-            <h2>Audio Tracks</h2>
-            <p class="help-text">Choose each speaker’s audio and camera. Your choices are saved per sequence.</p>
+            <h2>Speakers <span class="info-tip" tabindex="0" role="img" aria-label="Choose each speaker’s audio and camera. Choices are saved per sequence." title="Choose each speaker’s audio and camera. Choices are saved per sequence.">i</span></h2>
 
             <div id="audio-tracks-list" class="tracks-list">
               <p class="empty-message" data-editor-copy="Connect to Premiere to see audio tracks">Connect to Premiere to see audio tracks</p>
@@ -623,9 +706,7 @@
 
           <!-- Video Track to Camera Mapping -->
           <section class="section">
-            <h2>Video Tracks</h2>
-            <p class="help-text">Select camera tracks to switch. Other tracks stay unchanged. Each camera needs its own number.</p>
-            <p class="help-text">The topmost camera track gets the winning camera at every cut and the bottom camera track keeps the other angle underneath. No clips are disabled.</p>
+            <h2>Cameras <span class="info-tip" tabindex="0" role="img" aria-label="Select the camera tracks to switch and give each its own number. The top track shows the active camera at every cut and the bottom track keeps the other angle. No clips are disabled. Other tracks stay unchanged." title="Select the camera tracks to switch and give each its own number. The top track shows the active camera at every cut and the bottom track keeps the other angle. No clips are disabled. Other tracks stay unchanged.">i</span></h2>
 
             <div id="video-tracks-list" class="tracks-list">
               <p class="empty-message" data-editor-copy="Connect to Premiere to see video tracks">Connect to Premiere to see video tracks</p>
@@ -641,7 +722,6 @@
                 <select id="wide-camera-select">
                   <option value="-1">None</option>
                 </select>
-                <p class="help-text">Switches to the wide camera for 5 seconds when speakers overlap.</p>
               </div>
             </div>
           </section>
@@ -669,18 +749,17 @@
 
             <div class="form-group" style="margin-top: 12px;">
               <label for="jcut-offset">
-                J-Cut Offset (audio leads video)
+                J-Cut Offset <span class="info-tip" tabindex="0" role="img" aria-label="Delays the camera switch after a speaker starts. Microphone audio stays in sync." title="Delays the camera switch after a speaker starts. Microphone audio stays in sync.">i</span>
                 <span class="value-display" id="jcut-value">0.3s</span>
               </label>
               <input type="range" id="jcut-offset" min="0" max="1.0" step="0.05" value="0.3">
-              <p class="help-text">Delay the camera switch after a speaker starts. Selected microphone audio stays in sync.</p>
             </div>
           </details>
         </div>
 
         <!-- Action footer -->
         <footer class="content-footer">
-          <p id="multicam-action-note" class="footer-action-note">Cuts a duplicate with your nests, effects and continuous audio.</p>
+          <p id="multicam-action-note" class="footer-action-note">Works on a duplicate sequence.</p>
           <button type="button" id="resolve-cancel-btn" class="btn btn-secondary btn-small hidden">Cancel</button>
           <p id="footer-status" class="footer-status"></p>
           <button id="autocut-btn" class="btn btn-primary btn-large" aria-describedby="multicam-action-note" disabled>
@@ -705,17 +784,10 @@
 
         <!-- Scrollable content -->
         <div class="content-scroll">
-          <aside id="caption-update-notice" class="caption-update-notice hidden" role="note" aria-labelledby="caption-update-title">
-            <div class="caption-notice-heading"><strong id="caption-update-title">Arabic captions</strong><button id="caption-update-dismiss" type="button" class="caption-notice-close" aria-label="Dismiss Arabic captions notice">×</button></div>
-            <p>Arabic captions from Tiny or Base can miss words or repeat text, especially with dialects. For Moroccan Darija, choose <strong>Moroccan Darija</strong> — SmoothyEdit selects the <strong>MoulSot v0.3</strong> model automatically. For other Arabic, choose <strong>Arabic</strong> and <strong>Large v3 Turbo</strong>. Review names and wording before exporting.</p>
-            <p>If the result still looks wrong, message me on <a href="https://discord.gg/KmJRqUZzDe" data-caption-support>Discord</a> or my socials: <a href="https://x.com/alibahrawy34" data-caption-support>X</a> / <a href="https://www.instagram.com/alibahrawy34/" data-caption-support>Instagram</a>. Sorry for that.</p>
-          </aside>
           <!-- Source: sequence or local file -->
           <section class="section">
             <h2>Source</h2>
-            <p class="help-text" data-editor-copy="Transcribe a Premiere sequence, or any audio/video file on your computer.">Transcribe a Premiere sequence, or any audio/video file on your computer.</p>
-
-            <div class="source-switch" id="captions-source-switch">
+                        <div class="source-switch" id="captions-source-switch">
               <button class="source-option active" id="captions-source-sequence" data-source="sequence" data-editor-copy="Premiere Sequence">Premiere Sequence</button>
               <button class="source-option" id="captions-source-file" data-source="file">Audio / Video File</button>
             </div>
@@ -739,7 +811,7 @@
               <select id="caption-language-select" class="select-input">
                 <option value="auto">Auto-detect</option>
               </select>
-              <p class="help-text" id="caption-language-status">Auto-detect works for any spoken language. Moroccan Darija automatically selects the local MoulSot v0.3 model.</p>
+              <p class="help-text" id="caption-language-status">Auto-detect handles any spoken language.</p>
               <button type="button" id="caption-recommended-model" class="btn btn-secondary btn-small hidden">Use Large v3 Turbo</button>
             </div>
 
@@ -751,14 +823,13 @@
             </div>
 
             <div class="form-group">
-              <label for="caption-engine-select">Transcription Engine</label>
+              <label for="caption-engine-select">Transcription Engine <span class="info-tip" tabindex="0" role="img" aria-label="If the GPU engine keeps failing or is slow, switch to CPU. Auto retries on CPU whenever the GPU fails." title="If the GPU engine keeps failing or is slow, switch to CPU. Auto retries on CPU whenever the GPU fails.">i</span></label>
               <select id="caption-engine-select" class="select-input">
                 <option value="auto">Auto — GPU if available</option>
                 <option value="cuda">GPU</option>
                 <option value="cpu">CPU (all cores)</option>
               </select>
               <p class="help-text" id="caption-engine-status">Checking engine…</p>
-              <p class="help-text">If the GPU engine keeps failing or is slow, switch to CPU. Auto retries on CPU whenever the GPU fails.</p>
             </div>
           </section>
           <!-- Sequence Info -->
@@ -774,7 +845,6 @@
           <!-- Audio Tracks -->
           <section class="section" id="captions-tracks-section">
             <h2>Audio Tracks</h2>
-            <p class="help-text">Detected audio tracks that will be transcribed</p>
 
             <div id="captions-audio-tracks-list" class="tracks-list">
               <p class="empty-message" data-editor-copy="Connect to Premiere to see audio tracks">Connect to Premiere to see audio tracks</p>
@@ -791,7 +861,7 @@
           <!-- Caption Settings -->
           <section class="section" id="caption-format-section">
             <h2>Caption formatting</h2>
-            <p id="caption-reformat-note" class="help-text">Choose your own line length, line count, and duration. Changing these updates existing captions without transcribing again.</p>
+            <p id="caption-reformat-note" class="help-text">Changes update existing captions instantly.</p>
 
             <div class="form-group">
               <label for="caption-max-chars">
@@ -823,7 +893,6 @@
                 <button id="captions-capitalize-btn" type="button" class="btn btn-secondary btn-small" aria-pressed="false" title="Capitalise the first letter of every caption">Sentence case</button>
                 <button id="captions-remove-punct-btn" type="button" class="btn btn-secondary btn-small" aria-pressed="false" title="Strip punctuation from every caption">Remove Punctuation</button>
               </div>
-              <p class="help-text">Apply before or after generating captions. Click again to turn off.</p>
             </div>
           </section>
 
@@ -833,7 +902,7 @@
               <h2>Edit captions</h2>
               <span id="captions-count" class="help-text"></span>
             </div>
-            <p class="help-text" data-editor-copy="Edit any subtitle or timing below. Search and replace words across the all subtitles. Changes apply to Save SRT and Send to Premiere.">Edit any subtitle or timing below. Search and replace words across the all subtitles. Changes apply to Save SRT and Send to Premiere.</p>
+            <p class="help-text" data-editor-copy="Edit text or timing. Changes apply to Save SRT and Send to Premiere.">Edit text or timing. Changes apply to Save SRT and Send to Premiere.</p>
             <div class="caption-find-replace" role="group" aria-label="Find and replace captions">
               <div class="caption-search-fields">
                 <div class="form-group">
@@ -868,7 +937,7 @@
 
         <!-- Action footer -->
         <footer class="content-footer">
-          <p id="captions-action-note" class="footer-action-note" data-editor-copy="Generate editable captions. Save an SRT or add a caption track to your Premiere sequence.">Generate editable captions. Save an SRT or add a caption track to your Premiere sequence.</p>
+          <p id="captions-action-note" class="footer-action-note" data-editor-copy="Save an SRT or add a caption track to your Premiere sequence.">Save an SRT or add a caption track to your Premiere sequence.</p>
           <p id="captions-footer-status" class="footer-status"></p>
           <div class="footer-buttons">
             <button id="generate-captions-btn" class="btn btn-primary btn-large" aria-describedby="captions-action-note" disabled>
@@ -923,7 +992,7 @@
           <!-- Audio Track Selection -->
           <section class="section">
             <h2>Audio Tracks</h2>
-            <p class="help-text">Select audio tracks to analyze for silence (will be combined)</p>
+            <p class="help-text">Tracks are combined for analysis.</p>
 
             <div id="silence-audio-tracks-list" class="tracks-list">
               <p class="empty-message" data-editor-copy="Connect to Premiere to see audio tracks">Connect to Premiere to see audio tracks</p>
@@ -936,37 +1005,33 @@
 
             <div class="form-group">
               <label for="silence-threshold">
-                Silence Threshold
+                Silence Threshold <span class="info-tip" tabindex="0" role="img" aria-label="Audio below this level counts as silence. Lower is less aggressive." title="Audio below this level counts as silence. Lower is less aggressive.">i</span>
                 <span class="value-display" id="silence-threshold-value">-50 dB</span>
               </label>
               <input type="range" id="silence-threshold" min="-60" max="-20" step="1" value="-50">
-              <p class="help-text">Audio below this level is considered silence (lower = less aggressive)</p>
             </div>
 
             <div class="form-group">
               <label for="min-silence-duration">
-                Minimum Silence Duration
+                Minimum Silence Duration <span class="info-tip" tabindex="0" role="img" aria-label="Only silences longer than this are removed." title="Only silences longer than this are removed.">i</span>
                 <span class="value-display" id="min-silence-value">1.0s</span>
               </label>
               <input type="range" id="min-silence-duration" min="0.1" max="3.0" step="0.1" value="1.0">
-              <p class="help-text">Only remove silences longer than this</p>
             </div>
 
             <div class="form-group">
               <label for="padding-amount">
-                Padding Around Speech
+                Padding Around Speech <span class="info-tip" tabindex="0" role="img" aria-label="Silence kept before and after speech." title="Silence kept before and after speech.">i</span>
                 <span class="value-display" id="padding-value">0.2s</span>
               </label>
               <input type="range" id="padding-amount" min="0" max="1.0" step="0.05" value="0.2">
-              <p class="help-text">Keep this much silence before/after speech</p>
             </div>
 
             <div class="form-group" style="margin-top: 16px;">
               <label class="checkbox-label">
                 <input type="checkbox" id="edit-in-place">
-                <span>Edit current sequence directly</span>
+                <span>Edit current sequence directly <span class="info-tip" tabindex="0" role="img" aria-label="Ripple-deletes silence from your current timeline instead of making a new sequence." title="Ripple-deletes silence from your current timeline instead of making a new sequence.">i</span></span>
               </label>
-              <p class="help-text">Ripple deletes silence from your current timeline</p>
             </div>
           </section>
 
@@ -1067,6 +1132,99 @@
 
       </div>
 
+      <!-- Agentic + Review -->
+      <div class="tab-content" id="tab-agentic">
+        <div class="status-bar status-idle"><span>Agent</span></div>
+        <div class="agentic-review">
+          <section class="agentic-stage" aria-label="Review player">
+            <header class="agentic-stage-head">
+              <div class="agentic-stage-title"><h2 id="agentic-sequence-name">No sequence</h2><span class="agentic-link-chip" id="agentic-premiere-chip" data-linked="false">Premiere not linked</span></div>
+              <div class="agentic-preview-actions">
+                    <button type="button" class="btn btn-secondary btn-small hidden" id="agentic-use-sequence">Use sequence</button>
+                    <button type="button" class="btn btn-secondary btn-small" id="agentic-open-file">Open file</button>
+                    <button type="button" class="btn btn-secondary btn-small" id="agentic-refresh-frame">Refresh frame</button>
+                  </div>
+            </header>
+            <div class="agentic-job hidden" id="agentic-job" role="status" aria-live="polite">
+                <div class="agentic-job-head"><strong id="agentic-job-title">Job</strong><span id="agentic-job-pct">0%</span></div>
+                <div class="agentic-job-track"><i id="agentic-job-bar"></i></div>
+                <p id="agentic-job-message"></p>
+              </div>
+            <div class="agentic-preview-frame" id="agentic-preview-frame">
+                  <img id="agentic-preview-image" alt="Preview frame">
+                  <video id="agentic-video" playsinline preload="metadata" aria-label="Review playback"></video>
+                  <canvas id="agentic-markup" aria-label="Annotation layer"></canvas>
+                  <div class="agentic-preview-empty" id="agentic-preview-empty">Connect an editor or open a file to preview a frame.</div>
+                  <div class="agentic-timecode" id="agentic-timecode">00:00:00:00</div>
+                  <div class="agentic-play-overlay" id="agentic-play-overlay" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+                  </div>
+                </div>
+            <div class="agentic-scrub-row">
+                  <button type="button" class="agentic-play-btn" id="agentic-play" aria-label="Play" aria-pressed="false">
+                    <svg class="agentic-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+                    <svg class="agentic-pause-icon hidden" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+                  </button>
+                  <button type="button" class="agentic-frame-btn" id="agentic-prev-frame" aria-label="Previous frame">−1f</button>
+                  <div class="agentic-scrub-wrap"><input type="range" id="agentic-scrub" min="0" max="0" step="0.001" value="0" aria-label="Review time"><div class="agentic-markers" id="agentic-markers" aria-hidden="true"></div></div>
+                  <button type="button" class="agentic-frame-btn" id="agentic-next-frame" aria-label="Next frame">+1f</button>
+                  <span class="agentic-time-readout" id="agentic-time-readout">00:00:00:00 / 00:00:00:00</span>
+                  <button type="button" class="agentic-icon-btn" id="agentic-mute" aria-label="Mute preview" aria-pressed="false">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="agentic-muted-line" d="m17 9 4 6M21 9l-4 6"/></svg>
+                  </button>
+                  <button type="button" class="agentic-icon-btn" id="agentic-fullscreen" aria-label="Fullscreen preview">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
+                  </button>
+                </div>
+            <div class="agentic-markup-bar">
+                  <span class="agentic-overline">Markup</span>
+                  <div class="agentic-tools-inline" role="group" aria-label="Markup tool">
+                    <button type="button" class="active" data-agentic-tool="select">Select</button>
+                    <button type="button" data-agentic-tool="rect">Box</button>
+                    <button type="button" data-agentic-tool="arrow">Arrow</button>
+                    <button type="button" data-agentic-tool="pen">Pen</button>
+                  </div>
+                  <label class="agentic-color" title="Markup color"><input type="color" id="agentic-markup-color" value="#ff4d3d" aria-label="Markup color"></label>
+                  <button type="button" class="agentic-text-btn" id="agentic-markup-undo">Undo</button>
+                  <button type="button" class="agentic-text-btn" id="agentic-markup-clear">Clear</button>
+                </div>
+            <p class="help-text agentic-preview-note">Source clips only. No effects, transitions or final mix.</p>
+          </section>
+          <aside class="agentic-comments" aria-label="Notes for the AI">
+            <header class="agentic-comments-head">
+              <strong>Notes for the AI</strong>
+              <span class="agentic-count" id="agentic-notes-count">0 open</span>
+            </header>
+            <div class="agentic-notes" id="agentic-notes"></div>
+            <p class="help-text agentic-empty" id="agentic-notes-empty">No notes yet. Pause on a frame and write what the AI should fix.</p>
+            <p class="agentic-flash hidden" id="agentic-flash" role="status" aria-live="polite"></p>
+            <div class="agentic-note-composer">
+              <div class="agentic-composer-row">
+                <span class="agentic-tc-chip" id="agentic-note-time">00:00:00:00</span>
+                <textarea id="agentic-note-body" rows="2" maxlength="6000" placeholder="Leave a note for the AI…"></textarea>
+              </div>
+              <div class="agentic-note-actions">
+                <label class="agentic-check"><input type="checkbox" id="agentic-note-capture" checked> Attach frame</label>
+                <span class="agentic-for-ai">For AI only</span>
+                <button type="button" class="agentic-send" id="agentic-note-add" aria-label="Add note"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg></button>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <div id="agentic-approval" class="agentic-approval hidden" role="dialog" aria-modal="true" aria-labelledby="agentic-approval-title">
+          <div class="agentic-approval-card">
+            <span class="agentic-overline">Approval required</span>
+            <h2 id="agentic-approval-title">Run this timeline action?</h2>
+            <pre id="agentic-approval-detail"></pre>
+            <div class="agentic-approval-actions">
+              <button type="button" class="btn btn-secondary" id="agentic-approval-deny">Deny</button>
+              <button type="button" class="btn btn-primary" id="agentic-approval-allow">Approve</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Dev tab: local UI previews and debug logs -->
       <div class="tab-content hidden" id="tab-logs">
         <div class="status-bar status-idle">
@@ -1098,6 +1256,128 @@
         </div>
       </div>
 
+      <!-- ShortsCuts Tab Content -->
+      <div class="tab-content" id="tab-shortscuts">
+        <div id="shortscuts-status-bar" class="status-bar status-idle">
+          <span id="shortscuts-status-text">ShortsCuts</span>
+        </div>
+        <div class="content-scroll">
+          <section class="section">
+            <div class="section-header-row">
+              <h2>Your deck <span class="info-tip" tabindex="0" role="img" aria-label="Select clips in Premiere, then press a key while Premiere is in front. Transitions use Premiere’s QE bridge and can vary by version." title="Select clips in Premiere, then press a key while Premiere is in front. Transitions use Premiere’s QE bridge and can vary by version.">i</span></h2>
+              <button id="shortscuts-add" class="btn btn-primary btn-small shortscuts-add-btn" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add</button>
+            </div>
+
+            <div class="shortscuts-filters">
+              <label class="shortscuts-search">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg>
+                <input id="shortscuts-deck-search" type="search" placeholder="Search keys…" autocomplete="off" aria-label="Search keys">
+              </label>
+              <div class="shortscuts-filter-chips" role="group" aria-label="Filter keys">
+                <button type="button" class="active" data-deck-filter="all">All</button>
+                <button type="button" data-deck-filter="effects">Effects</button>
+                <button type="button" data-deck-filter="transitions">Transitions</button>
+                <button type="button" data-deck-filter="presets">Presets</button>
+                <button type="button" data-deck-filter="multi">Multi-actions</button>
+              </div>
+            </div>
+
+            <div id="shortscuts-plan" class="shortscuts-plan hidden" role="status">
+              <span id="shortscuts-plan-text"></span>
+              <button id="shortscuts-plan-upgrade" type="button" class="btn btn-secondary btn-small">Get unlimited keys</button>
+            </div>
+            <div id="shortscuts-deck" class="shortscuts-deck"></div>
+            <p id="shortscuts-empty" class="empty-message">No keys match this view.</p>
+            <p id="shortscuts-hint" class="help-text shortscuts-hint" role="status" aria-live="polite"></p>
+          </section>
+
+          <section class="section">
+            <div class="section-header-row">
+              <h2>Layout</h2>
+              <div class="shortscuts-segmented" role="tablist" aria-label="Preview device">
+                <button type="button" class="active" data-device="phone" role="tab" aria-selected="true">Phone</button>
+                <button type="button" data-device="tablet" role="tab" aria-selected="false">Tablet</button>
+              </div>
+            </div>
+            <p class="help-text">Drag keys to reorder. Drop a key on a folder to move it inside.</p>
+            <div class="shortscuts-studio">
+              <div class="shortscuts-stage">
+                <div class="shortscuts-device" id="shortscuts-device" data-device="phone">
+                  <div class="shortscuts-device-screen">
+                    <div class="shortscuts-device-head">
+                      <button type="button" id="shortscuts-device-back" class="shortscuts-device-back hidden" aria-label="Back to all keys">‹</button>
+                      <strong id="shortscuts-device-title">ShortsCuts</strong>
+                    </div>
+                    <div class="shortscuts-device-grid" id="shortscuts-device-grid" aria-label="Remote layout preview"></div>
+                  </div>
+                </div>
+                <div class="shortscuts-stage-tools">
+                  <button type="button" id="shortscuts-new-folder" class="btn btn-secondary btn-small">New folder</button>
+                  <button type="button" id="shortscuts-new-multi" class="btn btn-secondary btn-small">New multi-action</button>
+                  <div class="shortscuts-columns" aria-label="Columns">
+                    <span>Columns</span>
+                    <button type="button" id="shortscuts-cols-down" aria-label="Fewer columns">−</button>
+                    <strong id="shortscuts-cols">3</strong>
+                    <button type="button" id="shortscuts-cols-up" aria-label="More columns">+</button>
+                  </div>
+                </div>
+              </div>
+              <aside class="shortscuts-inspector" id="shortscuts-inspector" aria-label="Key settings"></aside>
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="section-header-row">
+              <h2>Phone remote</h2>
+              <span id="shortscuts-server-status" class="help-text">Off</span>
+            </div>
+            <p class="help-text">Your layout on a phone or tablet. Same Wi-Fi only.</p>
+            <div class="shortscuts-remote">
+              <div class="shortscuts-remote-controls">
+                <label class="shortscuts-switch"><input type="checkbox" id="shortscuts-server-toggle"> <span>Run phone remote</span></label>
+                <label class="shortscuts-port">Port <input type="number" id="shortscuts-port" min="1024" max="65535" step="1" value="4789"></label>
+                <p id="shortscuts-server-error" class="shortscuts-error hidden" role="alert"></p>
+              </div>
+              <div id="shortscuts-remote-on" class="shortscuts-remote-on hidden">
+                <img id="shortscuts-qr" class="shortscuts-qr" alt="QR code for the ShortsCuts phone remote" width="180" height="180">
+                <div class="shortscuts-remote-meta">
+                  <code id="shortscuts-url" class="shortscuts-url"></code>
+                  <div class="shortscuts-remote-actions">
+                    <button id="shortscuts-copy-url" class="btn btn-secondary btn-small">Copy link</button>
+                    <button id="shortscuts-open-url" class="btn btn-secondary btn-small">Open</button>
+                    <button id="shortscuts-new-token" class="btn btn-secondary btn-small">New code</button>
+                  </div>
+                  <p id="shortscuts-clients" class="help-text">Scan the code with your phone camera.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+        <div id="shortscuts-catalog-modal" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="shortscuts-catalog-title">
+          <div class="modal-content shortscuts-catalog-modal">
+            <div class="modal-header">
+              <h3 id="shortscuts-catalog-title">Add to the deck</h3>
+              <button id="shortscuts-catalog-close" class="modal-close-btn" aria-label="Close effects list">&times;</button>
+            </div>
+            <div class="shortscuts-catalog-tabs" role="tablist">
+              <button type="button" class="shortscuts-catalog-tab active" data-catalog-tab="all" role="tab" aria-selected="true">All</button>
+              <button type="button" class="shortscuts-catalog-tab" data-catalog-tab="effects" role="tab" aria-selected="false">Effects</button>
+              <button type="button" class="shortscuts-catalog-tab" data-catalog-tab="transitions" role="tab" aria-selected="false">Transitions</button>
+              <button type="button" class="shortscuts-catalog-tab" data-catalog-tab="presets" role="tab" aria-selected="false">Presets</button>
+            </div>
+            <div class="shortscuts-catalog-search-row">
+              <input id="shortscuts-catalog-search" class="shortscuts-search" type="search" placeholder="Search effects, transitions and presets…" autocomplete="off">
+              <button id="shortscuts-capture" class="btn btn-secondary btn-small hidden" type="button">Capture from clip</button>
+              <button id="shortscuts-catalog-refresh" class="btn btn-secondary btn-small hidden" type="button">Refresh</button>
+            </div>
+            <div id="shortscuts-catalog-list" class="shortscuts-catalog-list"></div>
+            <p id="shortscuts-catalog-status" class="help-text" role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+
       <!-- Compressor Tab Content -->
       <div class="tab-content" id="tab-compressor">
         <!-- Status bar -->
@@ -1109,28 +1389,20 @@
         <div class="content-scroll">
           <!-- Drop Zone -->
           <section class="section" id="compressor-drop-section">
-            <h2>Select Videos</h2>
-            <p class="help-text">Reduce video file size with HEVC compression. Choose one video or a folder; processing runs locally on your computer.</p>
+            <h2>Videos</h2>
             <div id="compressor-drop-zone" class="drop-zone">
               <div class="drop-zone-content">
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="opacity: 0.5; margin-bottom: 12px;">
                   <path d="m4 4 6 6M4 10h6V4m10 16-6-6m6 0h-6v6"/>
                 </svg>
-                <p class="drop-text">Drop video or folder here or click to browse</p>
+                <p class="drop-text">Drop a video or folder, or browse</p>
                 <p class="help-text">Supports: MP4, MOV, MKV, AVI, WEBM, M4V, MTS</p>
               </div>
             </div>
             <button id="compressor-browse-btn" class="btn btn-secondary btn-small" style="margin-top: 12px;">Browse Video or Folder</button>
           </section>
 
-          <section id="compressor-empty-guide" class="compressor-empty-guide" aria-labelledby="compressor-guide-title">
-            <h3 id="compressor-guide-title">Compress videos locally</h3>
-            <p>Create HEVC MP4 copies for easier storage and sharing.</p>
-            <ul class="compressor-feature-list">
-              <li><span class="compressor-feature-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg></span><span><strong>Control quality and speed</strong><br>Choose High, Balanced, or Fast. Hardware acceleration is used when available.</span></li>
-              <li><span class="compressor-feature-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg></span><span><strong>Keep your originals</strong><br>Compressed copies go to a separate output folder. Your original files stay untouched.</span></li>
-            </ul>
-          </section>
+          
 
           <!-- Selected Source Info -->
           <section class="section hidden" id="compressor-folder-section">
@@ -1298,7 +1570,7 @@
               <button id="assets-restore-btn" class="btn btn-secondary btn-small hidden">Restore original</button>
               <button id="assets-process-cancel-btn" class="btn btn-secondary btn-small hidden">Cancel</button>
             </div>
-            <p id="assets-local-note" class="help-text assets-local-note">Free, on your device · Remove backgrounds or upscale images 2× / 4×. Add an image below to start. Models download once; your images stay on this computer.</p>
+            <p id="assets-local-note" class="help-text assets-local-note">Models download once. Images stay on this computer.</p>
             <p id="assets-process-status" class="help-text" role="status" aria-live="polite"></p>
             <progress id="assets-process-progress" class="hidden" max="100" aria-label="Image processing progress"></progress>
           </section>
@@ -1306,8 +1578,7 @@
 
           <!-- Input -->
           <section class="section" id="assets-input-section">
-            <h2>Add an image</h2>
-            <p class="help-text" data-editor-copy="Import an SVG or a regular image, convert it to PNG, then send it straight to your Premiere timeline.">Import an SVG or a regular image, convert it to PNG, then send it straight to your Premiere timeline.</p>
+            <h2>Image</h2>
 
             <div id="assets-drop-zone" class="drop-zone">
               <div class="drop-zone-content">
@@ -1316,7 +1587,7 @@
                   <circle cx="8.5" cy="8.5" r="1.5"></circle>
                   <polyline points="21 15 16 10 5 21"></polyline>
                 </svg>
-                <p class="drop-text">Drop an SVG or image here or click to browse</p>
+                <p class="drop-text">Drop, paste or browse</p>
                 <p class="help-text">SVG, PNG, JPG, WEBP, GIF, BMP, AVIF</p>
               </div>
             </div>
@@ -1325,19 +1596,9 @@
               <button id="assets-browse-btn" class="btn btn-secondary btn-small">Browse Files</button>
               <button id="assets-paste-btn" class="btn btn-secondary btn-small">Paste from Clipboard</button>
             </div>
-            <p class="help-text">Tip: copy an image in your browser, then press ⌘V (Ctrl+V) in this window to pull it in.</p>
           </section>
 
-          <section id="assets-empty-guide" class="assets-empty-guide" aria-labelledby="assets-guide-title">
-            <h3 id="assets-guide-title" data-editor-copy="Your images, ready for Premiere">Your images, ready for Premiere</h3>
-            <p>Bring graphics into your edit in a few clicks.</p>
-            <ul class="assets-feature-list">
-              <li><span class="assets-feature-icon" aria-hidden="true">✂</span><span><strong>Remove background</strong><br>Create a transparent cutout, free on your device.</span></li>
-              <li><span class="assets-feature-icon" aria-hidden="true">↑</span><span><strong>Upscale 2× or 4×</strong><br>Enlarge your image while preserving detail and transparency.</span></li>
-              <li><span class="assets-feature-icon" aria-hidden="true">↗</span><span><strong>Convert SVG to PNG</strong><br>Export a PNG with a transparent or custom background.</span></li>
-              <li><span class="assets-feature-icon" aria-hidden="true">+</span><span><strong>Copy, paste, and import</strong><br><span data-editor-copy="Copy an image, paste it here, and send it straight to your Premiere Pro timeline.">Copy an image, paste it here, and send it straight to your Premiere Pro timeline.</span></span></li>
-            </ul>
-          </section>
+          
 
 
           <!-- Preview -->
@@ -1366,8 +1627,7 @@
           <!-- SVG optimization (SVG only) -->
           <section class="section hidden" id="assets-optimize-section">
             <h2>SVG Optimization</h2>
-            <p class="help-text">Trim the SVG a little before it becomes a PNG.</p>
-
+            
             <div class="form-group">
               <label class="checkbox-label">
                 <input type="checkbox" id="assets-optimize-toggle" checked>
@@ -1433,7 +1693,7 @@
 
         <!-- Action footer -->
         <footer class="content-footer assets-footer">
-          <p id="assets-action-note" class="footer-action-note" data-editor-copy="Export PNG saves all images. Save As and Send to Premiere use the selected image.">Export PNG saves all images. Save As and Send to Premiere use the selected image.</p>
+          <p id="assets-action-note" class="footer-action-note" data-editor-copy="Save As and Send to Premiere use the selected image.">Save As and Send to Premiere use the selected image.</p>
           <p id="assets-footer-status" class="footer-status"></p>
           <div class="assets-actions">
             <button id="assets-convert-btn" class="btn btn-secondary" aria-describedby="assets-action-note" disabled>
@@ -1515,145 +1775,433 @@
   <!-- Full-window settings view -->
   <div id="settings-modal" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
     <div class="modal-content settings-modal">
-      <div class="modal-header">
-        <div class="settings-heading"><h3 id="settings-title">Settings</h3><p class="settings-version">SmoothyEdit <span id="settings-current-version">Version…</span></p></div>
-        <button id="settings-close-btn" class="modal-close-btn" aria-label="Close settings">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-      </div>
-
       <div class="settings-body" id="settings-body">
-      <div class="settings-section"><h4>Studio AI</h4><label class="checkbox-label"><input type="checkbox" id="studio-enabled-toggle" checked><span>Show Studio AI features</span></label><p class="help-text">Turn off to hide Studio, Shorts, AI Photos and cloud pairing. Multicam, Silence Removal, local Captions, Compressor, Assets and the media libraries stay available for free.</p><p id="studio-preference-status" class="help-text" role="status"></p></div>
-      <div class="settings-section" data-studio-only id="chat-writing-settings">
-        <h4>Chat</h4>
-          <label for="chat-writing-prompt" class="help-text">System prompt</label>
-          <textarea id="chat-writing-prompt" rows="4" maxlength="4000" spellcheck="true" aria-describedby="chat-writing-help chat-writing-count"></textarea>
-          <p id="chat-writing-count" class="help-text"></p>
-          <p id="chat-writing-help" class="help-text">Optional. Saved on this device.</p>
-          <div class="settings-actions"><button type="button" id="chat-writing-save" class="btn btn-primary">Save</button><button type="button" id="chat-writing-reset" class="btn btn-secondary">Clear</button></div>
-        <p id="chat-writing-status" class="help-text" role="status" aria-live="polite"></p>
-      </div>
-      <div class="settings-section">
-        <h4>Caption models</h4>
-        <p class="help-text">Open the folder containing your downloaded models. Add compatible whisper.cpp GGML <code>.bin</code> files for any language, then refresh to select them in Captions.</p>
-        <p class="help-text">Choose the spoken language in Captions and use a model that supports it. PyTorch, Safetensors and other GGUF models need conversion or a different engine.</p>
-        <div class="settings-actions"><button type="button" id="open-caption-models-folder-btn" class="btn btn-secondary">Open models folder</button><button type="button" id="refresh-caption-models-btn" class="btn btn-secondary">Refresh models</button></div>
-        <p id="caption-models-settings-status" class="help-text" role="status" aria-live="polite"></p>
-      </div>
-      <!-- Active NLE Selector -->
-      <div class="settings-section">
-        <h4>Active Editor</h4>
-        <p class="help-text">Premiere uses its live bridge. Resolve Free uses Smoothy Connector for automatic sends and timeline loads. Start it from Workspace → Scripts once per Resolve session.</p>
-        <div class="nle-selector">
-          <button class="nle-option" id="nle-auto-btn" data-nle="null">
-            <span class="nle-icon">Auto</span>
-          </button>
-          <button class="nle-option" id="nle-premiere-btn" data-nle="premiere">
-            <span class="nle-icon"><img src="./editor-logos/premiere-pro.svg" width="28" height="28" alt=""/></span>
-            <span class="nle-label">Premiere Pro</span>
-          </button>
-          <button class="nle-option" id="nle-resolve-btn" data-nle="resolve"><span class="nle-icon"><img src="./editor-logos/davinci-resolve.svg" width="28" height="28" alt=""/></span><span class="nle-label">Resolve Free</span></button>
-        </div>
-        <p class="help-text" id="nle-status-text">Auto-detecting...</p>
-      </div>
-
-      <div class="settings-section">
-        <h4>Premiere Pro Bridge</h4>
-        <p class="help-text">The CEP extension connects SmoothyEdit to Premiere Pro. On Windows, the installer sets it up automatically. On macOS, it auto-installs when the app launches. If missing, click Install below, then restart Premiere and open Window > Extensions > SmoothyEdit.</p>
-
-        <div class="bridge-status-row">
-          <span class="connection-dot" id="bridge-status-dot"></span>
-          <span id="bridge-status-text">Checking...</span>
-        </div>
-
-        <div class="form-group">
-          <label for="cep-path-input">CEP Extensions Path</label>
-          <div class="cep-path-row">
-            <input type="text" id="cep-path-input" placeholder="Loading..." readonly>
-            <button id="cep-browse-btn" class="btn btn-secondary btn-small">Browse</button>
+        <aside class="settings-nav">
+          <div class="settings-nav-head">
+            <h3 id="settings-title">Settings</h3>
+            <p class="settings-version">SmoothyEdit <span id="settings-current-version">Version…</span></p>
           </div>
-          <p class="help-text">Default location where Adobe looks for CEP extensions.</p>
-        </div>
+          <label class="settings-search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg>
+            <input id="settings-search" type="search" placeholder="Search settings…" autocomplete="off" aria-label="Search settings">
+          </label>
+          <nav class="settings-nav-list" id="settings-nav-list" aria-label="Settings sections">
+            <button type="button" class="settings-nav-item active" data-settings-pane="general" data-pane-title="General" data-pane-description="App visibility, Studio AI and developer tools." data-search="general studio ai appearance dev logs advanced">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <span>General</span>
+            </button>
+            <button type="button" class="settings-nav-item" data-settings-pane="profile" data-pane-title="Profile" data-pane-description="Your name, password and account." data-search="profile account name password security delete sign out email plan">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span>Profile</span>
+            </button>
+            <button type="button" class="settings-nav-item" data-settings-pane="chat" data-pane-title="Chat" data-pane-description="How the AI assistant replies." data-search="chat studio ai system prompt writing" data-studio-pane="true">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span>Chat</span>
+            </button>
+            <button type="button" class="settings-nav-item" data-settings-pane="captions" data-pane-title="Captions" data-pane-description="Local transcription models." data-search="captions models whisper folder language">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg>
+              <span>Captions</span>
+            </button>
+            <button type="button" class="settings-nav-item" data-settings-pane="editors" data-pane-title="Editors" data-pane-description="Which editor Smoothy talks to, and the Premiere bridge." data-search="editors premiere resolve bridge cep adobe nle">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+              <span>Editors</span>
+            </button>
+            <button type="button" class="settings-nav-item" data-settings-pane="connections" data-pane-title="Connections" data-pane-description="Cloud account, credits and dashboard pairing." data-search="connections cloud dashboard token website credits subscription" data-studio-pane="true">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11 5"/><path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07L13 19"/></svg>
+              <span>Connections</span>
+            </button>
+            <button type="button" class="settings-nav-item" data-settings-pane="updates" data-pane-title="Updates" data-pane-description="Check for a newer SmoothyApp." data-search="updates version download install">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+              <span>Updates</span>
+            </button>
+            <button type="button" class="settings-nav-item" data-settings-pane="feedback" data-pane-title="Feedback" data-pane-description="Tell us what to build or fix." data-search="feedback bug feature request support email">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+              <span>Feedback</span>
+            </button>
+            <button type="button" class="settings-nav-item" data-settings-pane="community" data-pane-title="Community" data-pane-description="Meet other editors and keep in touch." data-search="community discord x instagram linkedin website social">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <span>Community</span>
+            </button>
+            <button type="button" class="settings-nav-item" data-settings-pane="agent" data-pane-title="Agent" data-pane-description="Connect Claude Code, Codex or another MCP agent." data-search="agent mcp claude code codex token connection tools activity premiere alongside">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4M9 14h.01M15 14h.01"/></svg>
+              <span>Agent</span>
+            </button>
+          </nav>
+        </aside>
 
-        <div class="settings-actions">
-          <button id="cep-install-btn" class="btn btn-primary">Install CEP Bridge</button>
-          <button id="cep-reset-btn" class="btn btn-secondary">Reset Path</button>
-        </div>
-      </div>
+        <div class="settings-detail">
+          <header class="settings-detail-head">
+            <div class="settings-detail-copy">
+              <h2 id="settings-pane-title">General</h2>
+              <p id="settings-pane-description">App visibility, Studio AI and developer tools.</p>
+            </div>
+            <button id="settings-close-btn" class="settings-done-btn" type="button" aria-label="Close settings and go back" title="Close settings (Esc)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+              <span>Back</span>
+            </button>
+          </header>
 
-      <div class="settings-section" data-studio-only>
-        <h4>Account &amp; cloud tools</h4>
-        <p class="help-text">Sign in for AI Photos, Shorts and shared history. Cloud tools use credits; local tools remain free.</p>
-        <div class="settings-actions">
-        <button id="settings-account-btn" class="btn btn-secondary btn-small" type="button">Sign in</button>
-        <button type="button" data-account-page="subscription" class="btn btn-secondary btn-small">Subscription &amp; credits ↗</button>
-        <button type="button" data-account-page="account/security" class="btn btn-secondary btn-small">Account security ↗</button>
-        </div>
-        <details class="advanced-settings">
-          <summary>Pair the web dashboard with Premiere</summary>
-          <p class="help-text">Optional: this token pairs the website with Premiere. App Shorts uses your account sign-in.</p>
-          <div class="form-group">
-            <label for="connection-token">Connection Token</label>
-            <input type="password" id="connection-token" placeholder="Paste your token here..." autocomplete="off" spellcheck="false">
-            <p class="help-text">Get your token at <a href="#" id="get-token-link" class="link">smoothyedit.com/connection</a></p>
+          <div class="settings-panes" id="settings-panes">
+            <section class="settings-pane active" data-pane="general">
+              <div class="settings-group">
+                <div class="settings-group-label">Application</div>
+                <div class="settings-section settings-row-group">
+                  <div class="settings-row">
+                    <div class="settings-row-copy">
+                      <strong>Studio AI features</strong>
+                      <p>Hide Studio, Shorts, AI Photos and cloud pairing. Multicam, Silence Removal, Captions, Compressor, Assets and the media libraries stay available.</p>
+                    </div>
+                    <div class="settings-row-control">
+                      <label class="settings-switch"><input type="checkbox" id="studio-enabled-toggle" checked aria-label="Show Studio AI features"><span aria-hidden="true"></span></label>
+                    </div>
+                  </div>
+                  <p id="studio-preference-status" class="help-text settings-row-status" role="status"></p>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <div class="settings-group-label">Advanced</div>
+                <div class="settings-section settings-row-group">
+                  <div class="settings-row">
+                    <div class="settings-row-copy">
+                      <strong>Developer tools</strong>
+                      <p>Show the hidden Dev tab with live debug logs and the update banner preview.</p>
+                    </div>
+                    <div class="settings-row-control">
+                      <label class="settings-switch"><input type="checkbox" id="show-logs-toggle" aria-label="Show the Dev tab"><span aria-hidden="true"></span></label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-pane" data-pane="profile">
+              <div class="settings-group">
+                <div class="settings-group-label">Account</div>
+                <div class="settings-section">
+                  <div class="profile-identity">
+                    <span class="profile-avatar" id="profile-avatar" aria-hidden="true">G</span>
+                    <div class="profile-identity-copy">
+                      <strong id="profile-name-display">Guest</strong>
+                      <span id="profile-email-display">Not signed in</span>
+                    </div>
+                    <span class="profile-plan" id="profile-plan-badge" data-plan="guest">Guest</span>
+                  </div>
+                  <p class="help-text" id="profile-account-help">Sign in to choose the name other editors see, change your password and manage your account. You can keep chatting as a guest.</p>
+                  <div class="settings-actions">
+                    <button id="settings-account-btn" class="btn btn-secondary btn-small" type="button">Sign in</button>
+                    <button type="button" class="btn btn-secondary btn-small" data-account-page="subscription">Plan &amp; credits ↗</button>
+                    <button type="button" class="btn btn-secondary btn-small" data-account-page="account/security">Account security ↗</button>
+                  </div>
+                </div>
+              </div>
+
+              <div id="profile-signed-in" class="settings-pane-group">
+                <div class="settings-group">
+                  <div class="settings-group-label">Display name</div>
+                  <div class="settings-section settings-row-group">
+                    <div class="settings-row">
+                      <div class="settings-row-copy">
+                        <strong>Name</strong>
+                        <p>Shown to other editors in the community lobby and on your dashboard. Never your email.</p>
+                      </div>
+                      <div class="settings-row-control settings-row-inline">
+                        <input id="profile-name-input" type="text" maxlength="40" autocomplete="nickname" placeholder="Your name" aria-label="Display name">
+                        <button type="button" class="btn btn-primary btn-small" id="profile-name-save">Save</button>
+                      </div>
+                    </div>
+                    <p class="help-text settings-row-status" id="profile-name-status" role="status" aria-live="polite"></p>
+                  </div>
+                </div>
+
+                <div class="settings-group">
+                  <div class="settings-group-label">Password</div>
+                  <div class="settings-section settings-row-group">
+                    <div class="settings-row">
+                      <div class="settings-row-copy">
+                        <strong>Change password</strong>
+                        <p>At least 8 characters. You stay signed in on this device afterwards.</p>
+                      </div>
+                      <div class="settings-row-control settings-row-stack">
+                        <input id="profile-current-password" type="password" autocomplete="current-password" placeholder="Current password" aria-label="Current password">
+                        <input id="profile-new-password" type="password" autocomplete="new-password" placeholder="New password" aria-label="New password">
+                        <input id="profile-confirm-password" type="password" autocomplete="new-password" placeholder="Repeat new password" aria-label="Repeat new password">
+                        <button type="button" class="btn btn-primary btn-small" id="profile-password-save">Update password</button>
+                      </div>
+                    </div>
+                    <p class="help-text settings-row-status" id="profile-password-status" role="status" aria-live="polite"></p>
+                    <p class="help-text">Forgot your current password? <a href="#" id="profile-forgot-password" class="link">Reset it on the website</a>.</p>
+                  </div>
+                </div>
+
+                <div class="settings-group">
+                  <div class="settings-group-label">Session</div>
+                  <div class="settings-section settings-row-group">
+                    <div class="settings-row">
+                      <div class="settings-row-copy">
+                        <strong>Sign out</strong>
+                        <p>Signs out on this device. Local tools and projects keep working.</p>
+                      </div>
+                      <div class="settings-row-control">
+                        <button type="button" class="btn btn-secondary btn-small" id="profile-signout-btn">Sign out</button>
+                      </div>
+                    </div>
+                    <p class="help-text settings-row-status" id="profile-session-status" role="status" aria-live="polite"></p>
+                  </div>
+                </div>
+
+                <div class="settings-group settings-group-wide">
+                  <div class="settings-group-label settings-danger-label">Danger zone</div>
+                  <div class="settings-section settings-danger">
+                    <div class="settings-row">
+                      <div class="settings-row-copy">
+                        <strong>Delete account</strong>
+                        <p>Permanently deletes your account, subscription access, credits and community messages. Local projects are untouched.</p>
+                      </div>
+                      <div class="settings-row-control settings-row-stack settings-row-stack-wide">
+                        <input id="profile-delete-password" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password to delete the account">
+                        <label class="checkbox-label settings-delete-confirm"><input type="checkbox" id="profile-delete-confirm"><span>I understand this is permanent</span></label>
+                        <button type="button" class="btn settings-danger-btn btn-small" id="profile-delete-btn" disabled>Delete my account</button>
+                      </div>
+                    </div>
+                    <p class="help-text settings-row-status" id="profile-delete-status" role="status" aria-live="polite"></p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-pane" data-pane="chat" data-studio-only>
+              <div class="settings-group">
+                <div class="settings-group-label">Assistant</div>
+                <div class="settings-section">
+                  <div class="settings-row">
+                    <div class="settings-row-copy">
+                      <strong>System prompt</strong>
+                      <p>Optional instructions for every reply. Saved on this device and sent with each request you make to Chat.</p>
+                    </div>
+                    <div class="settings-row-control"><span id="chat-writing-count" class="help-text"></span></div>
+                  </div>
+                  <textarea id="chat-writing-prompt" rows="4" maxlength="4000" spellcheck="true" aria-label="System prompt" aria-describedby="chat-writing-help"></textarea>
+                  <div class="settings-actions"><button type="button" id="chat-writing-save" class="btn btn-primary btn-small">Save</button><button type="button" id="chat-writing-reset" class="btn btn-secondary btn-small">Clear</button></div>
+                  <p id="chat-writing-help" class="help-text">Kept offline; it is only used for your own Chat requests.</p>
+                  <p id="chat-writing-status" class="help-text settings-row-status" role="status" aria-live="polite"></p>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-pane" data-pane="captions">
+              <div class="settings-group">
+                <div class="settings-group-label">Models</div>
+                <div class="settings-section settings-row-group">
+                  <div class="settings-row">
+                    <div class="settings-row-copy">
+                      <strong>Model folder</strong>
+                      <p>Add compatible whisper.cpp GGML <code>.bin</code> files for any language, then refresh to select them in Captions.</p>
+                    </div>
+                    <div class="settings-row-control">
+                      <button type="button" id="open-caption-models-folder-btn" class="btn btn-secondary btn-small">Open folder</button>
+                      <button type="button" id="refresh-caption-models-btn" class="btn btn-secondary btn-small">Refresh</button>
+                    </div>
+                  </div>
+                  <p id="caption-models-settings-status" class="help-text settings-row-status" role="status" aria-live="polite"></p>
+                </div>
+                <div class="settings-section">
+                  <div class="settings-row">
+                    <div class="settings-row-copy">
+                      <strong>Choosing a model</strong>
+                      <p>Pick the spoken language in Captions and use a model that supports it. PyTorch, Safetensors and other GGUF models need conversion or a different engine.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-pane" data-pane="editors">
+              <div class="settings-group">
+                <div class="settings-group-label">Active editor</div>
+                <div class="settings-section">
+                  <p class="help-text">Premiere uses its live bridge. Resolve Free uses Smoothy Connector for automatic sends and timeline loads. Start it from Workspace → Scripts once per Resolve session.</p>
+                  <div class="nle-selector">
+                    <button class="nle-option" id="nle-auto-btn" data-nle="null">
+                      <span class="nle-icon">Auto</span>
+                    </button>
+                    <button class="nle-option" id="nle-premiere-btn" data-nle="premiere">
+                      <span class="nle-icon"><img src="./editor-logos/premiere-pro.svg" width="28" height="28" alt=""/></span>
+                      <span class="nle-label">Premiere Pro</span>
+                    </button>
+                    <button class="nle-option" id="nle-resolve-btn" data-nle="resolve"><span class="nle-icon"><img src="./editor-logos/davinci-resolve.svg" width="28" height="28" alt=""/></span><span class="nle-label">Resolve Free</span></button>
+                  </div>
+                  <p class="help-text" id="nle-status-text">Auto-detecting...</p>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <div class="settings-group-label">Premiere Pro bridge</div>
+                <div class="settings-section">
+                  <p class="help-text">The CEP extension connects SmoothyEdit to Premiere Pro. On Windows, the installer sets it up automatically. On macOS, it auto-installs when the app launches. If missing, click Install below, then restart Premiere and open Window &gt; Extensions &gt; SmoothyEdit.</p>
+
+                  <div class="bridge-status-row">
+                    <span class="connection-dot" id="bridge-status-dot"></span>
+                    <span id="bridge-status-text">Checking...</span>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="cep-path-input">CEP Extensions Path</label>
+                    <div class="cep-path-row">
+                      <input type="text" id="cep-path-input" placeholder="Loading..." readonly>
+                      <button id="cep-browse-btn" class="btn btn-secondary btn-small">Browse</button>
+                    </div>
+                    <p class="help-text">Default location where Adobe looks for CEP extensions.</p>
+                  </div>
+
+                  <div class="settings-actions">
+                    <button id="cep-install-btn" class="btn btn-primary btn-small">Install CEP Bridge</button>
+                    <button id="cep-reset-btn" class="btn btn-secondary btn-small">Reset Path</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-pane" data-pane="connections" data-studio-only>
+              <div class="settings-group">
+                <div class="settings-group-label">Dashboard</div>
+                <div class="settings-section">
+                  <div class="settings-row">
+                    <div class="settings-row-copy">
+                      <strong>Cloud tools</strong>
+                      <p>Sign in for AI Photos, Shorts and shared history. Cloud tools use credits; local tools remain free.</p>
+                    </div>
+                    <div class="settings-row-control">
+                      <button type="button" data-account-page="subscription" class="btn btn-secondary btn-small">Plan &amp; credits ↗</button>
+                      <button type="button" data-account-page="account/security" class="btn btn-secondary btn-small">Account security ↗</button>
+                    </div>
+                  </div>
+                  <div class="settings-actions">
+                    <button id="settings-open-studio-btn" class="btn btn-secondary btn-small">Open Dashboard</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <div class="settings-group-label">Premiere pairing</div>
+                <div class="settings-section">
+                  <div class="settings-row">
+                    <div class="settings-row-copy">
+                      <strong>Connection token</strong>
+                      <p>Optional: this token pairs the website with Premiere. App Shorts uses your account sign-in.</p>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label for="connection-token">Connection Token</label>
+                    <input type="password" id="connection-token" placeholder="Paste your token here..." autocomplete="off" spellcheck="false">
+                    <p class="help-text">Get your token at <a href="#" id="get-token-link" class="link">smoothyedit.com/connection</a></p>
+                  </div>
+                  <div class="connection-status-row"><span class="connection-dot" id="settings-connection-dot"></span><span id="settings-connection-status">Not connected</span></div>
+                  <div class="settings-actions"><button id="save-token-btn" class="btn btn-secondary btn-small">Save Token</button><button id="connect-website-btn" class="btn btn-primary btn-small">Connect</button></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-pane" data-pane="updates">
+              <div class="settings-group">
+                <div class="settings-group-label">Application</div>
+                <div class="settings-section" id="settings-update-section">
+                  <div class="settings-row">
+                    <div class="settings-row-copy">
+                      <strong>App updates</strong>
+                      <p id="settings-update-help">SmoothyEdit checks for updates on startup and every six hours. Downloads and installation only start when you choose.</p>
+                    </div>
+                    <div class="settings-row-control">
+                      <button id="check-update-btn" class="btn btn-secondary btn-small">Check for Updates</button>
+                      <button id="settings-install-update-btn" class="btn btn-primary btn-small hidden">View update</button>
+                    </div>
+                  </div>
+                  <div class="update-status-row">
+                    <span id="settings-update-status" role="status" aria-live="polite">No updates checked yet</span>
+                  </div>
+                  <div id="settings-update-notes" class="settings-update-notes hidden"></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-pane" data-pane="feedback">
+              <div class="settings-group">
+                <div class="settings-group-label">Get in touch</div>
+                <div class="settings-section" id="settings-feedback-section">
+                  <div class="settings-feedback-actions">
+                    <button type="button" class="settings-feedback-action" data-feedback-kind="feedback"><span><strong>Share feedback</strong><small>Tell us what’s working and what could be better.</small></span><span aria-hidden="true">↗</span></button>
+                    <button type="button" class="settings-feedback-action" data-feedback-kind="feature"><span><strong>Request a feature</strong><small>Suggest a tool or feature you’d like to see.</small></span><span aria-hidden="true">↗</span></button>
+                    <button type="button" class="settings-feedback-action" data-feedback-kind="bug"><span><strong>Report a problem</strong><small>Describe what happened and how to reproduce it.</small></span><span aria-hidden="true">↗</span></button>
+                  </div>
+                  <p class="help-text settings-feedback-help">Opens an email draft to support@smoothyedit.com for you to review and send.</p>
+                  <p id="settings-feedback-status" class="help-text hidden" role="status" aria-live="polite"></p>
+                </div>
+              </div>
+            </section>
+
+            <section class="settings-pane" data-pane="agent">
+              <div class="settings-group">
+                <div class="settings-group-label">Agent access</div>
+                <div class="settings-section">
+                  <p class="help-text">Timeline edits always ask for your approval.</p>
+                  <div class="agentic-status-card" id="agentic-status-card">
+              <div class="agentic-status-line"><span class="agentic-dot" id="agentic-dot"></span><strong id="agentic-status-text">Starting…</strong></div>
+              <span class="agentic-meta" id="agentic-status-meta">—</span>
+              <label class="agentic-toggle"><input type="checkbox" id="agentic-enabled" checked><span>Agent access</span></label>
+              
+            </div>
+                  <label class="checkbox-label"><input type="checkbox" id="agentic-alongside"> <span>Show the Agent view while editing in Premiere or Resolve</span></label>
+                </div>
+              </div>
+              <div class="settings-group">
+                <div class="settings-group-label">Connection</div>
+                <div class="settings-section">
+                  <section class="section agentic-side-card">
+                <span class="agentic-overline">Connection</span>
+                <h2>Connection</h2>
+                <div class="agentic-kv"><span>MCP URL</span><code id="agentic-url">—</code></div>
+                <div class="agentic-kv"><span>Token</span><code id="agentic-token">••••••••</code><button type="button" id="agentic-token-toggle">Show</button></div>
+                <div class="agentic-actions">
+                  <button type="button" class="btn btn-primary btn-small" id="agentic-copy-claude">Copy Claude Code setup</button>
+                  <button type="button" class="btn btn-secondary btn-small" id="agentic-copy-json">Copy MCP JSON</button>
+                  <button type="button" class="btn btn-secondary btn-small" id="agentic-copy-skill">Copy agent skill</button>
+                </div>
+              </section>
+                </div>
+              </div>
+              <div class="settings-group">
+                <div class="settings-group-label">Tools</div>
+                <div class="settings-section"><section class="section agentic-side-card">
+                <div class="agentic-notes-head"><div><span class="agentic-overline">Available tools</span><h2>Tools</h2></div></div>
+                <div id="agentic-tools" class="agentic-tools"></div>
+              </section></div>
+              </div>
+              <div class="settings-group">
+                <div class="settings-group-label">Recent calls</div>
+                <div class="settings-section"><section class="section agentic-side-card">
+                <div class="agentic-notes-head"><div><span class="agentic-overline">Activity</span><h2>Activity</h2></div><span class="agentic-count" id="agentic-client-count">0 clients</span></div>
+                <div id="agentic-activity" class="agentic-activity"></div>
+              </section></div>
+              </div>
+            </section>
+            <section class="settings-pane" data-pane="community">
+              <div class="settings-group">
+                <div class="settings-group-label">Follow along</div>
+                <div class="settings-section">
+                  <p class="help-text">Follow SmoothyEdit, meet other editors, and keep in touch with the creator.</p>
+                  <div class="settings-actions">
+                    <button id="settings-discord-btn" class="btn btn-secondary btn-small">Join our Discord</button>
+                    <button id="settings-smoothy-twitter-btn" class="btn btn-secondary btn-small" type="button">SmoothyEdit on X</button>
+                    <button id="settings-twitter-btn" class="btn btn-secondary btn-small">Ali on X</button>
+                    <button id="settings-instagram-btn" class="btn btn-secondary btn-small">Instagram</button>
+                    <button id="settings-linkedin-btn" class="btn btn-secondary btn-small" type="button">LinkedIn</button>
+                    <button id="settings-website-btn" class="btn btn-secondary btn-small" type="button">Personal website</button>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
-          <div class="connection-status-row"><span class="connection-dot" id="settings-connection-dot"></span><span id="settings-connection-status">Not connected</span></div>
-          <div class="settings-actions"><button id="save-token-btn" class="btn btn-secondary">Save Token</button><button id="connect-website-btn" class="btn btn-primary">Connect</button><button id="settings-open-studio-btn" class="btn btn-secondary">Open Dashboard</button></div>
-        </details>
-      </div>
-
-      <div class="settings-section" id="settings-update-section">
-        <h4>App Updates</h4>
-        <p id="settings-update-help" class="help-text">SmoothyEdit checks for updates on startup and every six hours. Downloads and installation only start when you choose. Skip any version and keep using the one you have.</p>
-
-        <div class="update-status-row">
-          <span id="settings-update-status" role="status" aria-live="polite">No updates checked yet</span>
         </div>
-
-        <div id="settings-update-notes" class="settings-update-notes hidden"></div>
-
-        <div class="settings-actions">
-          <button id="check-update-btn" class="btn btn-secondary">Check for Updates</button>
-          <button id="settings-install-update-btn" class="btn btn-primary hidden">View update</button>
-        </div>
-      </div>
-
-      <div class="settings-section" id="settings-feedback-section">
-        <h4>Give us feedback</h4>
-        <p class="help-text">What should we improve or build next? We’d love to hear from you.</p>
-        <div class="settings-feedback-actions">
-          <button type="button" class="settings-feedback-action" data-feedback-kind="feedback"><span><strong>Share feedback</strong><small>Tell us what’s working and what could be better.</small></span><span aria-hidden="true">↗</span></button>
-          <button type="button" class="settings-feedback-action" data-feedback-kind="feature"><span><strong>Request a feature</strong><small>Suggest a tool or feature you’d like to see.</small></span><span aria-hidden="true">↗</span></button>
-          <button type="button" class="settings-feedback-action" data-feedback-kind="bug"><span><strong>Report a problem</strong><small>Describe what happened and how to reproduce it.</small></span><span aria-hidden="true">↗</span></button>
-        </div>
-        <p class="help-text settings-feedback-help">Opens an email draft to support@smoothyedit.com for you to review and send.</p>
-        <p id="settings-feedback-status" class="help-text hidden" role="status" aria-live="polite"></p>
-      </div>
-
-      <div class="settings-section">
-        <h4>Community</h4>
-        <p class="help-text">Follow SmoothyEdit, meet other editors, and keep in touch with the creator.</p>
-        <div class="settings-actions">
-          <button id="settings-discord-btn" class="btn btn-secondary">Join our Discord</button>
-          <button id="settings-smoothy-twitter-btn" class="btn btn-secondary" type="button">SmoothyEdit on X</button>
-          <button id="settings-twitter-btn" class="btn btn-secondary">Ali on X</button>
-          <button id="settings-instagram-btn" class="btn btn-secondary">Instagram</button>
-          <button id="settings-linkedin-btn" class="btn btn-secondary" type="button">LinkedIn</button>
-          <button id="settings-website-btn" class="btn btn-secondary" type="button">Personal website</button>
-        </div>
-      </div>
-
-      <div class="settings-section">
-        <h4>Advanced</h4>
-        <label class="checkbox-label" style="margin-top: 8px;">
-          <input type="checkbox" id="show-logs-toggle">
-          <span>Show the Dev tab</span>
-        </label>
-        <p class="help-text">Hidden by default. Preview the update banner and view live debug logs.</p>
-      </div>
       </div>
     </div>
   </div>
@@ -1730,6 +2278,9 @@
     </div>
   </div>
 
+  <script type="module" src="custom-select.js"></script>
   <script type="module" src="app.js"></script>
+  <script type="module" src="pro-lock.js"></script>
+  <script type="module" src="nav-order.js"></script>
 </body>
 </html>

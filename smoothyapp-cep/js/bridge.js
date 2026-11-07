@@ -9,7 +9,7 @@
   'use strict';
 
   const csInterface = new CSInterface();
-  const HOST_SCRIPT_VERSION = '20261020-multicam-append-track-v33';
+  const HOST_SCRIPT_VERSION = '20261101-shortscuts-v38';
   const MARKER_PAYLOAD_CHUNK_SIZE = 8000;
   let ws = null;
   let isConnected = false;
@@ -156,7 +156,7 @@
         callback({
           success: false,
           stale: true,
-          error: 'The SmoothyEdit panel in Premiere is out of date (' + result + '). Reinstall the latest app, then reopen the panel in Premiere.'
+          error: 'Close Window → Extensions → SmoothyEdit and open it again to load the updated Premiere bridge (' + result + ').'
         });
         return;
       }
@@ -233,7 +233,64 @@
       case 'importStockFootage':
         importStockFootage(data.filePath, data.requestId);
         break;
+
+      case 'getShortsCutsCatalog':
+        runShortsCutsHost('getShortsCutsCatalog', {}, 'shortsCutsCatalog', data.requestId);
+        break;
+      case 'applyShortsCut':
+        runShortsCutsHost('applyShortsCut', data.cut || {}, 'shortsCutApplied', data.requestId);
+        break;
+      case 'captureShortsCutPreset':
+        runShortsCutsHost('captureShortsCutPreset', {}, 'shortsCutPresetCaptured', data.requestId);
+        break;
     }
+  }
+
+  function runShortsCutsHost(hostFunction, payload, responseType, requestId) {
+    const reply = result => send(Object.assign({}, result, { type: responseType, requestId: requestId }));
+    let payloadJson = '{}';
+    try {
+      payloadJson = JSON.stringify(payload || {});
+    } catch (e) {
+      reply({ success: false, error: 'Could not prepare the ShortsCuts request.' });
+      return;
+    }
+    ensureHostScriptLoaded(loadResult => {
+      if (!loadResult.success) { reply({ success: false, error: loadResult.error }); return; }
+      const guard = 'try { $.evalFile(' + JSON.stringify(getHostScriptPath()) + '); ' +
+        'if (getSmoothyCepHostVersion() !== ' + JSON.stringify(HOST_SCRIPT_VERSION) + ') { JSON.stringify({success:false,error:"Reopen the updated SmoothyEdit panel."}); } else { ';
+      const finish = ' } } catch(e) { JSON.stringify({success:false,error:e.message}); }';
+      const finishReply = result => {
+        try {
+          const parsed = JSON.parse(result);
+          reply(Object.assign({ success: false }, parsed));
+        } catch (e) {
+          reply({ success: false, error: 'Premiere did not return a valid ShortsCuts response.' });
+        }
+      };
+      if (payloadJson.length <= 60000) {
+        const encoded = encodeURIComponent(payloadJson).replace(/'/g, '%27');
+        csInterface.evalScript(guard + hostFunction + "(decodeURIComponent('" + encoded + "'))" + finish, finishReply);
+        return;
+      }
+      // Large captured presets are staged in small evalScript calls.
+      csInterface.evalScript('$.global.SMOOTHY_SHORTSCUTS_PAYLOAD = ""; "OK";', function(resetResult) {
+        if (resetResult !== '"OK"' && resetResult !== 'OK') { reply({ success: false, error: 'Could not stage the preset payload.' }); return; }
+        const chunks = [];
+        for (let i = 0; i < payloadJson.length; i += 8000) chunks.push(payloadJson.slice(i, i + 8000));
+        function appendNext(index) {
+          if (index >= chunks.length) {
+            csInterface.evalScript(guard + hostFunction + '($.global.SMOOTHY_SHORTSCUTS_PAYLOAD)' + finish, finishReply);
+            return;
+          }
+          csInterface.evalScript('$.global.SMOOTHY_SHORTSCUTS_PAYLOAD += ' + JSON.stringify(chunks[index]) + '; "OK";', function(chunkResult) {
+            if (chunkResult !== '"OK"' && chunkResult !== 'OK') { reply({ success: false, error: 'Could not stage the preset payload.' }); return; }
+            appendNext(index + 1);
+          });
+        }
+        appendNext(0);
+      });
+    });
   }
 
   function runMulticamHostCommand(hostFunction, responseType, data) {
