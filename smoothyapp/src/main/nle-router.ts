@@ -108,18 +108,18 @@ export async function runAutoCut(config: any, onStart?: () => void, destination?
   } finally { resolveApplyActive=false;multicamBusy = false; }
 }
 
-export async function runSilenceRemoval(config: any, onStart?: () => void, destination?:string) {
+export async function runSilenceRemoval(config: any, onStart?: () => void, destination?:string, transcribeForRetakes?: any) {
   if (multicamBusy) return { success: false, error: 'Wait for the current timeline job to finish.' };
   multicamBusy = true;
   try {
     if(activeNLE==='resolve'){
       if(!destination)throw new Error('Choose a destination XML.');resolveApplyActive=true;
       let result;
-      try{result=await finishResolveApply(await resolveService.removeSilence(config,destination,onStart));}
+      try{result=await finishResolveApply(await resolveService.removeSilence(config,destination,onStart,transcribeForRetakes));}
       catch(error){result={success:false,nle:'resolve',error:error instanceof Error?error.message:'Resolve Apply failed.'};}
       result.operation='silence';callbacks.onResult?.(result);return result;
     }
-    return await wsRunSilenceRemoval(config,onStart);
+    return await wsRunSilenceRemoval(config,onStart,transcribeForRetakes);
   } finally { resolveApplyActive=false;multicamBusy = false; }
 }
 export function cancelTimelineJob() {

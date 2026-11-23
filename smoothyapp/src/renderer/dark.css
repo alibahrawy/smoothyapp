@@ -1,0 +1,174 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Dark mode (Design Bible §09 "Feature tiles, light and dark")
+   ---------------------------------------------------------------------
+   Turned on by <html data-theme="dark">, which app.js sets from
+   prefers-color-scheme (driven by Settings → General → Theme through
+   nativeTheme). Rules:
+   • Surfaces stay neutral warm greys, never near-black (owner, 2026-11-23).
+   • The app keeps its colour, but in dark shades: tiles, title bar and the
+     selected item use a deep muted shade of the flavor with light text;
+     buttons keep a softened flavor fill with dark text. Large panels stay
+     neutral (no tinted panels).
+   • Ink flips to near-white text; things filled with Ink flip to a light
+     fill with dark text (--on-ink). Icons on a flavor tile stay dark
+     (--tile-ink).
+   • Elevation comes from a lighter surface plus a faint top edge, not
+     from bigger shadows.
+   ═══════════════════════════════════════════════════════════════════ */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --ink: oklch(0.965 0.004 95);             /* text */
+  --on-ink: oklch(0.2 0 0);                 /* text on an Ink (now light) fill */
+  --canvas: oklch(0.235 0.004 95);          /* window #1F1E1C */
+  --sunken: oklch(0.265 0.004 95);          /* sidebar, fields, wells #262523: lifted, never black */
+  --surface: oklch(0.28 0.004 95);          /* cards, white buttons #292927 */
+  --hover: oklch(0.33 0.004 95);            /* hover, raised #363533 */
+  --border: oklch(0.37 0.004 95);
+  --border-strong: oklch(0.44 0.005 95);
+  --muted-text: oklch(0.74 0.006 95);
+  --secondary-text: oklch(0.86 0.005 95);
+
+  /* Washes were pale flavor backgrounds: neutral raised grey in the dark. */
+  --lime-wash: var(--hover); --mango-wash: var(--hover); --papaya-wash: var(--hover);
+  --watermelon-wash: var(--hover); --rose-wash: var(--hover); --dragonfruit-wash: var(--hover);
+  --grape-wash: var(--hover); --blueberry-wash: var(--hover); --sky-wash: var(--hover);
+
+  /* Deep flavor text must be light enough to read on dark. */
+  --lime-deep: oklch(0.84 0.15 142);
+  --mango-deep: oklch(0.86 0.14 90);
+  --papaya-deep: oklch(0.80 0.13 60);
+  --watermelon-deep: oklch(0.76 0.14 22);
+  --rose-deep: oklch(0.82 0.11 350);
+  --dragonfruit-deep: oklch(0.78 0.15 335);
+  --grape-deep: oklch(0.78 0.14 295);
+  --blueberry-deep: oklch(0.76 0.13 258);
+  --sky-deep: oklch(0.82 0.10 230);
+
+  /* Bold flavors lifted so they read as accents on dark. */
+  --blueberry: oklch(0.62 0.18 258);
+  --grape: oklch(0.64 0.21 295);
+  --dragonfruit: oklch(0.62 0.21 335);
+
+  /* Two layers of colour (owner's pick, 2026-11-23):
+     • --X-tint  = deep jewel shade for the big colour areas (title bar,
+       selected sidebar/Settings item), light text on it (--tint-ink).
+     • --X-jewel = full-strength colour for small icon tiles, like macOS
+       System Settings; glyph ink per flavor (--X-jewel-ink).
+     Hex so the Windows caption overlay can match the title bar. */
+  --lime-tint: #194224; --lime-jewel: #1DA835; --lime-jewel-ink: #151515;
+  --mango-tint: #473D13; --mango-jewel: #DCA822; --mango-jewel-ink: #151515;
+  --papaya-tint: #582D19; --papaya-jewel: #E5751B; --papaya-jewel-ink: #151515;
+  --watermelon-tint: #5A2426; --watermelon-jewel: #E6424C; --watermelon-jewel-ink: #FFFFFF;
+  --rose-tint: #57243A; --rose-jewel: #EA5098; --rose-jewel-ink: #FFFFFF;
+  --dragonfruit-tint: #502047; --dragonfruit-jewel: #BD3DA8; --dragonfruit-jewel-ink: #FFFFFF;
+  --grape-tint: #3A2A5E; --grape-jewel: #8151DB; --grape-jewel-ink: #FFFFFF;
+  --blueberry-tint: #19355E; --blueberry-jewel: #126EE5; --blueberry-jewel-ink: #FFFFFF;
+  --sky-tint: #0D3D51; --sky-jewel: #1E9FD0; --sky-jewel-ink: #151515;
+  --ink-tint: #3B3B39; --ink-jewel: #6B6A66; --ink-jewel-ink: #FFFFFF;
+  --tint-ink: oklch(0.94 0.008 95);
+
+  /* Fills with dark text (tool buttons, Lime, Pro, switches): a notch softer
+     than light mode so they don't glare on dark. */
+  --brand-lime: oklch(0.80 0.15 142);
+  --lime: oklch(0.80 0.15 142);
+  --mango: oklch(0.80 0.14 90);
+  --papaya: oklch(0.72 0.14 60);
+  --watermelon: oklch(0.68 0.15 22);
+  --rose: oklch(0.76 0.11 350);
+  --sky: oklch(0.74 0.11 230);
+  --graphite: oklch(0.55 0.01 260);
+
+  --shadow-button: inset 0 1px 0 rgb(255 255 255 / .06), 0 0 0 1px rgb(255 255 255 / .09), 0 1px 2px rgb(0 0 0 / .45);
+  --shadow-white: 0 0 0 1px rgb(255 255 255 / .10), 0 1px 2px rgb(0 0 0 / .45), 0 3px 6px -3px rgb(0 0 0 / .5);
+  --shadow-bar: 0 0 0 1px rgb(255 255 255 / .06), 0 3px 6px -3px rgb(0 0 0 / .55), 0 8px 12px -8px rgb(0 0 0 / .45);
+  --shadow-1: 0 0 0 1px rgb(255 255 255 / .04), 0 1px 2px rgb(0 0 0 / .35);
+  --shadow-2: 0 0 0 1px rgb(255 255 255 / .05), 0 4px 10px -3px rgb(0 0 0 / .5);
+  --shadow-3: 0 0 0 1px rgb(255 255 255 / .06), 0 10px 24px -8px rgb(0 0 0 / .6);
+  --shadow-color: rgb(0 0 0 / .45);
+
+  --overlay-bg: rgb(0 0 0 / .6);
+  --feature-lock-bg: rgb(12 12 12 / .82);
+  --input-bg: var(--sunken);
+  --primary-hover: oklch(0.76 0.15 142);
+}
+
+/* ── Components ─────────────────────────────────────────────────────── */
+
+/* Selected sidebar / Settings item: the deep flavor shade with light text. */
+:root[data-theme="dark"] .settings-nav-item.active {
+  background: var(--settings-tint, var(--ink-tint)) !important;
+  color: var(--tint-ink) !important;
+}
+
+/* Media Encoder mode cards (styles.css paints them white with cream hovers). */
+:root[data-theme="dark"] .encoder-mode { background: var(--surface); color: var(--ink); }
+:root[data-theme="dark"] .encoder-mode:hover:not(:disabled) { background: var(--hover); border-color: var(--border-strong); }
+:root[data-theme="dark"] .encoder-mode.is-selected { background: var(--hover); border-color: var(--mango); box-shadow: inset 0 0 0 0.5px var(--mango); }
+
+/* Plan badge: neutral pill, flavor text. */
+:root[data-theme="dark"] .profile-plan[data-plan] { background: var(--hover); }
+:root[data-theme="dark"] .profile-plan[data-plan="guest"] { color: var(--mango-deep); }
+:root[data-theme="dark"] .profile-plan[data-plan="free"] { color: var(--lime-deep); }
+:root[data-theme="dark"] .profile-plan[data-plan="pro"] { color: var(--ink); }
+
+/* Title bar sits on a deep shade: status colours use the light deep tones. */
+:root[data-theme="dark"] .window-titlebar > .status-error { --window-status-ink: var(--watermelon-deep); }
+:root[data-theme="dark"] .window-titlebar > .status-success { --window-status-ink: var(--lime-deep); }
+
+/* Credits pills: quiet raised grey instead of a bright light pill. */
+:root[data-theme="dark"] :is(.nav-item-badge, .nav-credits-badge, .paid-badge):not(.nav-pro-badge) {
+  background: var(--hover) !important;
+  color: var(--ink) !important;
+}
+/* Selected item ring: half-strength flavor so it frames, not glows. */
+:root[data-theme="dark"] .sidebar-nav .nav-item.active {
+  border-color: color-mix(in oklch, var(--tab-accent, var(--ink)) 55%, transparent);
+  box-shadow: none;
+}
+:root[data-theme="dark"] .settings-nav-item.active {
+  border-color: color-mix(in oklch, var(--settings-ring, var(--border-strong)) 55%, transparent) !important;
+}
+
+/* Icon tiles take the full-strength jewel colour of their tool. */
+:root[data-theme="dark"] #tab-multicam, :root[data-theme="dark"] .nav-item[data-tab="multicam"] { --tab-jewel: var(--blueberry-jewel); --tab-jewel-ink: var(--blueberry-jewel-ink); }
+:root[data-theme="dark"] #tab-silence, :root[data-theme="dark"] .nav-item[data-tab="silence"] { --tab-jewel: var(--dragonfruit-jewel); --tab-jewel-ink: var(--dragonfruit-jewel-ink); }
+:root[data-theme="dark"] #tab-local-audio, :root[data-theme="dark"] .nav-item[data-tab="local-audio"] { --tab-jewel: var(--sky-jewel); --tab-jewel-ink: var(--sky-jewel-ink); }
+:root[data-theme="dark"] #tab-captions, :root[data-theme="dark"] .nav-item[data-tab="captions"] { --tab-jewel: var(--grape-jewel); --tab-jewel-ink: var(--grape-jewel-ink); }
+:root[data-theme="dark"] #tab-shortscuts, :root[data-theme="dark"] .nav-item[data-tab="shortscuts"] { --tab-jewel: var(--lime-jewel); --tab-jewel-ink: var(--lime-jewel-ink); }
+:root[data-theme="dark"] #tab-compressor, :root[data-theme="dark"] .nav-item[data-tab="compressor"] { --tab-jewel: var(--mango-jewel); --tab-jewel-ink: var(--mango-jewel-ink); }
+:root[data-theme="dark"] #tab-assets, :root[data-theme="dark"] .nav-item[data-tab="assets"] { --tab-jewel: var(--papaya-jewel); --tab-jewel-ink: var(--papaya-jewel-ink); }
+:root[data-theme="dark"] #tab-agentic, :root[data-theme="dark"] .nav-item[data-tab="agentic"] { --tab-jewel: var(--ink-jewel); --tab-jewel-ink: var(--ink-jewel-ink); }
+:root[data-theme="dark"] #tab-stock, :root[data-theme="dark"] .nav-item[data-tab="stock"] { --tab-jewel: var(--watermelon-jewel); --tab-jewel-ink: var(--watermelon-jewel-ink); }
+:root[data-theme="dark"] #tab-audio, :root[data-theme="dark"] .nav-item[data-tab="audio"] { --tab-jewel: var(--rose-jewel); --tab-jewel-ink: var(--rose-jewel-ink); }
+:root[data-theme="dark"] #tab-studio-text, :root[data-theme="dark"] .nav-item[data-tab="studio-text"], :root[data-theme="dark"] #tab-bestshorts, :root[data-theme="dark"] .nav-item[data-tab="bestshorts"] { --tab-jewel: var(--lime-jewel); --tab-jewel-ink: var(--lime-jewel-ink); }
+:root[data-theme="dark"] #tab-photos, :root[data-theme="dark"] .nav-item[data-tab="photos"] { --tab-jewel: var(--sky-jewel); --tab-jewel-ink: var(--sky-jewel-ink); }
+:root[data-theme="dark"] #tab-chat, :root[data-theme="dark"] .nav-item[data-tab="chat"] { --tab-jewel: var(--papaya-jewel); --tab-jewel-ink: var(--papaya-jewel-ink); }
+:root[data-theme="dark"] #tab-community, :root[data-theme="dark"] .nav-item[data-tab="community"] { --tab-jewel: var(--grape-jewel); --tab-jewel-ink: var(--grape-jewel-ink); }
+:root[data-theme="dark"] #tab-logs, :root[data-theme="dark"] .nav-item[data-tab="logs"] { --tab-jewel: var(--ink-jewel); --tab-jewel-ink: var(--ink-jewel-ink); }
+:root[data-theme="dark"] .settings-nav-item[data-settings-pane="profile"] { --settings-jewel: var(--rose-jewel); --settings-jewel-ink: var(--rose-jewel-ink); }
+:root[data-theme="dark"] .settings-nav-item[data-settings-pane="general"] { --settings-jewel: var(--lime-jewel); --settings-jewel-ink: var(--lime-jewel-ink); }
+:root[data-theme="dark"] .settings-nav-item[data-settings-pane="updates"] { --settings-jewel: var(--sky-jewel); --settings-jewel-ink: var(--sky-jewel-ink); }
+:root[data-theme="dark"] .settings-nav-item[data-settings-pane="editors"] { --settings-jewel: var(--blueberry-jewel); --settings-jewel-ink: var(--blueberry-jewel-ink); }
+:root[data-theme="dark"] .settings-nav-item[data-settings-pane="captions"] { --settings-jewel: var(--grape-jewel); --settings-jewel-ink: var(--grape-jewel-ink); }
+:root[data-theme="dark"] .settings-nav-item[data-settings-pane="chat"] { --settings-jewel: var(--papaya-jewel); --settings-jewel-ink: var(--papaya-jewel-ink); }
+:root[data-theme="dark"] .settings-nav-item[data-settings-pane="agent"] { --settings-jewel: var(--ink-jewel); --settings-jewel-ink: var(--ink-jewel-ink); }
+:root[data-theme="dark"] .settings-nav-item[data-settings-pane="community"] { --settings-jewel: var(--grape-jewel); --settings-jewel-ink: var(--grape-jewel-ink); }
+:root[data-theme="dark"] .settings-nav-item[data-settings-pane="feedback"] { --settings-jewel: var(--papaya-jewel); --settings-jewel-ink: var(--papaya-jewel-ink); }
+:root[data-theme="dark"] .settings-nav-item[data-settings-pane="about"] { --settings-jewel: var(--lime-jewel); --settings-jewel-ink: var(--lime-jewel-ink); }
+
+:root[data-theme="dark"] .sidebar-nav .nav-item .nav-icon,
+:root[data-theme="dark"] .sidebar-nav .nav-item.active .nav-icon,
+:root[data-theme="dark"] .drop-zone .drop-icon,
+:root[data-theme="dark"] .drop-zone-tile {
+  background: var(--tab-jewel, var(--ink-jewel)) !important;
+  color: var(--tab-jewel-ink, #FFFFFF) !important;
+}
+:root[data-theme="dark"] .settings-nav-icon,
+:root[data-theme="dark"] .settings-nav-item .settings-nav-icon svg { color: var(--settings-jewel-ink, #FFFFFF) !important; }
+:root[data-theme="dark"] .settings-nav-icon { background: var(--settings-jewel, var(--ink-jewel)) !important; }
+:root[data-theme="dark"] .settings-nav-item .settings-nav-icon svg { background: transparent !important; }
+:root[data-theme="dark"] :is(.local-audio-mode-icon, .local-audio-file-icon) { background: var(--sky-jewel) !important; color: var(--sky-jewel-ink) !important; }
+:root[data-theme="dark"] .studio-empty-icon { background: var(--lime-jewel) !important; color: var(--lime-jewel-ink) !important; }
+:root[data-theme="dark"] .encoder-mode-icon { background: var(--mango-jewel) !important; color: var(--mango-jewel-ink) !important; }
+:root[data-theme="dark"] #settings-modal .nle-option .nle-icon-auto { background: var(--ink-jewel); color: #FFFFFF; }

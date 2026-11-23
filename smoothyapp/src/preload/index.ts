@@ -8,14 +8,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setWindowTitlebarColor: (color: string) => ipcRenderer.invoke('set-window-titlebar-color', color),
   localAudioState: () => ipcRenderer.invoke('local-audio-state'),
   localAudioPick: () => ipcRenderer.invoke('local-audio-pick'),
+  localAudioSelect: (filePath: string) => ipcRenderer.invoke('local-audio-select', filePath),
   localAudioSetup: () => ipcRenderer.invoke('local-audio-setup'),
   localAudioRun: (input: unknown) => ipcRenderer.invoke('local-audio-run', input),
   localAudioCancel: () => ipcRenderer.invoke('local-audio-cancel'),
-  localAudioSave: (id: string) => ipcRenderer.invoke('local-audio-save', id),
+  localAudioSave: (input: string | { id: string; strength?: number }) => ipcRenderer.invoke('local-audio-save', input),
   localAudioPreview: (id: string) => ipcRenderer.invoke('local-audio-preview', id),
   onLocalAudioProgress: (callback: (data: { message: string }) => void) => ipcRenderer.on('local-audio-progress', (_, data) => callback(data)),
   getAppPreferences: () => ipcRenderer.invoke('get-app-preferences'),
   setStudioEnabled: (value: boolean) => ipcRenderer.invoke('set-studio-enabled', value),
+  setAppearance: (value: 'system' | 'light' | 'dark') => ipcRenderer.invoke('set-appearance', value),
   saveChatWritingPrompt: (value: string) => ipcRenderer.invoke('save-chat-writing-prompt', value),
   resetChatWritingPrompt: () => ipcRenderer.invoke('reset-chat-writing-prompt'),
   onAppPreferencesChanged: (callback: (data: any) => void) => ipcRenderer.on('app-preferences-changed', (_, data) => callback(data)),
@@ -37,7 +39,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   photosCopy: (id: string) => ipcRenderer.invoke('photos-copy', id),
   photosPreview: (id: string) => ipcRenderer.invoke('photos-preview', id),
   photosPremiere: (id: string) => ipcRenderer.invoke('photos-premiere', id),
-  trackMediaPreview: (kind: 'audio' | 'stock' | 'assets') => ipcRenderer.invoke('track-media-preview', kind),
+  trackMediaPreview: (kind: 'audio' | 'stock' | 'assets' | 'sfx') => ipcRenderer.invoke('track-media-preview', kind),
   // Get current status
   getStatus: () => ipcRenderer.invoke('get-status'),
 
@@ -89,6 +91,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('save-captions', options),
   importCaptionsToPremiere: (captions: any[]) =>
     ipcRenderer.invoke('import-captions-to-premiere', captions),
+  importProCaptionsToPremiere: (captions: any[], style?: Record<string, unknown>) =>
+    ipcRenderer.invoke('import-pro-captions-to-premiere', captions, style),
   unloadCaptionModel: () => ipcRenderer.invoke('unload-caption-model'),
   getCaptionEngineInfo: () => ipcRenderer.invoke('get-caption-engine-info'),
   getCaptionEngine: () => ipcRenderer.invoke('get-caption-engine'),
@@ -116,6 +120,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getTrialStatus: () => ipcRenderer.invoke('get-trial-status'),
   canUseFeature: (feature: string) => ipcRenderer.invoke('can-use-feature', feature),
   proUpgradeClick: (feature: string) => ipcRenderer.invoke('pro-upgrade-click', feature),
+  openProCheckout: () => ipcRenderer.invoke('pro-checkout-open'),
+  proFounderOffer: () => ipcRenderer.invoke('pro-founder-offer'),
+  onProCheckoutComplete: (callback: () => void) => { ipcRenderer.on('pro-checkout-complete', () => callback()); },
+  nudgeShown: (kind: string, preview?: boolean) => ipcRenderer.invoke('nudge-shown', kind, preview === true),
+  nudgeDropped: (kind: string) => ipcRenderer.invoke('nudge-dropped', kind),
+  nudgeStatus: () => ipcRenderer.invoke('nudge-status'),
+  nudgeAction: (kind: string, action: string, preview?: boolean) => ipcRenderer.invoke('nudge-action', kind, action, preview === true),
+  onNudge: (callback: (payload: { kind: 'pro' | 'social'; runs: number; preview?: boolean }) => void) => {
+    ipcRenderer.on('nudge-show', (_, payload) => callback(payload));
+  },
   openExternal: (url: string) => ipcRenderer.invoke('open-external', url),
 
   // Theme sync
@@ -136,6 +150,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   skipUpdate: (version: string) => ipcRenderer.invoke('skip-update', version),
   getUpdateState: () => ipcRenderer.invoke('get-update-state'),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  setAutoUpdates: (enabled: boolean) => ipcRenderer.invoke('set-auto-updates', enabled),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
   // NLE Bridge
@@ -203,6 +218,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   audioArchiveDownload: (options: any) => ipcRenderer.invoke('audio-archive-download', options),
   audioArchiveCancel: () => ipcRenderer.invoke('audio-archive-cancel'),
   onAudioArchiveProgress: (callback: (data: any) => void) => ipcRenderer.on('audio-archive-progress', (_, data) => callback(data)),
+  sfxSearch: (options: any) => ipcRenderer.invoke('sfx-search', options),
+  sfxSave: (options: { id: string; send?: boolean }) => ipcRenderer.invoke('sfx-save', options),
+  sfxShowFolder: () => ipcRenderer.invoke('sfx-show-folder'),
   audioLibraryOpen: () => ipcRenderer.invoke('audio-library-open'),
   audioLibraryStop: () => ipcRenderer.invoke('audio-library-stop'),
   audioLibrarySelectFolder: () => ipcRenderer.invoke('audio-library-select-folder'),
@@ -220,18 +238,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stockCancelDownload: () => ipcRenderer.invoke('stock-cancel-download'),
   onStockDownloadProgress: (callback: (data: any) => void) => ipcRenderer.on('stock-download-progress', (_, data) => callback(data)),
 
-  // Video Compressor
+  // Video Compressor & Media Encoder
   compressorCheckFFmpeg: () => ipcRenderer.invoke('compressor-check-ffmpeg'),
-  compressorDetectHardware: () => ipcRenderer.invoke('compressor-detect-hardware'),
-  compressorScanDirectory: (dirPath: string) => ipcRenderer.invoke('compressor-scan-directory', dirPath),
+  compressorDetectHardware: (target?: string) => ipcRenderer.invoke('compressor-detect-hardware', target),
+  compressorScanDirectory: (dirPath: string, mode?: string) => ipcRenderer.invoke('compressor-scan-directory', dirPath, mode),
   getDroppedFilePath: (file: File) => webUtils.getPathForFile(file),
-  compressorScanSource: (sourcePath: string) => ipcRenderer.invoke('compressor-scan-source', sourcePath),
+  compressorScanSource: (sourcePath: string, mode?: string) => ipcRenderer.invoke('compressor-scan-source', sourcePath, mode),
+  compressorScanSources: (sourcePaths: string[], mode?: string) => ipcRenderer.invoke('compressor-scan-sources', sourcePaths, mode),
+  compressorProbeFiles: (filePaths: string[]) => ipcRenderer.invoke('compressor-probe-files', filePaths),
+  compressorOpenOutputFolder: (folderPath: string) => ipcRenderer.invoke('compressor-open-output-folder', folderPath),
   compressorStart: (files: any[], settings: any) => ipcRenderer.invoke('compressor-start', files, settings),
   compressorStop: () => ipcRenderer.invoke('compressor-stop'),
   compressorIsRunning: () => ipcRenderer.invoke('compressor-is-running'),
   compressorGetStats: () => ipcRenderer.invoke('compressor-get-stats'),
+  compressorSelectFiles: (mode?: string) => ipcRenderer.invoke('compressor-select-files', mode),
   compressorSelectFolder: () => ipcRenderer.invoke('compressor-select-folder'),
-  compressorSelectSource: () => ipcRenderer.invoke('compressor-select-source'),
+  compressorSelectSource: (mode?: string) => ipcRenderer.invoke('compressor-select-source', mode),
   compressorSelectOutputFolder: (defaultPath?: string) => ipcRenderer.invoke('compressor-select-output-folder', defaultPath),
   onCompressorProgress: (callback: (data: any) => void) => {
     ipcRenderer.on('compressor-progress', (_, data) => callback(data));
@@ -263,7 +285,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   agentReviewResolve: (input: any) => ipcRenderer.invoke('agent-review-resolve', input),
   agentReviewOpen: (input: any) => ipcRenderer.invoke('agent-review-open', input),
   agentPreviewClear: () => ipcRenderer.invoke('agent-preview-clear'),
-  agentApprove: (id: string, allow: boolean) => ipcRenderer.invoke('agent-approve', { id, allow }),
+  agentApprove: (id: string, allow: boolean, session = false) => ipcRenderer.invoke('agent-approve', { id, allow, session }),
+  agentRevokeGrants: () => ipcRenderer.invoke('agent-revoke-grants'),
   agentOpenArtifact: (file: string) => ipcRenderer.invoke('agent-open-artifact', file),
   agentArtifactData: (file: string) => ipcRenderer.invoke('agent-artifact-data', file),
   agentJobList: () => ipcRenderer.invoke('agent-job-list'),
@@ -292,6 +315,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   shortscutsPresets: (refresh = false) => ipcRenderer.invoke('shortscuts-presets', refresh),
   shortscutsPreset: (id: string) => ipcRenderer.invoke('shortscuts-preset', id),
   shortscutsApply: (id: string) => ipcRenderer.invoke('shortscuts-apply', id),
+  shortscutsHistory: (action: 'undo' | 'redo') => ipcRenderer.invoke('shortscuts-history', action),
+  shortscutsPickApp: () => ipcRenderer.invoke('shortscuts-pick-app'),
+  shortscutsPickFolder: () => ipcRenderer.invoke('shortscuts-pick-folder'),
   shortscutsCapturePreset: () => ipcRenderer.invoke('shortscuts-capture-preset'),
   shortscutsOpenRemote: () => ipcRenderer.invoke('shortscuts-open-remote'),
   shortscutsCopyRemote: () => ipcRenderer.invoke('shortscuts-copy-remote'),
@@ -302,6 +328,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   communityConnect: () => ipcRenderer.invoke('community-connect'),
   communitySend: (body: string) => ipcRenderer.invoke('community-send', body),
   communityDisconnect: () => ipcRenderer.invoke('community-disconnect'),
+  communityProfiles: () => ipcRenderer.invoke('community-profiles'),
+  communityDelete: (id: string) => ipcRenderer.invoke('community-delete', id),
+  communityReport: (id: string, reason?: string) => ipcRenderer.invoke('community-report', id, reason),
+  communityBlock: (id: string) => ipcRenderer.invoke('community-block', id),
+  communityUnblock: (id: string) => ipcRenderer.invoke('community-unblock', id),
+  communitySaveProfile: (input: { name?: string; avatar?: unknown }) => ipcRenderer.invoke('community-save-profile', input),
+  communityOpenLink: (url: string) => ipcRenderer.invoke('community-open-link', url),
+  onCommunityProfiles: (callback: (profiles: any[]) => void) => {
+    ipcRenderer.on('community-profiles', (_, profiles) => callback(profiles));
+  },
   onCommunityState: (callback: (state: any) => void) => {
     ipcRenderer.on('community-state', (_, state) => callback(state));
   },

@@ -9,7 +9,7 @@
   'use strict';
 
   const csInterface = new CSInterface();
-  const HOST_SCRIPT_VERSION = '20261101-shortscuts-v38';
+  const HOST_SCRIPT_VERSION = '20261123-box-highlight-captions-v42';
   const MARKER_PAYLOAD_CHUNK_SIZE = 8000;
   let ws = null;
   let isConnected = false;
@@ -223,6 +223,12 @@
       case 'importCaptions':
         importCaptions(data.srtPath, data.requestId);
         break;
+      case 'importProCaptions':
+        runStagedHostCommand('smoothyImportProCaptions', 'proCaptionsImported', Object.assign({}, data, {
+          mogrtPath: csInterface.getSystemPath(SystemPath.EXTENSION).replace(/\\/g, '/') + '/mogrt/' +
+            (PRO_CAPTION_TEMPLATE_FILES[data.template] || PRO_CAPTION_TEMPLATE_FILES['box-highlight'])
+        }));
+        break;
 
       case 'importImage':
         importImageToTimeline(data.imagePath, data.durationSeconds, data.requestId);
@@ -245,6 +251,11 @@
         break;
     }
   }
+
+  // Smoothy Pro caption templates shipped in mogrt/ (built by smoothyedit-app/scripts/pro-captions/build-mogrt.mjs).
+  const PRO_CAPTION_TEMPLATE_FILES = {
+    'box-highlight': 'smoothy-box-highlight.mogrt'
+  };
 
   function runShortsCutsHost(hostFunction, payload, responseType, requestId) {
     const reply = result => send(Object.assign({}, result, { type: responseType, requestId: requestId }));
@@ -289,6 +300,44 @@
           });
         }
         appendNext(0);
+      });
+    });
+  }
+
+  // Stages a large JSON payload in small evalScript chunks, then reloads
+  // host.jsx and calls hostFunction(payloadJSON) in the same evalScript.
+  function runStagedHostCommand(hostFunction, responseType, data) {
+    const reply = result => send(Object.assign({}, result, { type: responseType, requestId: data.requestId }));
+    const isOk = value => value === 'OK' || value === '"OK"';
+    ensureHostScriptLoaded(loadResult => {
+      if (!loadResult.success) { reply({ success: false, error: loadResult.error }); return; }
+      const encoded = encodeURIComponent(JSON.stringify(data));
+      csInterface.evalScript('$.global.SMOOTHY_STAGED_PAYLOAD = ""; "OK";', result => {
+        if (!isOk(result)) { reply({ success: false, error: 'Could not stage the Premiere request.' }); return; }
+        let position = 0;
+        function append() {
+          if (position < encoded.length) {
+            const chunk = encoded.slice(position, position + MARKER_PAYLOAD_CHUNK_SIZE);
+            csInterface.evalScript('$.global.SMOOTHY_STAGED_PAYLOAD += ' + JSON.stringify(chunk) + '; "OK";', result => {
+              if (!isOk(result)) { reply({ success: false, error: 'Could not send the complete request to Premiere.' }); return; }
+              position += chunk.length;
+              append();
+            });
+            return;
+          }
+          const script = 'try { $.evalFile(' + JSON.stringify(getHostScriptPath()) + '); ' +
+            'if (getSmoothyCepHostVersion() !== ' + JSON.stringify(HOST_SCRIPT_VERSION) + ') { ' +
+            '$.global.SMOOTHY_STAGED_PAYLOAD = ""; ' +
+            'JSON.stringify({success:false,error:"Reopen the updated SmoothyEdit panel and try again."}); ' +
+            '} else { var __payload = $.global.SMOOTHY_STAGED_PAYLOAD; $.global.SMOOTHY_STAGED_PAYLOAD = ""; ' +
+            hostFunction + '(decodeURIComponent(__payload)); } ' +
+            '} catch(e) { $.global.SMOOTHY_STAGED_PAYLOAD = ""; JSON.stringify({success:false,error:e.message || String(e)}); }';
+          csInterface.evalScript(script, result => {
+            try { reply(JSON.parse(result)); }
+            catch (error) { reply({ success: false, error: 'Premiere did not return a valid response. ' + String(result).slice(0, 200) }); }
+          });
+        }
+        append();
       });
     });
   }
@@ -400,60 +449,78 @@
       reply({ type: 'captionsImported', success: false, error: 'No caption file path provided' });
       return;
     }
-    const escaped = String(srtPath).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    csInterface.evalScript(`importCaptions('${escaped}')`, function(result) {
-      try {
-        const res = JSON.parse(result);
-        reply({
-          type: 'captionsImported',
-          success: res.success,
-          count: res.count,
-          message: res.message,
-          error: res.error
-        });
-      } catch (e) {
-        const raw = typeof result === 'string' ? result.slice(0, 300) : String(result);
-        reply({ type: 'captionsImported', success: false, error: 'Failed to import captions: ' + e.message + ' | Premiere response: ' + raw });
+    ensureHostScriptLoaded(function(loadResult) {
+      if (!loadResult.success) {
+        reply({ type: 'captionsImported', success: false, error: loadResult.error });
+        return;
       }
+      const escaped = String(srtPath).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      csInterface.evalScript(`importCaptions('${escaped}')`, function(result) {
+        try {
+          const res = JSON.parse(result);
+          reply({
+            type: 'captionsImported',
+            success: res.success,
+            count: res.count,
+            message: res.message,
+            error: res.error
+          });
+        } catch (e) {
+          const raw = typeof result === 'string' ? result.slice(0, 300) : String(result);
+          reply({ type: 'captionsImported', success: false, error: 'Failed to import captions: ' + e.message + ' | Premiere response: ' + raw });
+        }
+      });
     });
   }
 
   function exportSubtitles(requestId) {
     const reply = (message) => send(Object.assign({}, message, { requestId: requestId }));
-    csInterface.evalScript('exportSubtitles()', function(result) {
-      try {
-        var res = JSON.parse(result);
-        reply({
-          type: 'subtitlesExported',
-          success: res.success,
-          subtitles: res.subtitles,
-          srt: res.srt,
-          count: res.count,
-          sequenceName: res.sequenceName,
-          source: res.source,
-          error: res.error
-        });
-      } catch (e) {
-        reply({ type: 'subtitlesExported', success: false, error: 'Failed to export subtitles: ' + e.message });
+    ensureHostScriptLoaded(function(loadResult) {
+      if (!loadResult.success) {
+        reply({ type: 'subtitlesExported', success: false, error: loadResult.error });
+        return;
       }
+      csInterface.evalScript('exportSubtitles()', function(result) {
+        try {
+          var res = JSON.parse(result);
+          reply({
+            type: 'subtitlesExported',
+            success: res.success,
+            subtitles: res.subtitles,
+            srt: res.srt,
+            count: res.count,
+            sequenceName: res.sequenceName,
+            source: res.source,
+            error: res.error
+          });
+        } catch (e) {
+          reply({ type: 'subtitlesExported', success: false, error: 'Failed to export subtitles: ' + e.message });
+        }
+      });
     });
   }
 
   function clearAllMarkers(scope, sequenceId, requestId) {
     const reply = (message) => send(Object.assign({}, message, { requestId: requestId }));
-    csInterface.evalScript('clearAllMarkers(' + JSON.stringify(scope || 'smoothy') + ', ' + JSON.stringify(sequenceId || '') + ')', function(result) {
-      try {
-        var res = JSON.parse(result);
-        reply({
-          type: 'markersCleared',
-          success: res.success,
-          count: res.count,
-          message: res.message,
-          error: res.error
-        });
-      } catch (e) {
-        reply({ type: 'markersCleared', success: false, error: 'Failed to parse response: ' + result });
+    ensureHostScriptLoaded(function(loadResult) {
+      if (!loadResult.success) {
+        reply({ type: 'markersCleared', success: false, error: loadResult.error });
+        return;
       }
+      csInterface.evalScript('clearAllMarkers(' + JSON.stringify(scope || 'smoothy') + ', ' + JSON.stringify(sequenceId || '') + ')', function(result) {
+        try {
+          var res = JSON.parse(result);
+          reply({
+            type: 'markersCleared',
+            success: res.success,
+            count: res.count,
+            message: res.message,
+            error: res.error
+          });
+        } catch (e) {
+          reply({ type: 'markersCleared', success: false, error: 'Failed to parse response: ' + result });
+        }
+      });
     });
   }
 
@@ -494,75 +561,75 @@
 
   function importXML(xmlPath, requestId) {
     const reply = (message) => send(Object.assign({}, message, { requestId: requestId }));
-    const escaped = xmlPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    csInterface.evalScript(`importFCPXML('${escaped}')`, function(result) {
-      try {
-        const res = JSON.parse(result);
-        reply({
-          type: 'xmlImported',
-          success: res.success,
-          error: res.error
-        });
-      } catch (e) {
-        reply({ type: 'xmlImported', success: false, error: 'Import failed' });
+    ensureHostScriptLoaded(function(loadResult) {
+      if (!loadResult.success) {
+        reply({ type: 'xmlImported', success: false, error: loadResult.error });
+        return;
       }
+      const escaped = xmlPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      csInterface.evalScript(`importFCPXML('${escaped}')`, function(result) {
+        try {
+          const res = JSON.parse(result);
+          reply({
+            type: 'xmlImported',
+            success: res.success,
+            error: res.error
+          });
+        } catch (e) {
+          reply({ type: 'xmlImported', success: false, error: 'Import failed' });
+        }
+      });
     });
   }
 
   function removeSilenceInPlace(silenceSegments, sequenceId, requestId) {
-    const reply = (message) => send(Object.assign({}, message, { requestId: requestId }));
-    // Convert to JSON string for ExtendScript
-    const segmentsJson = JSON.stringify({ segments: silenceSegments, sequenceId: sequenceId });
-    const encoded = encodeURIComponent(segmentsJson);
-    // Use QE DOM to extract (ripple delete) silence regions
-    csInterface.evalScript(`removeSilenceWithQE(decodeURIComponent('${encoded}'))`, function(result) {
-      try {
-        const res = JSON.parse(result);
-        reply({
-          type: 'silenceRemoved',
-          success: res.success,
-          message: res.message,
-          error: res.error
-        });
-      } catch (e) {
-        reply({ type: 'silenceRemoved', success: false, error: 'Failed to remove silence: ' + e.message });
-      }
+    // Stage in 8 KB chunks so long recordings with hundreds of silences never truncate evalScript.
+    runStagedHostCommand('removeSilenceWithQE', 'silenceRemoved', {
+      segments: silenceSegments,
+      sequenceId: sequenceId,
+      requestId: requestId
     });
   }
 
   function exportAudioForWebsite(requestId) {
     const reply = (message) => send(Object.assign({}, message, { requestId: requestId }));
-    csInterface.evalScript('exportSequenceAudio()', function(result) {
-      try {
-        const res = JSON.parse(result);
-        if (!res.success || !res.filePath) {
-          reply({ type: 'audioExported', success: false, error: res.error || 'Premiere did not create an audio file.' });
-          return;
-        }
-        const nodeRequire = window.cep_node && window.cep_node.require;
-        if (!nodeRequire) {
-          reply({ type: 'audioExported', success: false, error: 'CEP Node access is unavailable, so the temporary audio file cannot be read.' });
-          return;
-        }
-        const fs = nodeRequire('fs');
-        fs.readFile(res.filePath, function(readError, buffer) {
-          if (readError) {
-            reply({ type: 'audioExported', success: false, error: 'Failed to read exported audio: ' + readError.message });
+    ensureHostScriptLoaded(function(loadResult) {
+      if (!loadResult.success) {
+        reply({ type: 'audioExported', success: false, error: loadResult.error });
+        return;
+      }
+      csInterface.evalScript('exportSequenceAudio()', function(result) {
+        try {
+          const res = JSON.parse(result);
+          if (!res.success || !res.filePath) {
+            reply({ type: 'audioExported', success: false, error: res.error || 'Premiere did not create an audio file.' });
             return;
           }
-          try { fs.unlinkSync(res.filePath); } catch (_) {}
-          reply({
-            type: 'audioExported',
-            success: true,
-            audioBase64: buffer.toString('base64'),
-            fileName: res.fileName,
-            fileSize: res.fileSize || buffer.length,
-            duration: res.duration
+          const nodeRequire = window.cep_node && window.cep_node.require;
+          if (!nodeRequire) {
+            reply({ type: 'audioExported', success: false, error: 'CEP Node access is unavailable, so the temporary audio file cannot be read.' });
+            return;
+          }
+          const fs = nodeRequire('fs');
+          fs.readFile(res.filePath, function(readError, buffer) {
+            if (readError) {
+              reply({ type: 'audioExported', success: false, error: 'Failed to read exported audio: ' + readError.message });
+              return;
+            }
+            try { fs.unlinkSync(res.filePath); } catch (_) {}
+            reply({
+              type: 'audioExported',
+              success: true,
+              audioBase64: buffer.toString('base64'),
+              fileName: res.fileName,
+              fileSize: res.fileSize || buffer.length,
+              duration: res.duration
+            });
           });
-        });
-      } catch (e) {
-        reply({ type: 'audioExported', success: false, error: 'Export failed: ' + e.message });
-      }
+        } catch (e) {
+          reply({ type: 'audioExported', success: false, error: 'Export failed: ' + e.message });
+        }
+      });
     });
   }
 

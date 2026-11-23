@@ -8,8 +8,10 @@ import path from 'node:path';
 import sharp from 'sharp';
 import {
   EditOpError,
+  PROJECT_LAYOUT,
   applyOps,
   createProject,
+  defineRegion,
   lintProject,
   projectDuration,
   type EditAsset,
@@ -30,6 +32,11 @@ import {
   type SpeechService
 } from './edit-features';
 import type { AgentResult } from './types';
+import { fileStamp, hashKey, type ResultCache } from './results';
+import { findSfx, levelGain, loadSfx, musicBedGraph, packCues, parseAstats, speechGaps, type Window } from './audio-post';
+import { parseEbur128 } from './analysis';
+import { runEngine } from './engine';
+import { creditLine, savePhoto, stockAttribution, type PhotoHit, type PhotoLicense } from './photos';
 
 export type EditEngineDeps = {
   root: string;
@@ -42,7 +49,19 @@ export type EditEngineDeps = {
   trackTool?: (id: string) => void;
   speech?: SpeechService | null;
   library?: LibraryService | null;
+  /** Disk cache for transcripts and analysis, keyed by input hash. */
+  cache?: ResultCache | null;
+  /** Resolves a project folder the editor approved for writing, or throws. */
+  prepareFolder?: (folder: unknown) => Promise<string>;
+  /** Bundled sound effects folder (library.json + files). */
+  sfxDir?: string | null;
+  /** Wikimedia Commons photo search and download. */
+  photos?: { search(input: { query: string; license?: PhotoLicense; limit?: number; orientation?: string }, signal?: AbortSignal): Promise<PhotoHit[]>; download(hit: PhotoHit, file: string, maxWidth: number, signal?: AbortSignal): Promise<{ path: string; width: number; height: number; resized: boolean }> } | null;
+  /** Widest image kept on import or download (wider ones get a resized copy). Default 3840. */
+  maxImageWidth?: number;
 };
+
+const MAX_IMAGE_WIDTH = 3840;
 
 const clamp = (value: unknown, min: number, max: number, fallback: number): number => {
   const n = Number(value);
@@ -74,11 +93,26 @@ export class EditEngine {
     const next: EditProject = JSON.parse(JSON.stringify(project));
     const added: EditAsset[] = [];
     for (const input of paths.slice(0, MAX_IMPORT)) {
-      const file = await resolveMediaPath(input, this.deps.home, this.deps.userData);
-      const existing = Object.values(next.assets).find(asset => asset.path === file);
+      let file = await resolveMediaPath(input, this.deps.home, this.deps.userData);
+      const original = file;
+      const existing = Object.values(next.assets).find(asset => (asset.path === file || asset.original === file) && !asset.crop);
       if (existing) { added.push(existing); continue; }
-      const kind = mediaKind(file);
+      let kind = mediaKind(file);
       if (!kind) throw new EditOpError('That file type is not supported.');
+      let resizedFrom: string | undefined;
+      if (kind === 'image') {
+        // Oversized photos caused render glitches: keep a copy at most 3840 px wide; the original is untouched.
+        const max = this.deps.maxImageWidth || MAX_IMAGE_WIDTH;
+        const meta = await sharp(file).metadata().catch(() => null);
+        if (meta?.width && meta.width > max) {
+          const dir = next.folder ? path.join(next.folder, 'Media', 'Photos') : path.join(this.deps.root, next.id, 'media');
+          const copy = await uniquePath(path.join(dir, `${path.parse(file).name} ${max}px${/png$/i.test(meta.format || '') ? '.png' : '.jpg'}`));
+          await savePhoto(await fs.readFile(file), copy, max);
+          resizedFrom = `${meta.width}x${meta.height}`;
+          file = copy;
+          kind = mediaKind(file) || kind;
+        }
+      }
       const probe = await probeMedia(this.deps.ffprobe, file);
       if (kind !== 'image' && !(probe.duration > 0)) throw new EditOpError(`${path.basename(file)} has no readable duration.`);
       if (kind === 'video' && !probe.video) throw new EditOpError(`${path.basename(file)} has no video stream.`);
@@ -99,6 +133,8 @@ export class EditEngine {
         fps: probe.video?.fps || 0,
         hasVideo: Boolean(probe.video) && kind !== 'audio',
         hasAudio: Boolean(probe.audio) && kind !== 'image',
+        ...(probe.video?.alpha && kind !== 'audio' ? { alpha: true } : {}),
+        ...(resizedFrom ? { resizedFrom, original } : {}),
         source
       };
       next.assets[id] = asset;
@@ -108,6 +144,124 @@ export class EditEngine {
     next.updatedAt = new Date().toISOString();
     await this.store.commit(project, next);
     return { project: next, assets: added };
+  }
+
+  /** Imports a source and appends clips (source in/out seconds) end to end on V1 of the open project. */
+  async appendClips(source: string, clips: { srcIn: number; srcOut: number; id?: string }[]): Promise<any> {
+    return this.locked(async () => {
+      await this.store.active();
+      const { assets } = await this.importFiles([source]);
+      const asset = assets[0];
+      let current = await this.store.active();
+      const startAt = projectDuration(current);
+      const track = asset.kind === 'audio' ? 'A1' : 'V1';
+      const ops = clips.map((clip: any) => ({ op: 'add', asset: asset.id, track, in: clip.srcIn, out: clip.srcOut, ...(clip.id ? { name: String(clip.id), meta: { cutId: clip.id, seg: clip.seg, chapter: clip.chapter, chapterSub: clip.chapterSub, angle: clip.angle, words: clip.words, text: typeof clip.text === 'string' ? clip.text.slice(0, 400) : undefined } } : {}) }));
+      for (let i = 0; i < ops.length; i += 400) {
+        const { project: next } = applyOps(current, ops.slice(i, i + 400));
+        await this.store.commit(current, next);
+        current = next;
+      }
+      return { asset: asset.id, added: clips.length, from: Number(startAt.toFixed(3)), to: Number(projectDuration(current).toFixed(3)), ...this.summary(current), warnings: lintProject(current) };
+    });
+  }
+
+  /** Resolves an asset id in the open project to its file path and asset record. */
+  async resolveAsset(assetId: string): Promise<EditAsset> {
+    const project = await this.store.active();
+    const asset = project.assets[String(assetId || '')];
+    if (!asset) throw new EditOpError(`Asset "${assetId}" was not found in the open project.`, 'E_NOT_FOUND');
+    return asset;
+  }
+
+  /**
+   * Takes a snapshot of the open project, imports the cleaned audio WAV, and swaps
+   * every audio clip referencing the source asset (or its crop regions) to the cleaned
+   * audio asset, keeping all cuts, trims, links and fades intact.
+   */
+  async replaceAssetAudio(
+    target: { assetId?: string; sourcePath?: string },
+    cleanedAudioPath: string,
+    label = 'before audio cleanup'
+  ): Promise<{ snapshot: string; cleanedAssetId: string; updatedClips: number; tracks: string[] }> {
+    return this.locked(async () => {
+      const project = await this.store.active();
+      const matched = new Set<string>();
+      if (target.assetId) {
+        const base = project.assets[target.assetId];
+        if (!base) throw new EditOpError(`Asset "${target.assetId}" was not found in the open project.`, 'E_NOT_FOUND');
+        const rootId = base.parent || base.id;
+        matched.add(rootId);
+        for (const asset of Object.values(project.assets)) {
+          if (asset.id === base.id || asset.parent === rootId || asset.path === base.path) matched.add(asset.id);
+        }
+      } else if (target.sourcePath) {
+        const wanted = await fs.realpath(target.sourcePath).catch(() => path.resolve(target.sourcePath!));
+        for (const asset of Object.values(project.assets)) {
+          const assetReal = await fs.realpath(asset.path).catch(() => path.resolve(asset.path));
+          if (assetReal === wanted || asset.original === wanted) matched.add(asset.id);
+        }
+      }
+
+      const saved = await this.store.snapshot(project, label);
+      const next: EditProject = JSON.parse(JSON.stringify(project));
+      const cleanFile = await resolveMediaPath(cleanedAudioPath, this.deps.home, this.deps.userData);
+      let cleanedAsset = Object.values(next.assets).find(asset => asset.path === cleanFile && asset.kind === 'audio');
+      if (!cleanedAsset) {
+        const probe = await probeMedia(this.deps.ffprobe, cleanFile);
+        if (!probe.audio || !(probe.duration > 0)) throw new EditOpError('Cleaned audio file has no readable audio stream.');
+        let id = '';
+        for (let n = Object.keys(next.assets).length + 1; ; n += 1) {
+          id = `a${n}`;
+          if (!next.assets[id]) break;
+        }
+        cleanedAsset = {
+          id,
+          name: path.basename(cleanFile),
+          path: cleanFile,
+          kind: 'audio',
+          duration: probe.duration,
+          width: 0,
+          height: 0,
+          fps: 0,
+          hasVideo: false,
+          hasAudio: true
+        };
+        next.assets[id] = cleanedAsset;
+      }
+
+      let updatedClips = 0;
+      const tracks = new Set<string>();
+      for (const clip of next.clips) {
+        if (clip.kind === 'audio' && clip.asset && matched.has(clip.asset)) {
+          clip.asset = cleanedAsset.id;
+          updatedClips += 1;
+          tracks.add(clip.track);
+        }
+      }
+
+      next.revision += 1;
+      next.updatedAt = new Date().toISOString();
+      await this.store.commit(project, next);
+      this.deps.trackTool?.('agent_audio_apply');
+      return {
+        snapshot: `v${saved.version}`,
+        cleanedAssetId: cleanedAsset.id,
+        updatedClips,
+        tracks: [...tracks].sort()
+      };
+    });
+  }
+
+  /** Saves a version of the open project, then applies ops as one undoable change. */
+  async applyWithSnapshot(ops: any[], label: string): Promise<any> {
+    return this.locked(async () => {
+      const project = await this.store.active();
+      const saved = await this.store.snapshot(project, label);
+      let draft = project;
+      for (let i = 0; i < ops.length; i += 400) draft = applyOps(draft, ops.slice(i, i + 400)).project;
+      await this.store.commit(project, draft);
+      return { snapshot: `v${saved.version}`, ...this.summary(draft), warnings: lintProject(draft) };
+    });
   }
 
   async edit(input: any): Promise<AgentResult> {
@@ -121,15 +275,42 @@ export class EditEngine {
   }
 
   private summary(project: EditProject): any {
-    return { id: project.id, revision: project.revision, duration: Number(projectDuration(project).toFixed(3)), clips: project.clips.length, size: `${project.width}x${project.height}@${project.fps}` };
+    return { id: project.id, revision: project.revision, duration: Number(projectDuration(project).toFixed(3)), clips: project.clips.length, size: `${project.width}x${project.height}@${project.fps}`, folder: project.folder };
+  }
+
+  /** The open project's folder, if it has one. */
+  async activeFolder(): Promise<string | null> {
+    try { return (await this.store.active()).folder || null; } catch { return null; }
+  }
+
+  /** Cache key for the audio mix of a range: audio clips, their source files and the range. */
+  private async mixKey(project: EditProject, extra: Record<string, unknown>): Promise<string> {
+    const clips = project.clips.filter(clip => clip.kind === 'audio' && !clip.mute).map(clip => ({ ...clip, id: undefined, link: undefined }));
+    const used = [...new Set(clips.map(clip => clip.asset).filter(Boolean))] as string[];
+    const stamps = await Promise.all(used.map(id => fileStamp(project.assets[id]?.path || '')));
+    return hashKey({ clips, stamps, fps: project.fps, ...extra });
   }
 
   private async editAction(action: string, input: any): Promise<AgentResult> {
     switch (action) {
       case 'new': {
-        const project = await this.store.create(createProject({ name: input?.name, width: input?.width, height: input?.height, fps: input?.fps }));
+        let folder: string | undefined;
+        if (input?.folder !== undefined && input?.folder !== null && input?.folder !== '') {
+          if (!this.deps.prepareFolder) return fail('E_NOT_IMPLEMENTED', 'Project folders are not available in this build.');
+          folder = await this.deps.prepareFolder(input.folder);
+          for (const name of PROJECT_LAYOUT) await fs.mkdir(path.join(folder, name), { recursive: true });
+        }
+        const project = await this.store.create(createProject({ name: input?.name, width: input?.width, height: input?.height, fps: input?.fps, folder }));
         this.deps.trackTool?.('agent_edit_project');
-        return ok({ action, project: this.summary(project), name: project.name, next: 'Import media with action "import", then build with action "ops".' });
+        return ok({
+          action,
+          project: this.summary(project),
+          name: project.name,
+          layout: folder ? Object.fromEntries(PROJECT_LAYOUT.map(name => [name, path.join(folder as string, name)])) : undefined,
+          next: folder
+            ? 'Import media with action "import", then build with action "ops". smoothy_engine runs in Work/ by default; exports and versions go to Edit/.'
+            : 'Import media with action "import", then build with action "ops". Pass folder to also get Edit/, Media/, Graphics/ and Work/ on disk.'
+        });
       }
       case 'list':
         return ok({ action, current: this.store.currentId(), projects: await this.store.list() });
@@ -160,13 +341,49 @@ export class EditEngine {
       case 'cut_silence': return this.cutSilence(input);
       case 'multicam': return this.multicam(input);
       case 'transcribe': return this.transcribe(input);
+      case 'region': {
+        const project = await this.store.active();
+        const next: EditProject = JSON.parse(JSON.stringify(project));
+        const asset = defineRegion(next, { asset: input?.asset, name: input?.name, crop: input?.crop });
+        next.revision += 1;
+        next.updatedAt = new Date().toISOString();
+        await this.store.commit(project, next);
+        return ok({ action, asset: { id: asset.id, name: asset.name, size: `${asset.crop?.w}x${asset.crop?.h}`, crop: asset.crop, of: asset.parent }, next: `Add clips with {op:"add", asset:"${asset.id}"}; they keep the source timecode. Punch in with {op:"set", clip, zoom, anchor:[ex, ey]}.` });
+      }
+      case 'music_bed': return this.musicBed(input);
+      case 'sfx': return this.sfx(input);
+      case 'sfx_search': {
+        const library = await loadSfx(this.deps.sfxDir);
+        const query = typeof input?.query === 'string' ? input.query.trim().toLowerCase() : '';
+        const words = query.split(/\s+/).filter(Boolean);
+        const hits = library.filter(item => (!input?.category || item.category === input.category) && words.every((word: string) => [item.id, item.title, item.category, ...item.tags].join(' ').toLowerCase().includes(word)));
+        return ok({ action, count: hits.length, categories: [...new Set(library.map(item => item.category))], sounds: hits.slice(0, 40).map(item => ({ id: item.id, title: item.title, category: item.category, tags: item.tags.slice(0, 6), seconds: item.duration, license: item.license })) });
+      }
+      case 'snapshot': {
+        const project = await this.store.active();
+        const saved = await this.store.snapshot(project, typeof input?.label === 'string' ? input.label : '');
+        this.deps.trackTool?.('agent_edit_snapshot');
+        return ok({ action, version: saved.version, name: `v${saved.version}`, revision: project.revision, file: saved.file, next: 'Restore later with action "restore" version ' + saved.version + '.' });
+      }
+      case 'versions': {
+        const project = await this.store.active();
+        const versions = await this.store.versions(project);
+        return ok({ action, count: versions.length, versions: versions.map(({ file, ...row }) => row), current: project.revision });
+      }
+      case 'restore': {
+        const version = Number(String(input?.version ?? '').replace(/^v/i, ''));
+        if (!Number.isInteger(version) || version < 1) return fail('E_BAD_REQUEST', 'Provide version, for example 2 or "v2".');
+        const project = await this.store.restore(version);
+        this.deps.trackTool?.('agent_edit_restore');
+        return ok({ action, restored: `v${version}`, ...this.summary(project), note: 'Undo returns to the state before the restore. Saved versions are kept.', warnings: lintProject(project) });
+      }
       case 'undo':
       case 'redo': {
         const project = action === 'undo' ? await this.store.undo() : await this.store.redo();
         return ok({ action, ...this.summary(project), warnings: lintProject(project) });
       }
       default:
-        return fail('E_BAD_REQUEST', `Unknown edit action: ${action}`, 'Use new, list, open, show, import, ops, cut_silence, multicam, transcribe, undo or redo.');
+        return fail('E_BAD_REQUEST', `Unknown edit action: ${action}`, 'Use new, list, open, show, import, region, ops, cut_silence, multicam, transcribe, music_bed, sfx, sfx_search, snapshot, versions, restore, undo or redo.');
     }
   }
 
@@ -178,7 +395,8 @@ export class EditEngine {
       if (action === 'sheet') return await this.sheet(project, input);
       if (action === 'export') return await this.export(project, input);
       if (action === 'analyze') return await this.analyze(project, input);
-      return fail('E_BAD_REQUEST', `Unknown render action: ${action}`, 'Use frame, sheet, export or analyze.');
+      if (action === 'proxy') return await this.proxy(project, input);
+      return fail('E_BAD_REQUEST', `Unknown render action: ${action}`, 'Use frame, sheet, proxy, export or analyze.');
     } catch (error: any) {
       if (error instanceof EditOpError) return fail(error.code, error.message);
       throw error;
@@ -271,7 +489,9 @@ export class EditEngine {
     });
     if (!approved) return fail('E_APPROVAL_TIMEOUT', 'The editor did not approve this export.', 'Open the Agentic tab and approve the export request.');
     const snapshot: EditProject = JSON.parse(JSON.stringify(project));
-    const output = path.join(this.deps.root, project.id, 'exports', `${name}-r${project.revision}-${preset}.mp4`);
+    const output = await uniquePath(project.folder
+      ? path.join(project.folder, 'Edit', `${name} r${project.revision} ${preset}.mp4`)
+      : path.join(this.deps.root, project.id, 'exports', `${name}-r${project.revision}-${preset}.mp4`));
     const job = this.deps.startJob('render.export', async (progress, signal, jobId) => {
       const workDir = path.join(this.deps.root, project.id, 'work', jobId.slice(0, 8));
       try {
@@ -286,6 +506,155 @@ export class EditEngine {
       }
     });
     return ok({ action: 'export', jobId: job.id, status: job.status, output, note: 'Poll smoothy_jobs with action "wait". The result holds the MP4 path.' });
+  }
+
+  /** A small draft render of the timeline for a quick watch-through. No approval: it stays in the project. */
+  private async proxy(project: EditProject, input: any): Promise<AgentResult> {
+    this.requireContent(project);
+    const width = Math.max(320, Math.min(1280, Math.round(Number(input?.width) || 640)));
+    const dir = project.folder ? path.join(project.folder, 'Work', 'proxy') : path.join(this.deps.root, project.id, 'proxy');
+    await fs.mkdir(dir, { recursive: true });
+    const output = await uniquePath(path.join(dir, `${safeName(project.name)} r${project.revision} proxy.mp4`));
+    const from = input?.from !== undefined ? Math.max(0, Number(input.from) || 0) : undefined;
+    const to = input?.to !== undefined ? Math.max(0, Number(input.to) || 0) : undefined;
+    const snapshot: EditProject = JSON.parse(JSON.stringify(project));
+    this.deps.trackTool?.('agent_edit_proxy');
+    const job = this.deps.startJob('render.proxy', async (progress, signal, jobId) => {
+      const workDir = path.join(this.deps.root, project.id, 'work', `px-${jobId.slice(0, 8)}`);
+      try {
+        const result = await exportProject(snapshot, { ffmpeg: this.deps.ffmpeg, workDir, output, preset: 'draft', width, from, to, loudnorm: false, signal, onProgress: progress });
+        progress(100, 'Proxy ready');
+        return { path: result.output, duration: Number(result.duration.toFixed(2)), bytes: (await fs.stat(result.output)).size, width };
+      } finally {
+        await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
+      }
+    });
+    return ok({ action: 'proxy', jobId: job.id, status: job.status, output, note: 'Draft quality for checking only. Poll smoothy_jobs with action "wait".' });
+  }
+
+  // ---- music bed and sound effects ----------------------------------------------
+
+  private async measure(file: string, kind: 'lufs' | 'levels'): Promise<any> {
+    const key = hashKey({ kind, stamp: await fileStamp(file) });
+    const hit = await this.deps.cache?.get('audio-measure', key);
+    if (hit) return hit;
+    const filter = kind === 'lufs' ? 'ebur128=peak=true:framelog=verbose' : 'astats=measure_perchannel=none:measure_overall=Peak_level+RMS_level';
+    const run = await runEngine(this.deps.ffmpeg, 'ffmpeg', ['-nostdin', '-hide_banner', '-nostats', '-i', file, '-vn', '-af', filter, '-f', 'null', '-'], { cwd: this.deps.root, timeoutMs: 600000, tailLines: 60 });
+    if (run.exitCode !== 0) throw new EditOpError(`Could not measure ${path.basename(file)}.`);
+    const value = kind === 'lufs' ? parseEbur128(run.stderrTail.join('\n')) : parseAstats(run.stderrTail.join('\n'));
+    await this.deps.cache?.set('audio-measure', key, value).catch(() => {});
+    return value;
+  }
+
+  private async musicBed(input: any): Promise<AgentResult> {
+    const project = await this.store.active();
+    let music = input?.asset ? project.assets[String(input.asset)] : undefined;
+    if (input?.asset && !music) return fail('E_NOT_FOUND', `Asset "${input.asset}" is not in this project.`);
+    let musicPath = music?.path;
+    if (!music) {
+      if (!input?.path) return fail('E_BAD_REQUEST', 'Provide the music as asset (from import or smoothy_library add) or path.');
+      musicPath = await resolveMediaPath(input.path, this.deps.home, this.deps.userData);
+    }
+    if (music && !music.hasAudio) return fail('E_BAD_REQUEST', `${music.name} has no audio.`);
+    const total = Number(input?.duration) > 0 ? Number(input.duration) : projectDuration(project);
+    if (!(total > 1)) return fail('E_BAD_REQUEST', 'The timeline is empty; build the edit before the music bed.');
+    const probe = await probeMedia(this.deps.ffprobe, musicPath as string);
+    const targetLufs = clamp(input?.targetLufs, -60, -10, -33.5);
+    const liftLufs = clamp(input?.liftLufs, -60, -6, -24);
+    const crossfade = clamp(input?.crossfade, 0.2, 10, 3);
+    const voiceTrack = typeof input?.voiceTrack === 'string' ? input.voiceTrack.toUpperCase() : 'A1';
+    let lifts: Window[];
+    if (Array.isArray(input?.lifts)) lifts = input.lifts.map((item: any) => ({ from: Number(item?.from), to: Number(item?.to) })).filter((item: Window) => Number.isFinite(item.from) && Number.isFinite(item.to));
+    else lifts = speechGaps(project, voiceTrack, total, clamp(input?.minGap, 0.3, 30, 1.5));
+    this.deps.trackTool?.('agent_edit_music_bed');
+    const job = this.deps.startJob('edit.music_bed', async (progress, signal) => {
+      progress(3, 'Measuring the music');
+      const lufs = await this.measure(musicPath as string, 'lufs');
+      if (!Number.isFinite(lufs?.integrated)) throw new EditOpError('Could not measure the music loudness.');
+      const { graph, loops, windows } = musicBedGraph({ total, sourceSeconds: probe.duration, sourceLufs: lufs.integrated, targetLufs, liftLufs, lifts, crossfade, fadeIn: clamp(input?.fadeIn, 0, 10, 1.2), fadeOut: clamp(input?.fadeOut, 0, 20, 3) });
+      const dir = project.folder ? path.join(project.folder, 'Media', 'Music') : path.join(this.deps.root, project.id, 'audio');
+      await fs.mkdir(dir, { recursive: true });
+      const output = await uniquePath(path.join(dir, `${safeName(path.parse(musicPath as string).name)} bed r${project.revision}.wav`));
+      const script = `${output}.graph.txt`;
+      await fs.writeFile(script, graph);
+      try {
+        progress(8, `Building the bed (${loops} loop${loops === 1 ? '' : 's'})`);
+        const inputs = Array.from({ length: loops }, () => ['-i', musicPath as string]).flat();
+        const run = await runEngine(this.deps.ffmpeg, 'ffmpeg', ['-nostdin', '-hide_banner', '-y', ...inputs, '-filter_complex_script', script, '-map', '[o]', '-ac', '2', '-c:a', 'pcm_s24le', output], { cwd: dir, signal, timeoutMs: 3600000, expected: total, onProgress: p => progress(8 + p * 0.8, 'Building the bed') });
+        if (run.exitCode !== 0) throw new EditOpError(`The music bed failed: ${run.stderrTail.slice(-2).join(' ')}`);
+      } finally {
+        await fs.rm(script, { force: true }).catch(() => {});
+      }
+      progress(92, 'Adding it to the timeline');
+      return this.locked(async () => {
+        const { assets } = await this.importFiles([output], music?.source);
+        let current = await this.store.load(project.id);
+        const ops: any[] = input?.replace === false ? [] : current.clips.filter(clip => (clip.meta as any)?.kind === 'music').map(clip => ({ op: 'remove', clip: clip.id }));
+        const used = new Set(current.clips.filter(clip => (clip.meta as any)?.kind !== 'music' && clip.track[0] === 'A').map(clip => clip.track));
+        let track = typeof input?.track === 'string' ? input.track.toUpperCase() : '';
+        if (!track) for (let n = 2; n < 40; n += 1) if (!used.has(`A${n}`)) { track = `A${n}`; break; }
+        ops.push({ op: 'add', asset: assets[0].id, at: 0, track, name: 'Music bed', meta: { kind: 'music', source: path.basename(musicPath as string), license: music?.source?.license, credit: music?.source?.credit } });
+        const { project: next } = applyOps(current, ops);
+        await this.store.commit(current, next);
+        current = next;
+        progress(100, 'Music bed ready');
+        return {
+          file: output, track, seconds: Number(total.toFixed(2)), sourceLufs: lufs.integrated, targetLufs, liftLufs, lifts: windows.length,
+          liftWindows: windows.slice(0, 12).map(w => ({ from: Number(w.from.toFixed(2)), to: Number(w.to.toFixed(2)) })),
+          credit: music?.source?.credit, license: music?.source?.license, warnings: lintProject(current)
+        };
+      });
+    });
+    return ok({ action: 'music_bed', jobId: job.id, status: job.status, liftWindows: lifts.length, note: 'Poll smoothy_jobs with action "wait". Tell the editor the music licence and credit.' });
+  }
+
+  private async sfx(input: any): Promise<AgentResult> {
+    const cues = Array.isArray(input?.cues) ? input.cues.slice(0, 300) : [];
+    if (!cues.length) return fail('E_BAD_REQUEST', 'Provide cues: [{at, name}] (name = id, title or tags from sfx_search) or [{at, path}].');
+    const library = await loadSfx(this.deps.sfxDir);
+    const resolved: { at: number; file: string; title: string; entry?: any; gainDb: number; level: boolean }[] = [];
+    const unknown: string[] = [];
+    for (const cue of cues) {
+      const at = Number(cue?.at);
+      if (!Number.isFinite(at) || at < 0) { unknown.push(`at ${cue?.at}`); continue; }
+      if (cue?.path) {
+        const file = await resolveMediaPath(cue.path, this.deps.home, this.deps.userData);
+        resolved.push({ at, file, title: path.parse(file).name, gainDb: Number(cue.gainDb) || 0, level: cue.level !== false && input?.level !== false });
+        continue;
+      }
+      const entry = findSfx(library, String(cue?.name ?? cue?.id ?? ''));
+      if (!entry) { unknown.push(String(cue?.name ?? cue?.id ?? '')); continue; }
+      resolved.push({ at, file: entry.file, title: entry.title, entry, gainDb: Number(cue.gainDb) || 0, level: cue.level !== false && input?.level !== false });
+    }
+    if (!resolved.length) return fail('E_NOT_FOUND', `No cue matched a sound: ${unknown.slice(0, 5).join(', ')}`, 'List sounds with smoothy_edit action "sfx_search".');
+    const peakTarget = clamp(input?.peakDb, -40, -1, -18);
+    const rmsMax = clamp(input?.rmsMaxDb, -60, -6, -32);
+    const gains = new Map<string, number>();
+    for (const file of new Set(resolved.map(item => item.file))) {
+      const levels = await this.measure(file, 'levels');
+      gains.set(file, levelGain(levels.peak, levels.rms, peakTarget, rmsMax));
+    }
+    this.deps.trackTool?.('agent_edit_sfx');
+    // Edit actions already hold the project lock (see edit()), so no second lock here.
+    {
+      const { assets } = await this.importFiles([...new Set(resolved.map(item => item.file))]);
+      const byPath = new Map(assets.map(asset => [asset.path, asset]));
+      const current = await this.store.active();
+      const lanes = packCues(current, resolved.map(item => ({ at: item.at, length: byPath.get(item.file)?.duration || 1 })));
+      const ops = resolved.map((item, i) => ({
+        op: 'add', asset: byPath.get(item.file)!.id, at: item.at, track: lanes[i],
+        volume: (item.level ? gains.get(item.file) || 0 : 0) + item.gainDb,
+        name: item.title, meta: { kind: 'sfx', sound: item.entry?.id, license: item.entry?.license, author: item.entry?.author }
+      }));
+      const { project: next } = applyOps(current, ops);
+      await this.store.commit(current, next);
+      return ok({
+        action: 'sfx', placed: ops.length, tracks: [...new Set(lanes)], unknown: unknown.length ? unknown : undefined,
+        cues: ops.slice(0, 12).map((op, i) => ({ at: resolved[i].at, sound: resolved[i].title, track: op.track, gainDb: Number(op.volume.toFixed(1)) })),
+        licenses: [...new Set(resolved.map(item => item.entry ? `${item.entry.title}: ${item.entry.license}${item.entry.author ? ` (${item.entry.author})` : ''}` : null).filter(Boolean))].slice(0, 20),
+        warnings: lintProject(next)
+      });
+    }
   }
 
   // ---- Smoothy features ------------------------------------------------------
@@ -306,12 +675,21 @@ export class EditEngine {
     const minSilence = clamp(input?.minSilence, 0.2, 10, 0.5);
     const from = input?.from !== undefined ? Math.max(0, Number(input.from) || 0) : 0;
     const tracks = Array.isArray(input?.tracks) ? input.tracks.map((track: unknown) => String(track).toUpperCase()) : undefined;
+    const to = input?.to !== undefined ? Number(input.to) : undefined;
+    const key = this.deps.cache ? await this.mixKey(project, { from, to, tracks, thresholdDb, minSilence }) : '';
+    const cached = key ? await this.deps.cache?.get<{ mix: { duration: number }; result: Awaited<ReturnType<typeof analyzeWav>> }>('analyze', key) : null;
     return this.withWorkDir(project, 'analyze', async dir => {
-      const mix = await renderAudioMix(project, this.deps.ffmpeg, dir, { from, to: input?.to !== undefined ? Number(input.to) : undefined, tracks, tag: 'analyze' });
-      const result = await analyzeWav(this.deps.ffmpeg, mix.wav, { thresholdDb, minSilence });
+      let mix: { duration: number } = cached?.mix as any;
+      let result = cached?.result as Awaited<ReturnType<typeof analyzeWav>>;
+      if (!cached) {
+        const rendered = await renderAudioMix(project, this.deps.ffmpeg, dir, { from, to, tracks, tag: 'analyze' });
+        result = await analyzeWav(this.deps.ffmpeg, rendered.wav, { thresholdDb, minSilence });
+        mix = { duration: rendered.duration };
+        if (key) await this.deps.cache?.set('analyze', key, { mix, result }).catch(() => {});
+      }
       const silences = result.silences.map(item => ({ start: Number((item.start + from).toFixed(2)), end: Number((Math.min(item.end, mix.duration) + from).toFixed(2)) }));
       const silentSeconds = Number(silences.reduce((sum, item) => sum + (item.end - item.start), 0).toFixed(1));
-      return ok({ action: 'analyze', duration: Number(mix.duration.toFixed(2)), loudness: result.loudness, silentSeconds, silenceCount: silences.length, silences: silences.slice(0, 40), thresholdDb, minSilence });
+      return ok({ action: 'analyze', duration: Number(mix.duration.toFixed(2)), loudness: result.loudness, silentSeconds, silenceCount: silences.length, silences: silences.slice(0, 40), thresholdDb, minSilence, cached: Boolean(cached) || undefined });
     });
   }
 
@@ -388,12 +766,20 @@ export class EditEngine {
           progress(5, 'Preparing speech engine');
           await speech.prepare((percent, message) => progress(5 + percent * 0.25, message), signal);
         }
-        progress(32, 'Mixing dialogue');
-        const mix = await renderAudioMix(project, this.deps.ffmpeg, dir, { from, to, tracks, tag: 'speech' }, signal);
-        progress(38, 'Transcribing');
-        const result = await speech.transcribe(mix.wav, language, signal, (percent, message) => progress(38 + percent * 0.52, message));
+        const key = this.deps.cache ? await this.mixKey(project, { from, to, tracks, model: speech.describe(), language: language || 'auto' }) : '';
+        let result = key ? await this.deps.cache?.get<Awaited<ReturnType<SpeechService['transcribe']>>>('transcribe', key) : null;
+        const cachedTranscript = Boolean(result);
+        if (!result) {
+          progress(32, 'Mixing dialogue');
+          const mix = await renderAudioMix(project, this.deps.ffmpeg, dir, { from, to, tracks, tag: 'speech' }, signal);
+          progress(38, 'Transcribing');
+          result = await speech.transcribe(mix.wav, language, signal, (percent, message) => progress(38 + percent * 0.52, message));
+          if (key) await this.deps.cache?.set('transcribe', key, result).catch(() => {});
+        } else {
+          progress(90, 'Using the cached transcript');
+        }
         const text = result.chunks.map(chunk => chunk.text).join(' ').trim();
-        const captions = speech.format({ text, chunks: result.chunks, language: result.language }, { maxCharsPerLine: clamp(input?.maxChars, 12, 80, 38), maxLines: input?.lines === 1 ? 1 : 2, minDurationSeconds: 0.8, maxDurationSeconds: 6, gapBetweenCaptions: 0.04 })
+        const captions = speech.format({ text, chunks: result.chunks, language: result.language }, { maxCharsPerLine: clamp(input?.maxChars, 1, 80, 38), maxLines: input?.lines === 1 ? 1 : 2, minDurationSeconds: 0.8, maxDurationSeconds: 6, gapBetweenCaptions: 0.04 })
           .map(item => ({ start: Number((item.startTime + from).toFixed(2)), end: Number((item.endTime + from).toFixed(2)), text: item.text.replace(/\s+/g, ' ').trim() }));
         let placed = 0;
         if (place && captions.length) {
@@ -406,7 +792,7 @@ export class EditEngine {
           });
         }
         progress(100, 'Transcript ready');
-        return { language: result.language, lines: captions.length, placedOnT1: placed, transcript: captions.slice(0, 300).map(item => `${item.start.toFixed(1)}-${item.end.toFixed(1)} ${item.text}`), truncated: captions.length > 300 || undefined };
+        return { language: result.language, cached: cachedTranscript || undefined, lines: captions.length, placedOnT1: placed, transcript: captions.slice(0, 300).map(item => `${item.start.toFixed(1)}-${item.end.toFixed(1)} ${item.text}`), truncated: captions.length > 300 || undefined };
       } finally {
         await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
       }
@@ -416,43 +802,120 @@ export class EditEngine {
 
   // ---- library ---------------------------------------------------------------
 
+  private readonly photoHits = new Map<string, PhotoHit>();
+
+  /** The project's running credits file (Edit/CREDITS.txt in a project folder). */
+  private creditsFile(project: EditProject): string {
+    return project.folder ? path.join(project.folder, 'Edit', 'CREDITS.txt') : path.join(this.deps.root, project.id, 'CREDITS.txt');
+  }
+
+  private async appendCredit(project: EditProject, line: string | null): Promise<string | null> {
+    if (!line) return null;
+    const file = this.creditsFile(project);
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    const current = await fs.readFile(file, 'utf8').catch(() => '');
+    if (!current.split('\n').includes(line)) await fs.appendFile(file, `${current && !current.endsWith('\n') ? '\n' : ''}${line}\n`);
+    return file;
+  }
+
   async library(input: any): Promise<AgentResult> {
     const service = this.deps.library;
-    if (!service) return fail('E_NOT_IMPLEMENTED', 'The music and stock library is not available in this build.');
     const action = String(input?.action || 'music');
     const limit = Math.round(clamp(input?.limit, 1, 20, 8));
     const controller = new AbortController();
     try {
+      if (action === 'photo') {
+        if (!this.deps.photos) return fail('E_NOT_IMPLEMENTED', 'Photo search is not available in this build.');
+        const query = String(input?.query || '').trim().slice(0, 120);
+        if (!query) return fail('E_BAD_REQUEST', 'Provide a search query.');
+        const license: PhotoLicense = input?.license === 'cc-by' ? 'cc-by' : 'pd';
+        const hits = await this.deps.photos.search({ query, license, limit, orientation: typeof input?.orientation === 'string' ? input.orientation : undefined }, controller.signal);
+        this.deps.trackTool?.('agent_photo_search');
+        for (const hit of hits) this.photoHits.set(hit.id, hit);
+        while (this.photoHits.size > 300) this.photoHits.delete(this.photoHits.keys().next().value as string);
+        return ok({
+          action, count: hits.length, license,
+          photos: hits.map(hit => ({ id: hit.id, title: hit.title, author: hit.author, license: hit.license, attribution: hit.attribution, size: `${hit.width}x${hit.height}`, restrictions: hit.restrictions, page: hit.page })),
+          note: license === 'pd' ? 'CC0 and public domain only. Pass license:"cc-by" to include CC BY (the author must be credited).' : 'Includes CC BY: credit each author (the credits file is written for you). Share-alike, non-commercial and no-derivatives licences are never offered.',
+          next: 'smoothy_library action "add" kind "photo" id <id>'
+        });
+      }
+      if (action === 'music' && input?.license && input.license !== 'any') return fail('E_BAD_REQUEST', 'The music archive does not state licences, so it cannot be filtered by licence (for example Claim Clear).', 'Search without license, then confirm the track\'s licence with its provider before publishing.');
+      if (!service && action !== 'add' && action !== 'credits') return fail('E_NOT_IMPLEMENTED', 'The music and stock library is not available in this build.');
       if (action === 'music') {
-        const hits = await service.musicSearch({ query: typeof input?.query === 'string' ? input.query.slice(0, 120) : undefined, mood: typeof input?.mood === 'string' ? input.mood : undefined, genre: typeof input?.genre === 'string' ? input.genre : undefined, limit });
-        return ok({ action, count: hits.length, tracks: hits, note: 'YouTube Audio Library archive. Licence is not verified by the archive; tell the editor to check it before publishing.', next: 'smoothy_library action "add" kind "music" id <id>' });
+        const hits = await service!.musicSearch({ query: typeof input?.query === 'string' ? input.query.slice(0, 120) : undefined, mood: typeof input?.mood === 'string' ? input.mood : undefined, genre: typeof input?.genre === 'string' ? input.genre : undefined, limit });
+        return ok({ action, count: hits.length, tracks: hits, note: 'YouTube Audio Library archive. The archive does not state licences, so Content ID claims are possible; tell the editor to check each track before publishing.', next: 'smoothy_library action "add" kind "music" id <id>' });
       }
       if (action === 'stock') {
         const query = String(input?.query || '').trim();
         if (!query) return fail('E_BAD_REQUEST', 'Provide a search query.');
-        const hits = await service.stockSearch({ query, provider: typeof input?.provider === 'string' ? input.provider : 'all', orientation: typeof input?.orientation === 'string' ? input.orientation : undefined, limit }, controller.signal);
-        return ok({ action, count: hits.length, clips: hits, next: 'smoothy_library action "add" kind "stock" id <ref>' });
+        const hits = (await service!.stockSearch({ query, provider: typeof input?.provider === 'string' ? input.provider : 'all', orientation: typeof input?.orientation === 'string' ? input.orientation : undefined, limit: 20 }, controller.signal))
+          .map(hit => ({ ...hit, attribution: stockAttribution(hit.license) }));
+        const filtered = input?.license === 'no-attribution' ? hits.filter(hit => hit.attribution === 'none') : hits;
+        return ok({ action, count: Math.min(limit, filtered.length), clips: filtered.slice(0, limit), filteredOut: hits.length - filtered.length || undefined, next: 'smoothy_library action "add" kind "stock" id <ref>' });
+      }
+      if (action === 'credits') {
+        const project = await this.store.active();
+        const lines = Object.values(project.assets).filter(asset => !asset.crop).map(creditLine).filter((line): line is string => Boolean(line));
+        const unique = [...new Set(lines)];
+        const file = this.creditsFile(project);
+        await fs.mkdir(path.dirname(file), { recursive: true });
+        await fs.writeFile(file, unique.length ? `${unique.join('\n')}\n` : '');
+        this.deps.trackTool?.('agent_credits_written');
+        return ok({ action, count: unique.length, file, lines: unique.slice(0, 30), note: 'Paste these into the video description. Rewritten from every sourced asset in the project.' });
       }
       if (action === 'add') {
-        const kind = input?.kind === 'stock' ? 'stock' : input?.kind === 'music' ? 'music' : '';
+        const kind = input?.kind === 'stock' ? 'stock' : input?.kind === 'music' ? 'music' : input?.kind === 'photo' ? 'photo' : '';
         const id = String(input?.id || '');
-        if (!kind || !id) return fail('E_BAD_REQUEST', 'Provide kind ("music" or "stock") and the id/ref from a search.');
-        await this.store.active();
-        const approved = await this.deps.requestApproval('smoothy_library.add', { action, kind, id: id.slice(0, 60), note: kind === 'music' ? 'Downloads this track into your Smoothy Audio Library and adds it to the edit project.' : 'Downloads this footage into your Smoothy Stock Footage folder and adds it to the edit project.' });
+        if (!kind || !id) return fail('E_BAD_REQUEST', 'Provide kind ("music", "stock" or "photo") and the id/ref from a search.');
+        if (kind !== 'photo' && !service) return fail('E_NOT_IMPLEMENTED', 'The music and stock library is not available in this build.');
+        const project = await this.store.active();
+        const hit = kind === 'photo' ? this.photoHits.get(id) : undefined;
+        if (kind === 'photo' && (!hit || !this.deps.photos)) return fail('E_NOT_FOUND', 'Search photos again and use an id from the results.');
+        const approved = await this.deps.requestApproval('smoothy_library.add', { action, kind, id: id.slice(0, 60), ...(hit ? { title: hit.title, author: hit.author, license: hit.license } : {}), note: kind === 'music' ? 'Downloads this track into your Smoothy Audio Library and adds it to the edit project.' : kind === 'stock' ? 'Downloads this footage into your Smoothy Stock Footage folder and adds it to the edit project.' : 'Downloads this photo (at most 3840 px wide) into the project and adds it to the edit.' });
         if (!approved) return fail('E_APPROVAL_TIMEOUT', 'The editor did not approve this download.', 'Open the Agentic tab and approve the request.');
         const job = this.deps.startJob(`library.${kind}`, async (progress, signal) => {
-          const fetched = kind === 'music' ? await service.musicFetch(id, signal, progress) : await service.stockFetch(id, signal, progress);
+          let fetched: { path: string; title: string; license?: string; credit?: string; url?: string; provider?: string };
+          let resized = false;
+          if (kind === 'photo') {
+            const dir = project.folder ? path.join(project.folder, 'Media', 'Photos') : path.join(this.deps.root, project.id, 'photos');
+            const ext = hit!.mime === 'image/png' ? '.png' : hit!.mime === 'image/webp' ? '.webp' : '.jpg';
+            const file = await uniquePath(path.join(dir, `${safeName(hit!.title)}${ext}`));
+            progress(10, 'Downloading photo');
+            const saved = await this.deps.photos!.download(hit!, file, this.deps.maxImageWidth || MAX_IMAGE_WIDTH, signal);
+            resized = saved.resized;
+            fetched = { path: saved.path, title: hit!.title, license: hit!.license, provider: 'Wikimedia Commons', url: hit!.page, credit: `"${hit!.title}" by ${hit!.author}` };
+          } else {
+            fetched = kind === 'music' ? await service!.musicFetch(id, signal, progress) : await service!.stockFetch(id, signal, progress);
+          }
           progress(92, 'Adding to the project');
-          const { assets } = await this.locked(() => this.importFiles([fetched.path], { provider: fetched.provider || (kind === 'music' ? 'YouTube Audio Library' : 'stock'), license: fetched.license, credit: fetched.credit, url: fetched.url }));
+          const { assets } = await this.locked(() => this.importFiles([fetched.path], { provider: fetched.provider || (kind === 'music' ? 'YouTube Audio Library' : kind === 'photo' ? 'Wikimedia Commons' : 'stock'), license: fetched.license, credit: fetched.credit, url: fetched.url }));
           const asset = assets[0];
-          return { asset: { id: asset.id, name: asset.name, kind: asset.kind, duration: Number(asset.duration.toFixed(2)) }, title: fetched.title, license: fetched.license, credit: fetched.credit, url: fetched.url };
+          const credits = await this.appendCredit(await this.store.active(), creditLine(asset)).catch(() => null);
+          if (kind === 'photo') this.deps.trackTool?.('agent_photo_add');
+          return { asset: { id: asset.id, name: asset.name, kind: asset.kind, duration: Number(asset.duration.toFixed(2)), size: asset.kind === 'audio' ? undefined : `${asset.width}x${asset.height}` }, title: fetched.title, license: fetched.license, credit: fetched.credit, url: fetched.url, resized: resized || undefined, creditsFile: credits || undefined };
         });
-        return ok({ action, jobId: job.id, status: job.status, note: 'Poll smoothy_jobs with action "wait"; the result holds the asset id to use in smoothy_edit ops, plus its licence and credit.' });
+        return ok({ action, jobId: job.id, status: job.status, note: 'Poll smoothy_jobs with action "wait"; the result holds the asset id to use in smoothy_edit ops, plus its licence and credit (also added to the credits file).' });
       }
-      return fail('E_BAD_REQUEST', `Unknown library action: ${action}`, 'Use music, stock or add.');
+      return fail('E_BAD_REQUEST', `Unknown library action: ${action}`, 'Use music, stock, photo, add or credits.');
     } catch (error: any) {
       if (error instanceof EditOpError) return fail(error.code, error.message);
       return fail('E_INTERNAL', error?.message || 'The library request failed.');
     }
   }
+}
+
+/** Adds " (2)", " (3)" … so an existing file is never overwritten. */
+export async function uniquePath(file: string): Promise<string> {
+  const ext = path.extname(file);
+  const base = file.slice(0, file.length - ext.length);
+  for (let n = 1; n < 1000; n += 1) {
+    const candidate = n === 1 ? file : `${base} (${n})${ext}`;
+    try {
+      await fs.access(candidate);
+    } catch {
+      return candidate;
+    }
+  }
+  return `${base} ${Date.now()}${ext}`;
 }

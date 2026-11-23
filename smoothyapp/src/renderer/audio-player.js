@@ -13,13 +13,26 @@ function playbackIcon(button, kind) {
   button.dataset.icon = kind;
   button.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor">${playbackIcons[kind]}</svg>`;
 }
+const HEART = 'M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z';
+// Favourites are a heart (Design Bible: library rows), outlined until chosen.
+export function favoriteIcon(button, on) {
+  const state = on ? 'on' : 'off';
+  if (button.dataset.heart === state) return;
+  button.dataset.heart = state;
+  button.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="${HEART}"/></svg>`;
+}
+// Range inputs paint their played part from --fill (WebKit has no progress pseudo-element).
+export function paintRange(input) {
+  const min = Number(input.min) || 0, max = Number(input.max) || 0, value = Number(input.value) || 0;
+  input?.style?.setProperty('--fill', `${max > min ? Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100)) : 0}%`);
+}
 export function trackRow(track, { select, favorite, artist, selected, busy = false, starred = false, download = null, downloadColumn = false }) {
   const row = document.createElement('tr'); row.className = 'audio-track'; row.dataset.id = track.id;
   row.dataset.favoriteId = favoriteId(track);
   row.classList.toggle('selected', selected);
   const cell = (text, name = '') => { const td = document.createElement('td'); td.className = name; td.textContent = text; row.append(td); return td; };
   const play = document.createElement('button'); play.type = 'button'; play.className = 'audio-row-play'; play.dataset.title = track.title; playbackIcon(play, 'play'); play.setAttribute('aria-label', 'Play ' + track.title); play.disabled = busy; play.addEventListener('click', () => select(track)); cell('', 'audio-play-cell').append(play);
-  const star = document.createElement('button'); star.type = 'button'; star.className = 'audio-star'; star.textContent = starred ? '★' : '☆'; star.setAttribute('aria-pressed', String(starred)); star.setAttribute('aria-label', (starred ? 'Remove favorite: ' : 'Favorite: ') + track.title); star.title = `${track.favoriteCount || 0} community favorites`; star.disabled = busy; star.addEventListener('click', () => favorite(track)); cell('', 'audio-star-cell').append(star);
+  const star = document.createElement('button'); star.type = 'button'; star.className = 'audio-star'; favoriteIcon(star, starred); star.setAttribute('aria-pressed', String(starred)); star.setAttribute('aria-label', (starred ? 'Remove favorite: ' : 'Favorite: ') + track.title); star.title = `${track.favoriteCount || 0} community favorites`; star.disabled = busy; star.addEventListener('click', () => favorite(track)); cell('', 'audio-star-cell').append(star);
   if (downloadColumn) {
     const slot = cell('', 'audio-download-cell');
     if (download) {
@@ -49,7 +62,7 @@ export function refreshTrackCommunity(container, data) {
   const favorites = new Set(data.favorites || []), staff = new Set(data.staffPicks || []);
   container.querySelectorAll('.audio-track').forEach(row => {
     const id = row.dataset.favoriteId, starred = favorites.has(id), star = row.querySelector('.audio-star');
-    star.textContent = starred ? '★' : '☆'; star.setAttribute('aria-pressed', String(starred));
+    favoriteIcon(star, starred); star.setAttribute('aria-pressed', String(starred));
     star.setAttribute('aria-label', (starred ? 'Remove favorite: ' : 'Favorite: ') + row.querySelector('.audio-row-play').dataset.title);
     star.title = `${data.counts?.[id] || 0} community favorites`;
     const title = row.querySelector('.audio-track-title'), badge = title.querySelector('.audio-pick-badge');
@@ -95,7 +108,7 @@ export function initAudioPlayer({ isConnected, onFavorite, onArtist }) {
   }
   function mediaMetadata() {
     if (!mediaSession) return;
-    try { mediaSession.metadata = active && track && typeof MediaMetadata === 'function' ? new MediaMetadata({ title: track.title, artist: track.artist || '', album: 'SmoothyEdit Audio Library' }) : null; } catch {}
+    try { mediaSession.metadata = active && track && typeof MediaMetadata === 'function' ? new MediaMetadata({ title: track.title, artist: track.artist || '', album: 'SmoothyApp Audio Library' }) : null; } catch {}
   }
   const update = () => {
     const playing = !audio.paused;
@@ -104,10 +117,11 @@ export function initAudioPlayer({ isConnected, onFavorite, onArtist }) {
     playbackIcon(el('play'), kind); el('play').setAttribute('aria-label', loading ? 'Cancel loading' : playing ? 'Pause' : failed ? 'Retry playback' : 'Play');
     el('play').setAttribute('aria-busy', String(loading));
     el('status').textContent = failed ? 'Could not play. Press play to retry.' : loading ? 'Loading audio…' : '';
-    document.querySelectorAll('.audio-track').forEach(row => {
+    document.querySelectorAll('#audio-archive-panel .audio-track, #audio-saved-panel .audio-track').forEach(row => {
       const current = row.dataset.id === track?.id, button = row.querySelector('.audio-row-play');
+      if (!button) return;
       row.classList.toggle('selected', current); playbackIcon(button, current ? kind : 'play');
-      button.setAttribute('aria-label', `${current && loading ? 'Cancel loading' : current && playing ? 'Pause' : current && failed ? 'Retry' : 'Play'} ${button.dataset.title}`);
+      button.setAttribute('aria-label', `${current && loading ? 'Cancel loading' : current && playing ? 'Pause' : current && failed ? 'Retry' : 'Play'} ${button.dataset.title || ''}`.trim());
       button.setAttribute('aria-busy', String(current && loading));
     });
     el('previous').disabled = busy || moving || !actions.previous; el('next').disabled = busy || moving || !actions.next;
@@ -118,10 +132,11 @@ export function initAudioPlayer({ isConnected, onFavorite, onArtist }) {
     el('send').disabled = busy || !actions.send || !isConnected();
     el('details').classList.toggle('hidden', !actions.details); el('details').disabled = busy;
     el('star').disabled = !track; const starred = track && favorites.has(favoriteId(track));
-    el('star').textContent = starred ? '★' : '☆'; el('star').setAttribute('aria-pressed', String(Boolean(starred)));
+    favoriteIcon(el('star'), Boolean(starred)); el('star').setAttribute('aria-pressed', String(Boolean(starred)));
     el('star').setAttribute('aria-label', starred ? 'Remove favorite' : 'Favorite track');
     const duration = Number.isFinite(audio.duration) ? audio.duration : track?.duration || 0;
     el('seek').max = String(duration); el('seek').value = String(audio.currentTime || 0); el('seek').disabled = !Number.isFinite(audio.duration);
+    paintRange(el('seek')); paintRange(el('volume'));
     el('elapsed').textContent = audio.currentTime ? formatDuration(audio.currentTime) : '0:00'; el('duration').textContent = formatDuration(duration);
     syncMediaSession();
   };
@@ -168,8 +183,8 @@ export function initAudioPlayer({ isConnected, onFavorite, onArtist }) {
   audio.addEventListener('pause', () => { loading = false; update(); });
   el('play').addEventListener('click', toggle);
   playbackIcon(el('previous'), 'previous'); playbackIcon(el('next'), 'next');
-  el('seek').addEventListener('input', () => { if (Number.isFinite(audio.duration)) audio.currentTime = Math.min(Number(el('seek').value), audio.duration); });
-  el('volume').addEventListener('input', () => { audio.volume = Number(el('volume').value); });
+  el('seek').addEventListener('input', () => { if (Number.isFinite(audio.duration)) audio.currentTime = Math.min(Number(el('seek').value), audio.duration); paintRange(el('seek')); });
+  el('volume').addEventListener('input', () => { audio.volume = Number(el('volume').value); paintRange(el('volume')); });
   el('star').addEventListener('click', () => { if (track) onFavorite(track); });
   el('artist').addEventListener('click', () => { if (track?.artist?.trim() && !busy) onArtist?.(track.artist); });
   for (const action of ['previous', 'next']) el(action).addEventListener('click', () => { void move(action); });

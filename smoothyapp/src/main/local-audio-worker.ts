@@ -36,8 +36,8 @@ class WorkProgress:
             self.stage, self.unit = ('reconstruct' if match else 'separate'), 'chunks'
         elif name == '_execute':
             inference = 'mask' in frame.f_locals
-            self.text = 'Enhancing speech…' if inference else 'Preparing speech windows…'
-            self.stage, self.unit = ('enhance' if inference else 'windows'), 'windows'
+            self.text = 'Removing background noise…' if inference else 'Preparing audio windows…'
+            self.stage, self.unit = ('denoise' if inference else 'windows'), 'windows'
         else:
             self.text, self.stage, self.unit = 'Reading audio frequency bands…', 'bands', 'bands'
         self.send(True)
@@ -113,8 +113,20 @@ def checked_session(*args, **kwargs):
 ort.InferenceSession = checked_session
 
 mode, source, output, cache = sys.argv[1:5]
-if mode not in ['prepare', 'separate', 'enhance']:
+if mode not in ['prepare', 'denoise', 'separate', 'isolate', 'enhance']:
     raise SystemExit('Unknown audio mode.')
+options = {}
+if len(sys.argv) >= 6 and sys.argv[5]:
+    if sys.argv[5].startswith('{'):
+        try:
+            parsed = json.loads(sys.argv[5])
+            if isinstance(parsed, dict):
+                options = parsed
+        except Exception:
+            options = {}
+    else:
+        options = {'separatedSpeech': sys.argv[5]}
+aggression = max(1, min(20, int(options.get('aggression', 5))))
 if mode != 'prepare':
     # Missing cache must request explicit setup, never fetch during a media run.
     import requests
@@ -130,8 +142,8 @@ def separate(filename, model, folder, backend=None):
         engine = AcceleratedSeparator(backend=backend, music=is_music, output_dir=folder, model_file_dir=cache, output_format='WAV',
         log_level=logging.WARNING, normalization_threshold=0.99,
         mdx_params={'hop_length':1024, 'segment_size':256, 'overlap':0.25, 'batch_size':1, 'enable_denoise':False},
-        vr_params={'batch_size':1, 'window_size':512, 'aggression':5, 'enable_tta':False, 'enable_post_process':False, 'post_process_threshold':0.2, 'high_end_process':False})
-        message('Loading music separation model…' if is_music else 'Loading noise removal model…')
+        vr_params={'batch_size':1, 'window_size':512, 'aggression':aggression, 'enable_tta':False, 'enable_post_process':False, 'post_process_threshold':0.2, 'high_end_process':False})
+        message('Loading voice & music separation model…' if is_music else 'Loading noise removal model…')
         engine.load_model(model)
         labels = {'cpu':'CPU','cuda':'NVIDIA CUDA','directml':'Windows DirectML','mps':'Apple Metal'}
         event('Using '+labels[engine.backend]+'.','device',backend=engine.backend)
@@ -154,48 +166,59 @@ if mode == 'prepare':
         engine.load_model(model)
     sys.exit(0)
 
-def pair(speech):
-    # The two published tracks always reconstruct the recording: Speech is the
-    # model's voice, and Music carries everything else — music, room and removed
-    # noise. Float WAVs preserve residual peaks without clipping. Stream in blocks
-    # so long recordings do not require another complete recording in memory.
+def pick_clean_stem(stems):
+    return next(filename for label,filename in stems.items() if label.lower() in ['no noise','no_noise','vocals'])
+
+def pair(primary_source, primary_file, primary_label, primary_kind, rest_file, rest_label, rest_kind, progress_text):
+    # The two published tracks always reconstruct the original recording exactly
+    # (primary + residual = original), preserving sample-accurate length for video
+    # lip-sync and enabling instant real-time dry/wet strength blending.
     import numpy as np
     import soundfile as sf
-    speech_path, music_path = os.path.join(output,'speech.wav'), os.path.join(output,'music.wav')
-    message('Preparing speech and music tracks…')
-    with sf.SoundFile(source) as original, sf.SoundFile(speech) as voice:
-        if original.samplerate != voice.samplerate or original.channels != voice.channels:
-            raise RuntimeError('The speech track format does not match the recording.')
-        with sf.SoundFile(speech_path,'w',samplerate=original.samplerate,channels=original.channels,subtype='FLOAT') as clean, sf.SoundFile(music_path,'w',samplerate=original.samplerate,channels=original.channels,subtype='FLOAT') as rest:
+    primary_path = os.path.join(output, primary_file)
+    rest_path = os.path.join(output, rest_file)
+    message(progress_text)
+    with sf.SoundFile(source) as original, sf.SoundFile(primary_source) as clean_src:
+        if original.samplerate != clean_src.samplerate or original.channels != clean_src.channels:
+            raise RuntimeError('The processed track format does not match the recording.')
+        with sf.SoundFile(primary_path,'w',samplerate=original.samplerate,channels=original.channels,subtype='FLOAT') as primary_out, sf.SoundFile(rest_path,'w',samplerate=original.samplerate,channels=original.channels,subtype='FLOAT') as rest_out:
             completed, total, last = 0, math.ceil(original.frames/65536), time.monotonic()
-            event('Preparing speech and music tracks…','tracks',0,total,'blocks')
+            event(progress_text,'tracks',0,total,'blocks')
             while True:
                 block = original.read(65536,dtype='float32',always_2d=True)
                 if not len(block): break
-                spoken = voice.read(len(block),dtype='float32',always_2d=True)
-                if len(spoken) < len(block): spoken = np.pad(spoken,((0,len(block)-len(spoken)),(0,0)))
-                clean.write(spoken)
-                rest.write(block-spoken)
+                part = clean_src.read(len(block),dtype='float32',always_2d=True)
+                if len(part) < len(block): part = np.pad(part,((0,len(block)-len(part)),(0,0)))
+                primary_out.write(part)
+                rest_out.write(block-part)
                 completed += 1
                 if completed == total or time.monotonic()-last >= .15:
-                    event('Preparing speech and music tracks…','tracks',completed,total,'blocks')
+                    event(progress_text,'tracks',completed,total,'blocks')
                     last = time.monotonic()
-    return [{'label':'Speech','kind':'speech','path':speech_path},{'label':'Music','kind':'music','path':music_path}]
+    return [{'label':primary_label,'kind':primary_kind,'path':primary_path},{'label':rest_label,'kind':rest_kind,'path':rest_path}]
 
 items=[]
-if mode == 'separate':
-    stems=separate(source,'UVR-MDX-NET-Inst_HQ_3.onnx',os.path.join(output,'music'))
-    items = pair(stems['Vocals'])
-elif mode == 'enhance':
-    # Reuse the accepted separation. Only the voice enters the noise remover, and
-    # only the enhanced speech is published; the music and noise are not exposed.
-    if len(sys.argv) < 6:
-        raise SystemExit('Enhancement needs the separated speech track.')
-    stems=separate(sys.argv[5],'UVR-DeNoise-Lite.pth',os.path.join(output,'noise'))
-    clean=next(filename for label,filename in stems.items() if label.lower() in ['no noise','no_noise','vocals'])
-    speech_path=os.path.join(output,'speech.wav')
-    shutil.copyfile(clean,speech_path)
-    items=[{'label':'Enhanced speech','kind':'speech','path':speech_path}]
+if mode == 'denoise':
+    stems = separate(source,'UVR-DeNoise-Lite.pth',os.path.join(output,'noise'))
+    clean = pick_clean_stem(stems)
+    items = pair(clean,'clean.wav','Clean audio','speech','noise.wav','Removed noise','noise','Preparing cleaned audio and noise tracks…')
+elif mode == 'separate':
+    stems = separate(source,'UVR-MDX-NET-Inst_HQ_3.onnx',os.path.join(output,'music'))
+    items = pair(stems['Vocals'],'speech.wav','Voice','speech','music.wav','Music','music','Preparing voice and music tracks…')
+elif mode in ['isolate', 'enhance']:
+    reused = options.get('separatedSpeech')
+    if isinstance(reused, str) and reused and os.path.isfile(reused):
+        voice_input = reused
+    else:
+        message('Step 1 of 2: Separating voice from music…')
+        music_stems = separate(source,'UVR-MDX-NET-Inst_HQ_3.onnx',os.path.join(output,'music'))
+        voice_input = music_stems['Vocals']
+        message('Step 2 of 2: Removing background noise…')
+    noise_stems = separate(voice_input,'UVR-DeNoise-Lite.pth',os.path.join(output,'noise'))
+    clean = pick_clean_stem(noise_stems)
+    items = pair(clean,'speech.wav','Clean voice','speech','background.wav','Music & noise','background','Preparing clean voice and background tracks…')
+
+order = {'speech':0,'noise':1,'music':1,'background':1}
 with open(os.path.join(output,'result.json'),'w',encoding='utf8') as handle:
-    json.dump(sorted(items,key=lambda item: {'speech':0,'music':1}[item['kind']]),handle)
+    json.dump(sorted(items,key=lambda item: order.get(item['kind'], 2)),handle)
 `;

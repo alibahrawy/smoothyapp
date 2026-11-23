@@ -1,6 +1,6 @@
 {
   "name": "smoothyedit",
-  "version": "3.0.0",
+  "version": "3.5.0",
   "description": "SmoothyEdit - local multicam editing for Premiere Pro and Resolve Free",
   "main": "out/main/index.js",
   "author": "SmoothyEdit",
@@ -10,13 +10,16 @@
     "dev:resolve": "npm run build && node scripts/open-resolve-dev.cjs",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "test": "node --test tests/*.test.mjs",
+    "typecheck": "tsc --noEmit",
     "generate-icons": "node scripts/generate-icons.js",
     "build:win": "npm run generate-icons && npm run build && electron-builder --win --config",
-    "build:mac": "npm run generate-icons && npm run build && electron-builder --mac --config",
+    "build:mac": "npm run generate-icons && npm run build:vision && npm run build && electron-builder --mac --config",
     "build:linux": "npm run generate-icons && npm run build && electron-builder --linux --config",
     "build:publish:linux": "npm run generate-icons && npm run build && electron-builder --linux --publish always --config",
-    "build:publish:mac": "npm run generate-icons && npm run build && electron-builder --mac --publish always --config",
-    "build:publish:win": "npm run generate-icons && npm run build && electron-builder --win --publish always --config"
+    "build:publish:mac": "npm run generate-icons && npm run build:vision && npm run build && electron-builder --mac --publish always --config",
+    "build:publish:win": "npm run generate-icons && npm run build && electron-builder --win --publish always --config",
+    "build:vision": "node scripts/build-vision.mjs"
   },
   "dependencies": {
     "@xmldom/xmldom": "0.9.12",
@@ -78,6 +81,10 @@
         ]
       },
       {
+        "from": "resources/sfx",
+        "to": "sfx"
+      },
+      {
         "from": "build/local-image-models-LICENSES.txt",
         "to": "local-image-models-LICENSES.txt"
       }
@@ -106,7 +113,7 @@
       "shortcutName": "SmoothyEdit",
       "include": "build/installer.nsh",
       "warningsAsErrors": false,
-      "deleteAppDataOnUninstall": true
+      "deleteAppDataOnUninstall": false
     },
     "mac": {
       "target": [
@@ -130,7 +137,16 @@
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist",
-      "notarize": true
+      "notarize": true,
+      "extraResources": [
+        {
+          "from": "resources/vision",
+          "to": "vision",
+          "filter": [
+            "smoothy-vision"
+          ]
+        }
+      ]
     },
     "linux": {
       "target": [

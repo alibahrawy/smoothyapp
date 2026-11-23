@@ -5,9 +5,9 @@ import {build} from 'esbuild';
 import {mkdtemp,writeFile,readFile,readdir,rm,mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
-const f={usage:[],handlers:new Map(),protocol:null,folder:'',choice:{canceled:true},events:[],quit:null,opened:[],imports:[],connected:true};globalThis.__audioIpcFixture=f;
+const f={appPath:fileURLToPath(new URL('..',import.meta.url)),usage:[],handlers:new Map(),protocol:null,folder:'',choice:{canceled:true},events:[],quit:null,opened:[],imports:[],connected:true};globalThis.__audioIpcFixture=f;
 const output=await build({entryPoints:[fileURLToPath(new URL('../src/main/audio-library-ipc.ts',import.meta.url))],bundle:true,platform:'node',format:'esm',write:false,plugins:[{name:'audio-fixture',setup(b){
- b.onResolve({filter:/^\.\/telemetry$/},()=>({path:'telemetry',namespace:'fixture'}));b.onResolve({filter:/^electron$/},()=>({path:'electron',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},({path})=>({contents:path==='telemetry'?`export const trackTool=id=>globalThis.__audioIpcFixture.usage.push(id);`:`const f=globalThis.__audioIpcFixture;export const app={getPath:()=>f.folder,on:(name,fn)=>{f.quit=fn}};export const ipcMain={handle:(name,fn)=>f.handlers.set(name,fn)};export const dialog={showOpenDialog:async()=>f.choice};export const shell={openExternal:async url=>f.opened.push(url),openPath:async()=>''};export const protocol={registerSchemesAsPrivileged(){},handle:(name,fn)=>{f.protocol=fn}};export const net={fetch:async url=>new Response(url)};`}));
+ b.onResolve({filter:/^\.\/telemetry$/},()=>({path:'telemetry',namespace:'fixture'}));b.onResolve({filter:/^electron$/},()=>({path:'electron',namespace:'fixture'}));b.onResolve({filter:/^\.\/ffmpeg-path$/},()=>({path:'ffmpeg-path',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},({path})=>({contents:path==='telemetry'?`export const trackTool=id=>globalThis.__audioIpcFixture.usage.push(id);`:path==='ffmpeg-path'?`import {createRequire} from 'node:module';const r=createRequire(globalThis.__audioIpcFixture.appPath+'/');export const getFFmpegPath=()=>r('ffmpeg-static');export const getFFprobePath=()=>r('ffprobe-static').path;`:`const f=globalThis.__audioIpcFixture;export const app={getPath:()=>f.folder,getAppPath:()=>f.appPath,on:(name,fn)=>{f.quit=fn}};export const ipcMain={handle:(name,fn)=>f.handlers.set(name,fn)};export const dialog={showOpenDialog:async()=>f.choice};export const shell={openExternal:async url=>f.opened.push(url),openPath:async()=>''};export const protocol={registerSchemesAsPrivileged(){},handle:(name,fn)=>{f.protocol=fn}};export const net={fetch:async url=>new Response(url)};`}));
  b.onLoad({filter:/audio-library\.ts$/},async args=>({contents:(await readFile(args.path,'utf8')).replace('private validate = validateMP3','private validate = async () => {}'),loader:'ts'}));
 }}]});
 const {registerAudioLibrary}=await import(`data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString('base64')}`);
@@ -72,3 +72,23 @@ test('favorite counters exclude unchanged state and invalid tracks',async()=>fix
 test('Resolve archive sends count the saved MP3 and confirmed Media Pool import separately',async()=>fixture(async()=>{
  const result=await archiveInvoke('download',{id:archiveId,premiere:true});assert.equal(result.success,true);assert.deepEqual(f.usage,['audio_save','audio_resolve']);
 },archiveFixture(),'resolve'));
+
+test('sound effects: search counts once, saves a WAV, sends a validated MP3 to Premiere and counts each real action',async()=>fixture(async invoke=>{
+ const search=f.handlers.get('sfx-search'),save=f.handlers.get('sfx-save');
+ const found=await search(null,{query:'whoosh'});assert.equal(found.success,true);assert.ok(found.total>=3);assert.deepEqual(f.usage,['sfx_search']);
+ await search(null,{query:'whoosh',background:true});assert.deepEqual(f.usage,['sfx_search'],'background loads are not feature runs');
+ assert.equal((await search(null,{category:'Nope'})).success,false);assert.deepEqual(f.usage,['sfx_search'],'failed searches add no count');
+ f.usage=[];
+ const plain=await save(null,{id:'pop'});assert.equal(plain.success,true);assert.match(plain.savedPath,/Sound Effects[\\/]Pop - SmoothyEdit SFX\.wav$/);assert.deepEqual(f.usage,['sfx_save']);assert.equal(f.imports.length,0);
+ assert.equal((await save(null,{id:'../../etc/passwd'})).success,false);assert.equal((await save(null,{})).success,false);assert.deepEqual(f.usage,['sfx_save'],'invalid saves add no count');
+ f.connected=false;assert.match((await save(null,{id:'pop',send:true})).error,/Connect the selected editor/);assert.deepEqual(f.usage,['sfx_save'],'a refused send saves and counts nothing');f.connected=true;
+ const sent=await save(null,{id:'whoosh-fast',send:true});assert.equal(sent.success,true,JSON.stringify(sent));assert.match(f.imports.at(-1),/Fast whoosh - SmoothyEdit SFX\.mp3$/);assert.deepEqual(f.usage,['sfx_save','sfx_save','sfx_premiere']);
+ const bytes=await readFile(f.imports.at(-1));assert.ok(bytes.length>1000&&(bytes.toString('latin1',0,3)==='ID3'||bytes[0]===255),'the Premiere copy is a real MP3');
+ assert.equal((await f.protocol({url:'smoothy-audio://sfx/pop',headers:{}})).status,200);assert.equal((await f.protocol({url:'smoothy-audio://sfx/../../etc/passwd',headers:{}})).status,404);assert.equal((await f.protocol({url:'smoothy-audio://sfx/nope-nope',headers:{}})).status,404);
+}));
+test('sound effects: Resolve receives the lossless WAV and a failed import still keeps the saved file',async()=>fixture(async()=>{
+ const save=f.handlers.get('sfx-save');
+ const sent=await save(null,{id:'hit-heavy',send:true});assert.equal(sent.success,true);assert.match(f.imports.at(-1),/Heavy hit - SmoothyEdit SFX\.wav$/);assert.deepEqual(f.usage,['sfx_save','sfx_resolve']);
+ f.usage=[];f.importError='Run Receive from Smoothy in Resolve first.';
+ const failed=await save(null,{id:'pop',send:true});assert.equal(failed.success,false);assert.match(failed.error,/Saved to your Sound Effects folder\. Run Receive/);assert.deepEqual(f.usage,['sfx_save'],'the saved file counts; the failed import does not');
+},undefined,'resolve'));

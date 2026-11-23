@@ -86,7 +86,12 @@ export const SHORTSCUT_ICONS: Record<string, string> = {
   "keyboard": "<path d=\"M224,44H32A20,20,0,0,0,12,64V192a20,20,0,0,0,20,20H224a20,20,0,0,0,20-20V64A20,20,0,0,0,224,44Zm-4,144H36V68H220ZM52,128a12,12,0,0,1,12-12H192a12,12,0,0,1,0,24H64A12,12,0,0,1,52,128Zm0-36A12,12,0,0,1,64,80H192a12,12,0,0,1,0,24H64A12,12,0,0,1,52,92Zm0,72a12,12,0,0,1,12-12h8a12,12,0,0,1,0,24H64A12,12,0,0,1,52,164Zm108,0a12,12,0,0,1-12,12H108a12,12,0,0,1,0-24h40A12,12,0,0,1,160,164Zm44,0a12,12,0,0,1-12,12h-8a12,12,0,0,1,0-24h8A12,12,0,0,1,204,164Z\"/>",
   "activity": "<path d=\"M71.76,148H31.7a12,12,0,1,1,0-24H65.33l12.45-18.66a12,12,0,0,1,20,0l22,33,6-9a12,12,0,0,1,10-5.34h24a12,12,0,1,1,0,24h-17.6l-12.46,18.66a12,12,0,0,1-20,0l-22-33-6,9A12,12,0,0,1,71.76,148ZM177.91,36c-20.12,0-38,7.93-50.07,21.56C115.74,43.93,97.89,36,77.76,36A66,66,0,0,0,12.07,94.68,12,12,0,0,0,36,97.32,42,42,0,0,1,77.76,60c17.83,0,32.75,9.4,38.95,24.54a12,12,0,0,0,22.25,0C145.16,69.4,160.08,60,177.91,60A42.08,42.08,0,0,1,220,102c0,29.42-25.86,57.77-47.56,76.36a329,329,0,0,1-44.58,31.81c-10.87-6.45-35.37-22-56.51-42.73a12,12,0,1,0-16.84,17.12c30.39,29.81,66.15,49.2,67.66,50a12.06,12.06,0,0,0,11.39,0C138,232.14,244,174.34,244,102A66.12,66.12,0,0,0,177.91,36Z\"/>",
   "circle": "<path d=\"M128,20A108,108,0,1,0,236,128,108.12,108.12,0,0,0,128,20Zm0,192a84,84,0,1,1,84-84A84.09,84.09,0,0,1,128,212Z\"/>",
-  "square": "<path d=\"M208,28H48A20,20,0,0,0,28,48V208a20,20,0,0,0,20,20H208a20,20,0,0,0,20-20V48A20,20,0,0,0,208,28Zm-4,176H52V52H204Z\"/>"
+  "square": "<path d=\"M208,28H48A20,20,0,0,0,28,48V208a20,20,0,0,0,20,20H208a20,20,0,0,0,20-20V48A20,20,0,0,0,208,28Zm-4,176H52V52H204Z\"/>",
+  "undo": "<path d=\"M236,152a68.07,68.07,0,0,1-68,68H80a12,12,0,0,1,0-24h88a44,44,0,0,0,0-88H61l27.51,27.51a12,12,0,0,1-17,17l-48-48a12,12,0,0,1,0-17l48-48a12,12,0,0,1,17,17L61,84H168A68.07,68.07,0,0,1,236,152Z\"/>",
+  "redo": "<path d=\"M232.49,87.51l-48,48a12,12,0,0,1-17-17L195,91H88a44,44,0,0,0,0,88h88a12,12,0,0,1,0,24H88a68,68,0,0,1,0-136H195L167.51,39.49a12,12,0,0,1,17-17l48,48A12,12,0,0,1,232.49,87.51Z\"/>",
+  "unnest": "<path d=\"M216,36H88A20,20,0,0,0,68,56V68H56A20,20,0,0,0,36,88V200a20,20,0,0,0,20,20H184a20,20,0,0,0,20-20V188h12a20,20,0,0,0,20-20V56A20,20,0,0,0,216,36ZM180,196H60V92H180Zm32-32H204V88a20,20,0,0,0-20-20H92V60H212ZM91.51,148.49l32-32a12,12,0,0,1,17,17L125,149l15.52,15.51a12,12,0,0,1-17,17l-32-32A12,12,0,0,1,91.51,148.49Z\"/>",
+  "app": "<path d=\"M208,36H48A20,20,0,0,0,28,56V200a20,20,0,0,0,20,20H208a20,20,0,0,0,20-20V56A20,20,0,0,0,208,36ZM52,60H204V88H52ZM204,196H52V112H204ZM76,74a10,10,0,1,1-10-10A10,10,0,0,1,76,74Zm32,0a10,10,0,1,1-10-10A10,10,0,0,1,108,74Z\"/>",
+  "folder-open": "<path d=\"M243.1,105.78A20,20,0,0,0,226.44,96H212V88a20,20,0,0,0-20-20H124.22L102.5,51.28A20.09,20.09,0,0,0,90.31,47H40A20,20,0,0,0,20,67V200a20,20,0,0,0,20,20H206.56a20,20,0,0,0,18.92-13.5l20.89-61.26A20,20,0,0,0,243.1,105.78ZM44,71H88.91l21.72,16.72A20.09,20.09,0,0,0,122.82,92H188v4H72a20,20,0,0,0-18.92,13.5L44,136.12ZM203.7,196H50.11L74.83,120H221.37Z\"/>"
 };
 
 /** Icon picker groups, in display order. */
@@ -446,45 +451,89 @@ export const SHORTSCUT_ICON_GROUPS: { name: string; icons: { id: string; label: 
       {
         "id": "square",
         "label": "Square"
+      },
+      {
+        "id": "unnest",
+        "label": "Unnest"
+      },
+      {
+        "id": "app",
+        "label": "App window"
+      },
+      {
+        "id": "folder-open",
+        "label": "Open folder"
+      },
+      {
+        "id": "undo",
+        "label": "Undo"
+      },
+      {
+        "id": "redo",
+        "label": "Redo"
       }
     ]
   }
 ];
 
-/** Key colours. A key without a chosen colour uses its kind's default. */
+/** Key colours (Design Bible §09 p.23): the nine flavors + Graphite (folders) + Ink (macros). */
 export const SHORTSCUT_COLORS: { id: string; label: string; value: string }[] = [
-  { id: 'lime', label: 'Lime', value: '#9bcf45' },
-  { id: 'green', label: 'Green', value: '#3fae6a' },
-  { id: 'teal', label: 'Teal', value: '#2aa39a' },
-  { id: 'sky', label: 'Sky', value: '#3b9be0' },
-  { id: 'blue', label: 'Blue', value: '#4f6ff0' },
-  { id: 'violet', label: 'Violet', value: '#8b5cf6' },
-  { id: 'pink', label: 'Pink', value: '#e256a8' },
-  { id: 'red', label: 'Red', value: '#e5484d' },
-  { id: 'orange', label: 'Orange', value: '#f2832b' },
-  { id: 'amber', label: 'Amber', value: '#e9b10e' },
-  { id: 'slate', label: 'Slate', value: '#5f6b73' },
-  { id: 'ink', label: 'Ink', value: '#23302d' },
+  { id: 'lime', label: 'Lime', value: '#92F388' },
+  { id: 'mango', label: 'Mango', value: '#FBCB2A' },
+  { id: 'papaya', label: 'Papaya', value: '#F48E20' },
+  { id: 'watermelon', label: 'Watermelon', value: '#FB6769' },
+  { id: 'rose', label: 'Rose', value: '#FC9AC9' },
+  { id: 'dragonfruit', label: 'Dragonfruit', value: '#B717A1' },
+  { id: 'grape', label: 'Grape', value: '#8A4AF5' },
+  { id: 'blueberry', label: 'Blueberry', value: '#0D5EC5' },
+  { id: 'sky', label: 'Sky', value: '#4BC6FA' },
+  { id: 'graphite', label: 'Graphite', value: '#5B5E66' },
+  { id: 'ink', label: 'Ink', value: '#151515' },
 ];
+
+const LIGHT_KEY_HEXES = new Set(['#92F388', '#FBCB2A', '#F48E20', '#FB6769', '#FC9AC9', '#4BC6FA']);
+
+const LEGACY_COLOR_ALIASES: Record<string, string> = {
+  green: 'lime',
+  amber: 'mango',
+  orange: 'papaya',
+  red: 'watermelon',
+  pink: 'rose',
+  violet: 'grape',
+  blue: 'blueberry',
+  teal: 'sky',
+  slate: 'graphite',
+};
 
 const COLOR_VALUES = new Map(SHORTSCUT_COLORS.map((color) => [color.id, color.value]));
 
 export function defaultShortsCutColor(kind?: string): string {
   if (kind === 'audio-effect') return 'sky';
-  if (kind === 'video-transition') return 'violet';
-  if (kind === 'audio-transition') return 'teal';
-  if (kind === 'preset') return 'pink';
-  if (kind === 'multi') return 'orange';
-  if (kind === 'folder') return 'slate';
+  if (kind === 'video-transition') return 'grape';
+  if (kind === 'audio-transition') return 'sky';
+  if (kind === 'preset') return 'rose';
+  if (kind === 'multi') return 'ink';
+  if (kind === 'unnest') return 'blueberry';
+  if (kind === 'motion-to-transform') return 'grape';
+  if (kind === 'adjustment-layer') return 'mango';
+  if (kind === 'open-app') return 'lime';
+  if (kind === 'open-folder') return 'graphite';
+  if (kind === 'folder') return 'graphite';
   return 'lime';
 }
 
 export function shortsCutColorValue(color: string | undefined, kind?: string): string {
-  return COLOR_VALUES.get(color || '') || COLOR_VALUES.get(defaultShortsCutColor(kind))!;
+  const mapped = color ? (LEGACY_COLOR_ALIASES[color] || color) : '';
+  return COLOR_VALUES.get(mapped) || COLOR_VALUES.get(defaultShortsCutColor(kind))!;
+}
+
+/** Light keys get Ink (#151515) labels; bold keys (Dragonfruit, Grape, Blueberry, Graphite, Ink) get white. */
+export function shortsCutKeyInk(hex: string | undefined): string {
+  return LIGHT_KEY_HEXES.has(String(hex || '').toUpperCase()) ? '#151515' : '#FFFFFF';
 }
 
 export function isShortsCutColor(value: unknown): value is string {
-  return typeof value === 'string' && COLOR_VALUES.has(value);
+  return typeof value === 'string' && (COLOR_VALUES.has(value) || Object.prototype.hasOwnProperty.call(LEGACY_COLOR_ALIASES, value));
 }
 
 export function isShortsCutIcon(value: unknown): value is string {
@@ -544,6 +593,11 @@ export function resolveShortsCutIcon(value: { label?: string; kind?: string; tar
   const kind = value.kind || '';
   if (kind === 'folder') return 'folder';
   if (kind === 'multi') return 'multi';
+  if (kind === 'unnest') return 'unnest';
+  if (kind === 'motion-to-transform') return 'move';
+  if (kind === 'adjustment-layer') return 'layers';
+  if (kind === 'open-app') return 'app';
+  if (kind === 'open-folder') return 'folder-open';
   if (kind === 'audio-effect') {
     for (const rule of AUDIO_RULES) if (rule.pattern.test(text)) return rule.icon;
     return 'audio';

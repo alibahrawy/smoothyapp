@@ -1,0 +1,467 @@
+[
+  {
+    "id": "buzz-error",
+    "title": "Error buzz",
+    "category": "Chimes & UI",
+    "tags": [
+      "error",
+      "wrong",
+      "buzz",
+      "denied",
+      "fail"
+    ],
+    "file": "synth/buzz-error.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 0.5
+  },
+  {
+    "id": "chime-notification",
+    "title": "Notification chime",
+    "category": "Chimes & UI",
+    "tags": [
+      "notification",
+      "chime",
+      "ding",
+      "message",
+      "bell",
+      "alert"
+    ],
+    "file": "synth/chime-notification.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 1.4
+  },
+  {
+    "id": "shimmer",
+    "title": "Sparkle shimmer",
+    "category": "Chimes & UI",
+    "tags": [
+      "sparkle",
+      "shimmer",
+      "magic",
+      "glitter",
+      "reveal"
+    ],
+    "file": "synth/shimmer.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 1.6
+  },
+  {
+    "id": "chime-success",
+    "title": "Success arpeggio",
+    "category": "Chimes & UI",
+    "tags": [
+      "success",
+      "complete",
+      "level up",
+      "win",
+      "arpeggio"
+    ],
+    "file": "synth/chime-success.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 1.2
+  },
+  {
+    "id": "cc0-shutter-modern",
+    "title": "Camera shutter (DSLR)",
+    "category": "Foley",
+    "tags": [
+      "camera",
+      "shutter",
+      "photo",
+      "dslr",
+      "snap"
+    ],
+    "file": "cc0/shutter-modern.wav",
+    "license": "CC0",
+    "author": "ristooooo1",
+    "sourceUrl": "https://freesound.org/s/539136/",
+    "origin": "cc0",
+    "duration": 0.489
+  },
+  {
+    "id": "cc0-shutter-old",
+    "title": "Camera shutter (film)",
+    "category": "Foley",
+    "tags": [
+      "camera",
+      "shutter",
+      "photo",
+      "film",
+      "vintage"
+    ],
+    "file": "cc0/shutter-old.wav",
+    "license": "CC0",
+    "author": "hmilleo",
+    "sourceUrl": "https://freesound.org/s/409093/",
+    "origin": "cc0",
+    "duration": 0.314
+  },
+  {
+    "id": "cc0-page-turn",
+    "title": "Page turn",
+    "category": "Foley",
+    "tags": [
+      "page",
+      "paper",
+      "turn",
+      "book",
+      "scrape"
+    ],
+    "file": "cc0/page-turn.wav",
+    "license": "CC0",
+    "author": "Kenney",
+    "sourceUrl": "https://www.remotion.dev/docs/sfx/page-turn",
+    "origin": "cc0",
+    "duration": 0.4
+  },
+  {
+    "id": "glitch-short",
+    "title": "Glitch",
+    "category": "Glitch & digital",
+    "tags": [
+      "glitch",
+      "digital",
+      "stutter",
+      "error",
+      "distortion"
+    ],
+    "file": "synth/glitch-short.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 0.55
+  },
+  {
+    "id": "tape-stop",
+    "title": "Tape stop",
+    "category": "Glitch & digital",
+    "tags": [
+      "tape stop",
+      "power down",
+      "slow down",
+      "record",
+      "rewind"
+    ],
+    "file": "synth/tape-stop.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 1.1
+  },
+  {
+    "id": "boom-cinematic",
+    "title": "Cinematic boom",
+    "category": "Hits & impacts",
+    "tags": [
+      "boom",
+      "impact",
+      "trailer",
+      "cinematic",
+      "hit"
+    ],
+    "file": "synth/boom-cinematic.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 3.2
+  },
+  {
+    "id": "hit-heavy",
+    "title": "Heavy hit",
+    "category": "Hits & impacts",
+    "tags": [
+      "hit",
+      "impact",
+      "thud",
+      "title",
+      "stinger"
+    ],
+    "file": "synth/hit-heavy.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 1.3
+  },
+  {
+    "id": "hit-punch",
+    "title": "Punch hit",
+    "category": "Hits & impacts",
+    "tags": [
+      "hit",
+      "punch",
+      "short",
+      "tight",
+      "emphasis"
+    ],
+    "file": "synth/hit-punch.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 0.5
+  },
+  {
+    "id": "pop-double",
+    "title": "Double pop",
+    "category": "Pops & clicks",
+    "tags": [
+      "pop",
+      "double",
+      "text",
+      "appear",
+      "ui"
+    ],
+    "file": "synth/pop-double.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 0.3
+  },
+  {
+    "id": "cc0-mouse-click",
+    "title": "Mouse click",
+    "category": "Pops & clicks",
+    "tags": [
+      "mouse",
+      "click",
+      "ui",
+      "button",
+      "computer"
+    ],
+    "file": "cc0/mouse-click.wav",
+    "license": "CC0",
+    "author": "Pixeliota",
+    "sourceUrl": "https://freesound.org/s/678248/",
+    "origin": "cc0",
+    "duration": 0.397
+  },
+  {
+    "id": "pop",
+    "title": "Pop",
+    "category": "Pops & clicks",
+    "tags": [
+      "pop",
+      "bubble",
+      "text",
+      "appear",
+      "ui"
+    ],
+    "file": "synth/pop.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 0.16
+  },
+  {
+    "id": "click-soft",
+    "title": "Soft click",
+    "category": "Pops & clicks",
+    "tags": [
+      "click",
+      "tap",
+      "ui",
+      "button",
+      "soft"
+    ],
+    "file": "synth/click-soft.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 0.08
+  },
+  {
+    "id": "riser-cinematic",
+    "title": "Cinematic riser",
+    "category": "Risers & drops",
+    "tags": [
+      "riser",
+      "build up",
+      "tension",
+      "cinematic",
+      "transition"
+    ],
+    "file": "synth/riser-cinematic.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 4
+  },
+  {
+    "id": "downlifter",
+    "title": "Downlifter",
+    "category": "Risers & drops",
+    "tags": [
+      "downlifter",
+      "fall",
+      "release",
+      "transition"
+    ],
+    "file": "synth/downlifter.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 2
+  },
+  {
+    "id": "riser-short",
+    "title": "Quick riser",
+    "category": "Risers & drops",
+    "tags": [
+      "riser",
+      "build up",
+      "short",
+      "transition"
+    ],
+    "file": "synth/riser-short.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 1.6
+  },
+  {
+    "id": "sub-drop",
+    "title": "Sub drop",
+    "category": "Risers & drops",
+    "tags": [
+      "bass drop",
+      "sub",
+      "low",
+      "boom"
+    ],
+    "file": "synth/sub-drop.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 2.4
+  },
+  {
+    "id": "whoosh-fast",
+    "title": "Fast whoosh",
+    "category": "Whooshes & swipes",
+    "tags": [
+      "whoosh",
+      "swoosh",
+      "transition",
+      "fast",
+      "cut"
+    ],
+    "file": "synth/whoosh-fast.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 0.7
+  },
+  {
+    "id": "whoosh-long",
+    "title": "Long whoosh",
+    "category": "Whooshes & swipes",
+    "tags": [
+      "whoosh",
+      "swoosh",
+      "transition",
+      "long",
+      "slide"
+    ],
+    "file": "synth/whoosh-long.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 1.5
+  },
+  {
+    "id": "whoosh-reverse",
+    "title": "Reverse whoosh",
+    "category": "Whooshes & swipes",
+    "tags": [
+      "whoosh",
+      "reverse",
+      "suck in",
+      "transition",
+      "zoom"
+    ],
+    "file": "synth/whoosh-reverse.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 1.1
+  },
+  {
+    "id": "swipe-ui",
+    "title": "UI swipe",
+    "category": "Whooshes & swipes",
+    "tags": [
+      "swipe",
+      "ui",
+      "slide",
+      "short",
+      "interface"
+    ],
+    "file": "synth/swipe-ui.wav",
+    "license": "SmoothyEdit original",
+    "author": "SmoothyEdit",
+    "sourceUrl": "",
+    "origin": "synth",
+    "duration": 0.28
+  },
+  {
+    "id": "cc0-whip",
+    "title": "Whip swish",
+    "category": "Whooshes & swipes",
+    "tags": [
+      "whip",
+      "swish",
+      "swoosh",
+      "transition",
+      "fast"
+    ],
+    "file": "cc0/whip.wav",
+    "license": "CC0",
+    "author": "JW_Audio",
+    "sourceUrl": "https://freesound.org/s/838766/",
+    "origin": "cc0",
+    "duration": 0.173
+  },
+  {
+    "id": "cc0-whoosh",
+    "title": "Whoosh",
+    "category": "Whooshes & swipes",
+    "tags": [
+      "whoosh",
+      "swoosh",
+      "transition",
+      "quick"
+    ],
+    "file": "cc0/whoosh.wav",
+    "license": "CC0",
+    "author": "1bob",
+    "sourceUrl": "https://freesound.org/s/831936/",
+    "origin": "cc0",
+    "duration": 0.154
+  }
+]

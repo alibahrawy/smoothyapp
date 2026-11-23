@@ -25,7 +25,7 @@ async function withFixture(action,editor){
  const invoke=(name,input)=>fixture.handlers.get('stock-'+name)(null,input);
  try{await action({folder,invoke,imports,values,disconnect:()=>{connected=false;},rejectImport:()=>{importsSucceed=false;}});}finally{globalThis.fetch=original;await rm(folder,{recursive:true,force:true});}
 }
-test('stock IPC searches without a key and settings report configuration without credentials',async()=>withFixture(async f=>{assert.deepEqual(f.invoke('get-settings'),{folder:f.folder,pixabayEnabled:false});assert.equal((await f.invoke('search',{query:'ocean'})).videos[0].license,'Public domain');}));
+test('stock IPC searches without a key and settings report configuration without credentials',async()=>withFixture(async f=>{assert.deepEqual(f.invoke('get-settings'),{folder:f.folder,pixabayEnabled:false,coverrEnabled:false});assert.equal((await f.invoke('search',{query:'ocean'})).videos[0].license,'Public domain');}));
 test('stock import rejects unknown IDs/disconnected Premiere and uses only the saved MP4',async()=>withFixture(async f=>{
  await f.invoke('search',{query:'ocean'});assert.equal((await f.invoke('download',{videoId:999,fileId:1})).success,false);assert.equal(f.imports.length,0);assert.deepEqual(fixture.usage,['stock_search']);
  const result=await f.invoke('download',{videoId:100,fileId:1,premiere:true});assert.equal(result.imported,true);assert.deepEqual(f.imports,[result.path]);assert.deepEqual(await readFile(result.path),bytes);assert.equal(fixture.events.some(event=>event.data.phase==='converting'),true);
@@ -36,7 +36,7 @@ test('failed Premiere import retains the permanent MP4 and its source record',as
 test('desktop IPC exposes no provider key setter, remover or credential settings',async()=>withFixture(async f=>{
  assert.equal(fixture.handlers.has('stock-save-pixabay-key'),false);
  assert.equal(fixture.handlers.has('stock-remove-pixabay-key'),false);
- assert.deepEqual(f.invoke('get-settings'),{folder:f.folder,pixabayEnabled:false});
+ assert.deepEqual(f.invoke('get-settings'),{folder:f.folder,pixabayEnabled:false,coverrEnabled:false});
  assert.match((await f.invoke('search',{query:'ocean',provider:'pixabay'})).error,/unavailable in this build/);
 }));
 

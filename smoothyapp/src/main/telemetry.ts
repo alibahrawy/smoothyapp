@@ -53,7 +53,15 @@ export function trackEvent(event: 'install' | 'launch' | 'heartbeat', tool?: str
   void send(event, tool);
 }
 
+// Local-only listener (the upgrade/social reminders count finished tools on this
+// device). It runs even when telemetry is off and never sends anything.
+let toolRunListener: ((tool: string) => void) | null = null;
+export function setToolRunListener(listener: ((tool: string) => void) | null) {
+  toolRunListener = listener;
+}
+
 export function trackTool(tool: string) {
+  try { toolRunListener?.(tool); } catch { /* Reminders must never block a tool. */ }
   void send('tool_run', tool);
 }
 

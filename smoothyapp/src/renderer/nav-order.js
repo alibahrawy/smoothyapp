@@ -46,9 +46,25 @@ function move(item, delta) {
   item.focus();
 }
 
+const defaults = {};
+
+function captureDefaults() {
+  for (const container of groups()) {
+    if (!defaults[container.id]) defaults[container.id] = itemsOf(container).map(tabOf);
+  }
+}
+
 function reset() {
   try { localStorage.removeItem(KEY); } catch { /* nothing saved */ }
-  location.reload();
+  for (const container of groups()) {
+    const wanted = defaults[container.id];
+    if (!Array.isArray(wanted)) continue;
+    const byTab = new Map(itemsOf(container).map((item) => [tabOf(item), item]));
+    for (const tab of wanted) {
+      const item = byTab.get(tab);
+      if (item) container.append(item);
+    }
+  }
 }
 
 let menu = null;
@@ -110,6 +126,7 @@ function bindDrag() {
 }
 
 function init() {
+  captureDefaults();
   applySaved();
   for (const container of groups()) {
     for (const item of itemsOf(container)) {

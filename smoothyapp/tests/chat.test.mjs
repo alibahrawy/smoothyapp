@@ -7,14 +7,19 @@ const serviceBundle = await build({entryPoints:[process.getBuiltinModule('node:u
 const {createChatService,validateChatInput} = await import(`data:text/javascript;base64,${Buffer.from(serviceBundle.outputFiles[0].text).toString('base64')}`);
 const input = {model:'openai/gpt-6-luna',messages:[{role:'user',content:'Help with my edit'}]};
 function fixture() {const f={owner:'a',enabled:true,events:[],calls:[],reply:'A useful reply'};const service=createChatService({owner:()=>f.owner,enabled:()=>f.enabled,writingStyle:()=>f.writingStyle,track:id=>{if(f.analyticsFailure)throw Error('Offline');f.events.push(id);},request:async(...args)=>{f.calls.push(args);if(f.request)return f.request(...args);if(f.fail)throw Error(f.fail);return f.reply;}});return {f,service};}
-test('desktop delegates model selection to Admin, preserves conversation and counts each completion once',async()=>{
+test('desktop forwards the chosen budget model, preserves conversation and counts each completion once',async()=>{
   const {f,service}=fixture();
-  for(const model of [undefined,'openai/gpt-6-luna','deepseek/deepseek-v4.1-flash','openai/gpt-6-astra']) {
+  const models=[undefined,'openai/gpt-6-luna','anthropic/claude-haiku-5.5','deepseek/deepseek-v4.1-flash-1017'];
+  for(const model of models) {
     const messages=[...input.messages,{role:'assistant',content:'Try this'},{role:'user',content:'Make it shorter'}];
     await service.run({model,messages});
-    assert.deepEqual(f.calls.at(-1)[1],{messages,thinking:false});
+    assert.deepEqual(f.calls.at(-1)[1],{messages,thinking:false,...(model&&{model})});
   }
-  assert.deepEqual(f.events,Array(4).fill('chat_reply'));
+  await service.run({model:'google/gemini-3.8-flash',messages:input.messages,thinking:true});
+  assert.equal(f.calls.at(-1)[1].model,'google/gemini-3.8-flash');
+  await assert.rejects(service.run({model:'google/gemini-3.8-flash',messages:input.messages,thinking:false}),/requires Thinking/);
+  await assert.rejects(service.run({model:'openai/gpt-6-astra',messages:input.messages}),/supported chat model/);
+  assert.deepEqual(f.events,Array(5).fill('chat_reply'));
 });
 test('Thinking forwards both states; invalid modes reject before work or counting',async()=>{
   const {f,service}=fixture();

@@ -1,5 +1,6 @@
 import { editorName,editorText } from './editor-context';
 import { initAudioArchive } from './audio-archive.js';
+import { initSfxLibrary } from './sfx-library.js';
 import { initAudioPlayer, trackRow, favoriteId, refreshTrackCommunity } from './audio-player.js';
 
 export function initAudioLibrary({ isConnected }) {
@@ -190,6 +191,7 @@ export function initAudioLibrary({ isConnected }) {
   archive = initAudioArchive({ player, community: () => community, onFavorite: favorite, onArtist: showArtist,
     onViewChange: view => { savedViewActive = view === 'saved'; render(); }, isLibraryBusy: () => state.busy,
     onSaved: accept, localTracks: () => state.tracks, previewSaved: preview });
+  initSfxLibrary({ isConnected });
   api.audioCommunityState().then(result => { if (result.success) acceptCommunity(result); }).catch(() => {});
   api.audioLibraryState().then(result => { if (!result.success) throw new Error(result.error); accept(result); }).catch(() => message('Could not load the audio library. Restart the app and retry.', true));
   return { isBusy: () => state.busy || archive?.isBusy() };

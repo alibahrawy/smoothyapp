@@ -3,13 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SmoothyEdit</title>
+  <title>SmoothyApp</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="shortscuts.css">
   <link rel="stylesheet" href="community.css">
   <link rel="stylesheet" href="agentic.css">
   <link rel="stylesheet" href="design-system.css">
   <link rel="stylesheet" href="custom-select.css">
+  <link rel="stylesheet" href="brand.css">
+  <link rel="stylesheet" href="dark.css">
+  <link rel="stylesheet" href="nudges.css">
 </head>
 <body>
   <aside id="resolve-receive-banner" class="resolve-receive-banner hidden" aria-label="DaVinci Resolve handoff">
@@ -47,237 +50,50 @@
           </span>
           <span class="nav-label">Multicam</span>
         </a><a href="#" class="nav-item" data-tab="silence">
-          <span class="nav-icon"><svg aria-hidden="true" data-icon="volume-x"
-  xmlns="http://www.w3.org/2000/svg"
-  width="20"
-  height="20"
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  stroke-linejoin="round"
->
-  <path d="M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z" />
-  <line x1="22" x2="16" y1="9" y2="15" />
-  <line x1="16" x2="22" y1="9" y2="15" />
-</svg>
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="volume-x" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M213.92,210.62a8,8,0,1,1-11.84,10.76L160,175.09v48.6a8.29,8.29,0,0,1-3.91,7.18,8,8,0,0,1-9-.56l-65.55-51A4,4,0,0,1,80,176.18V87.09L42.08,45.38A8,8,0,1,1,53.92,34.62Zm-27.21-55.46a8,8,0,0,0,11.29-.7,40,40,0,0,0,0-52.88,8,8,0,1,0-12,10.57,24,24,0,0,1,0,31.72A8,8,0,0,0,186.71,155.16Zm40.92-80.49a8,8,0,1,0-11.92,10.66,64,64,0,0,1,0,85.34,8,8,0,1,0,11.92,10.66,80,80,0,0,0,0-106.66ZM153,119.87a4,4,0,0,0,7-2.7V32.25a8.27,8.27,0,0,0-2.88-6.4,8,8,0,0,0-10-.16L103.83,59.33a4,4,0,0,0-.5,5.85ZM60,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H60a4,4,0,0,0,4-4V84A4,4,0,0,0,60,80Z"/></svg>
 
           </span>
           <span class="nav-label">Silence Removal</span>
-        </a><a href="#" class="nav-item" data-tab="local-audio" style="--tab-accent:#A8D8FF">
-          <span class="nav-icon"><svg aria-hidden="true" data-icon="audio-waveform" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2"/></svg></span><span class="nav-label">Audio Cleanup</span>
+        </a><a href="#" class="nav-item" data-tab="local-audio">
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="audio-waveform" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM72,152a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm32,32a8,8,0,0,1-16,0V72a8,8,0,0,1,16,0Zm32-16a8,8,0,0,1-16,0V88a8,8,0,0,1,16,0Zm32-16a8,8,0,0,1-16,0V104a8,8,0,0,1,16,0Zm32,8a8,8,0,0,1-16,0V96a8,8,0,0,1,16,0Z"/></svg></span><span class="nav-label">Audio Cleanup</span>
         </a><a href="#" class="nav-item" data-tab="captions">
-          <span class="nav-icon"><svg aria-hidden="true" data-icon="captions"
-  xmlns="http://www.w3.org/2000/svg"
-  width="20"
-  height="20"
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  stroke-linejoin="round"
->
-  <rect width="18" height="14" x="3" y="5" rx="2" ry="2" />
-  <path d="M7 15h4M15 15h2M7 11h2M13 11h4" />
-</svg>
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="captions" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M224,48H32A16,16,0,0,0,16,64V192a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48ZM116,162.64a40,40,0,1,1,0-69.28,8,8,0,1,1-8,13.85,24,24,0,1,0,0,41.58,8,8,0,0,1,8,13.85Zm80,0a40,40,0,1,1,0-69.28,8,8,0,1,1-8,13.85,24,24,0,1,0,0,41.58,8,8,0,0,1,8,13.85Z"/></svg>
           </span>
           <span class="nav-label">Captions</span>
-        </a><a href="#" class="nav-item" data-tab="shortscuts" style="--tab-accent:#C2E67F">
-          <span class="nav-icon"><svg aria-hidden="true" data-icon="zap"
-  xmlns="http://www.w3.org/2000/svg"
-  width="20"
-  height="20"
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  stroke-linejoin="round"
->
-  <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" />
-</svg>
+        </a><a href="#" class="nav-item" data-tab="shortscuts">
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="zap" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M213.85,125.46l-112,120a8,8,0,0,1-13.69-7l14.66-73.33L45.19,143.49a8,8,0,0,1-3-13l112-120a8,8,0,0,1,13.69,7L153.18,90.9l57.63,21.61a8,8,0,0,1,3,12.95Z"/></svg>
 
           </span>
           <span class="nav-label">ShortsCuts</span>
-        </a><a href="#" class="nav-item" data-tab="compressor">
-          <span class="nav-icon"><svg aria-hidden="true" data-icon="shrink"
-  xmlns="http://www.w3.org/2000/svg"
-  width="20"
-  height="20"
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  stroke-linejoin="round"
->
-  <path d="m15 15 6 6m-6-6v4.8m0-4.8h4.8" />
-  <path d="M9 19.8V15m0 0H4.2M9 15l-6 6" />
-  <path d="M15 4.2V9m0 0h4.8M15 9l6-6" />
-  <path d="M9 4.2V9m0 0H4.2M9 9 3 3" />
-</svg>
+        </a><a href="#" class="nav-item" data-tab="compressor" aria-label="Media Encoder · compress, convert, webm, mp4, h264, h265, hevc, av1, prores, extract audio, mp3, wav, flac">
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="shrink" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M144,104V64a8,8,0,0,1,13.66-5.66L172,72.69l30.34-30.35a8,8,0,0,1,11.32,11.32L183.31,84l14.35,14.34A8,8,0,0,1,192,112H152A8,8,0,0,1,144,104Zm-40,40H64a8,8,0,0,0-5.66,13.66L72.69,172,42.34,202.34a8,8,0,0,0,11.32,11.32L84,183.31l14.34,14.35A8,8,0,0,0,112,192V152A8,8,0,0,0,104,144Zm3.06-87.39a8,8,0,0,0-8.72,1.73L84,72.69,53.66,42.34A8,8,0,0,0,42.34,53.66L72.69,84,58.34,98.34A8,8,0,0,0,64,112h40a8,8,0,0,0,8-8V64A8,8,0,0,0,107.06,56.61ZM183.31,172l14.35-14.34A8,8,0,0,0,192,144H152a8,8,0,0,0-8,8v40a8,8,0,0,0,13.66,5.66L172,183.31l30.34,30.35a8,8,0,0,0,11.32-11.32Z"/></svg>
 
           </span>
-          <span class="nav-label">Compressor</span>
+          <span class="nav-label">Media Encoder</span>
         </a><a href="#" class="nav-item" data-tab="assets">
-          <span class="nav-icon"><svg aria-hidden="true" data-icon="image"
-  xmlns="http://www.w3.org/2000/svg"
-  width="20"
-  height="20"
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  stroke-linejoin="round"
->
-  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-  <circle cx="9" cy="9" r="2" />
-  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-</svg>
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="image" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM156,88a12,12,0,1,1-12,12A12,12,0,0,1,156,88Zm60,112H40V160.69l46.34-46.35a8,8,0,0,1,11.32,0h0L165,181.66a8,8,0,0,0,11.32-11.32l-17.66-17.65L173,138.34a8,8,0,0,1,11.31,0L216,170.07V200Z"/></svg>
 
           </span>
           <span class="nav-label">Assets</span>
-        </a></div></section><section class="channel-group" data-channel-group="agentic" hidden><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-agentic"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">Agentic</span></button><div class="channel-group-items" id="channels-agentic"><a href="#" class="nav-item" data-tab="agentic" style="--tab-accent:#B7A6FF" aria-label="Agentic · connect an MCP agent and review timecoded notes">
-          <span class="nav-icon"><svg aria-hidden="true" data-icon="bot"
-  xmlns="http://www.w3.org/2000/svg"
-  width="20"
-  height="20"
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  stroke-linejoin="round"
->
-  <path d="M12 8V4H8" />
-  <rect width="16" height="12" x="4" y="8" rx="2" />
-  <path d="M2 14h2M20 14h2M15 13v2M9 13v2" />
-</svg>
+        </a></div></section><section class="channel-group" data-channel-group="agentic" hidden><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-agentic"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">Agentic</span></button><div class="channel-group-items" id="channels-agentic"><a href="#" class="nav-item" data-tab="agentic" aria-label="Agentic · connect an MCP agent and review timecoded notes">
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="bot" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M200,48H136V16a8,8,0,0,0-16,0V48H56A32,32,0,0,0,24,80V192a32,32,0,0,0,32,32H200a32,32,0,0,0,32-32V80A32,32,0,0,0,200,48ZM172,96a12,12,0,1,1-12,12A12,12,0,0,1,172,96ZM96,184H80a16,16,0,0,1,0-32H96ZM84,120a12,12,0,1,1,12-12A12,12,0,0,1,84,120Zm60,64H112V152h32Zm32,0H160V152h16a16,16,0,0,1,0,32Z"/></svg>
           </span>
           <span class="nav-label">Agent</span>
           <span class="agentic-nav-badge hidden" id="agentic-nav-badge" aria-hidden="true"></span>
         </a></div></section><section class="channel-group" data-channel-group="library"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-library"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">Library</span></button><div class="channel-group-items" id="channels-library"><a href="#" class="nav-item" data-tab="stock">
-          <span class="nav-icon"><svg aria-hidden="true" data-icon="film"
-  xmlns="http://www.w3.org/2000/svg"
-  width="20"
-  height="20"
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  stroke-linejoin="round"
->
-  <rect width="18" height="18" x="3" y="3" rx="2" />
-  <path d="M7 3v18" />
-  <path d="M3 7.5h4" />
-  <path d="M3 12h18" />
-  <path d="M3 16.5h4" />
-  <path d="M17 3v18" />
-  <path d="M17 7.5h4" />
-  <path d="M17 16.5h4" />
-</svg>
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="film" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM184,56h32V72H184ZM72,200H40V184H72ZM72,72H40V56H72Zm48,128H88V184h32Zm0-128H88V56h32Zm48,128H136V184h32Zm0-128H136V56h32Zm48,128H184V184h32v16Z"/></svg>
 </span>
           <span class="nav-label">Stock Footage</span>
         </a><a href="#" class="nav-item" data-tab="audio">
-          <span class="nav-icon"><svg aria-hidden="true" data-icon="music"
-  xmlns="http://www.w3.org/2000/svg"
-  width="20"
-  height="20"
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  stroke-linejoin="round"
->
-  <path d="M9 18V5l12-2v13" />
-  <circle cx="6" cy="18" r="3" />
-  <circle cx="18" cy="16" r="3" />
-</svg>
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="music" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M212.92,17.71a7.89,7.89,0,0,0-6.86-1.46l-128,32A8,8,0,0,0,72,56V166.1A36,36,0,1,0,88,196V102.25l112-28V134.1A36,36,0,1,0,216,164V24A8,8,0,0,0,212.92,17.71Z"/></svg>
 </span>
           <span class="nav-label">Audio Library</span>
-        </a></div></section><section class="channel-group" data-channel-group="studio" data-fold-key="ai-workspace"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-studio"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">AI</span></button><div class="channel-group-items" id="channels-studio"><a href="#" class="nav-item" data-tab="studio-text" style="--tab-accent:#B0EC9C" aria-label="Dashboard · Studio · Shorts, Condense, Hooks, Titles, Descriptions, Thumbnails, B-roll, Social, Blog, SFX"><span class="nav-icon"><svg aria-hidden="true" data-icon="layout-dashboard"
-  xmlns="http://www.w3.org/2000/svg"
-  width="20"
-  height="20"
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  stroke-linejoin="round"
->
-  <rect width="7" height="9" x="3" y="3" rx="1" />
-  <rect width="7" height="5" x="14" y="3" rx="1" />
-  <rect width="7" height="9" x="14" y="12" rx="1" />
-  <rect width="7" height="5" x="3" y="16" rx="1" />
-</svg>
-</span><span class="nav-label">Dashboard</span><span class="paid-badge">Credits</span></a><a href="#" class="nav-item" data-tab="photos" aria-label="AI Photos · generate, edit, reactions, image history"><span class="nav-icon"><svg aria-hidden="true" data-icon="image-plus"
-  xmlns="http://www.w3.org/2000/svg"
-  width="20"
-  height="20"
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  stroke-linejoin="round"
->
-  <path d="M16 5h6" />
-  <path d="M19 2v6" />
-  <path d="M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5" />
-  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-  <circle cx="9" cy="9" r="2" />
-</svg>
-</span><span class="nav-label">AI Photos</span></a><a href="#" class="nav-item" data-tab="chat" aria-label="Chat"><span class="nav-icon"><svg aria-hidden="true" data-icon="messages-square"
-  xmlns="http://www.w3.org/2000/svg"
-  width="20"
-  height="20"
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  stroke-linejoin="round"
->
-  <path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z" />
-  <path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1" />
-</svg>
-</span><span class="nav-label">Chat</span></a></div></section><section class="channel-group" data-channel-group="community"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-community"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">Community</span></button><div class="channel-group-items" id="channels-community"><a href="#" class="nav-item" data-tab="community" style="--tab-accent:#D4C2FF" aria-label="Community chat"><span class="nav-icon"><svg aria-hidden="true" data-icon="users"
-  xmlns="http://www.w3.org/2000/svg"
-  width="20"
-  height="20"
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  stroke-linejoin="round"
->
-  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-  <circle cx="9" cy="7" r="4" />
-  <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-</svg>
+        </a></div></section><section class="channel-group" data-channel-group="studio" data-fold-key="ai-workspace"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-studio"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">AI</span></button><div class="channel-group-items" id="channels-studio"><a href="#" class="nav-item" data-tab="studio-text" aria-label="Dashboard · Studio · Shorts, Condense, Hooks, Titles, Descriptions, Thumbnails, B-roll, Social, Blog, SFX"><span class="nav-icon"><svg aria-hidden="true" data-icon="layout-dashboard" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M120,56v48a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V56A16,16,0,0,1,56,40h48A16,16,0,0,1,120,56Zm80-16H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm-96,96H56a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,104,136Zm96,0H152a16,16,0,0,0-16,16v48a16,16,0,0,0,16,16h48a16,16,0,0,0,16-16V152A16,16,0,0,0,200,136Z"/></svg>
+</span><span class="nav-label">Dashboard</span><span class="paid-badge">Credits</span></a><a href="#" class="nav-item" data-tab="photos" aria-label="AI Photos · generate, edit, reactions, image history"><span class="nav-icon"><svg aria-hidden="true" data-icon="image-plus" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M208,144a15.78,15.78,0,0,1-10.42,14.94L146,178l-19,51.62a15.92,15.92,0,0,1-29.88,0L78,178l-51.62-19a15.92,15.92,0,0,1,0-29.88L78,110l19-51.62a15.92,15.92,0,0,1,29.88,0L146,110l51.62,19A15.78,15.78,0,0,1,208,144ZM152,48h16V64a8,8,0,0,0,16,0V48h16a8,8,0,0,0,0-16H184V16a8,8,0,0,0-16,0V32H152a8,8,0,0,0,0,16Zm88,32h-8V72a8,8,0,0,0-16,0v8h-8a8,8,0,0,0,0,16h8v8a8,8,0,0,0,16,0V96h8a8,8,0,0,0,0-16Z"/></svg>
+</span><span class="nav-label">AI Photos</span></a><a href="#" class="nav-item" data-tab="chat" aria-label="Chat"><span class="nav-icon"><svg aria-hidden="true" data-icon="messages-square" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M232.07,186.76a80,80,0,0,0-62.5-114.17A80,80,0,1,0,23.93,138.76l-7.27,24.71a16,16,0,0,0,19.87,19.87l24.71-7.27a80.39,80.39,0,0,0,25.18,7.35,80,80,0,0,0,108.34,40.65l24.71,7.27a16,16,0,0,0,19.87-19.86Zm-16.25,1.47L224,216l-27.76-8.17a8,8,0,0,0-6,.63,64.05,64.05,0,0,1-85.87-24.88A79.93,79.93,0,0,0,174.7,89.71a64,64,0,0,1,41.75,92.48A8,8,0,0,0,215.82,188.23Z"/></svg>
+</span><span class="nav-label">Chat</span></a></div></section><section class="channel-group" data-channel-group="community"><button type="button" class="channel-group-toggle" aria-expanded="true" aria-controls="channels-community"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="m3 4.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span class="channel-group-name">Community</span></button><div class="channel-group-items" id="channels-community"><a href="#" class="nav-item" data-tab="community" aria-label="Community chat"><span class="nav-icon"><svg aria-hidden="true" data-icon="users" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M64.12,147.8a4,4,0,0,1-4,4.2H16a8,8,0,0,1-7.8-6.17,8.35,8.35,0,0,1,1.62-6.93A67.79,67.79,0,0,1,37,117.51a40,40,0,1,1,66.46-35.8,3.94,3.94,0,0,1-2.27,4.18A64.08,64.08,0,0,0,64,144C64,145.28,64,146.54,64.12,147.8Zm182-8.91A67.76,67.76,0,0,0,219,117.51a40,40,0,1,0-66.46-35.8,3.94,3.94,0,0,0,2.27,4.18A64.08,64.08,0,0,1,192,144c0,1.28,0,2.54-.12,3.8a4,4,0,0,0,4,4.2H240a8,8,0,0,0,7.8-6.17A8.33,8.33,0,0,0,246.17,138.89Zm-89,43.18a48,48,0,1,0-58.37,0A72.13,72.13,0,0,0,65.07,212,8,8,0,0,0,72,224H184a8,8,0,0,0,6.93-12A72.15,72.15,0,0,0,157.19,182.07Z"/></svg>
 </span><span class="nav-label">Community</span><span class="community-nav-badge hidden" id="community-nav-dot" role="status"></span></a></div></section><a href="#" class="nav-item hidden" data-tab="logs">
-          <span class="nav-icon"><svg aria-hidden="true" data-icon="terminal"
-  xmlns="http://www.w3.org/2000/svg"
-  width="20"
-  height="20"
-  viewBox="0 0 24 24"
-  fill="none"
-  stroke="currentColor"
-  stroke-width="2"
-  stroke-linecap="round"
-  stroke-linejoin="round"
->
-  <polyline points="4 17 10 11 4 5" />
-  <line x1="12" x2="20" y1="19" y2="19" />
-</svg>
+          <span class="nav-icon"><svg aria-hidden="true" data-icon="terminal" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor"><path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40Zm-91,94.25-40,32a8,8,0,1,1-10-12.5L107.19,128,75,102.25a8,8,0,1,1,10-12.5l40,32a8,8,0,0,1,0,12.5ZM176,168H136a8,8,0,0,1,0-16h40a8,8,0,0,1,0,16Z"/></svg>
 
           </span>
           <span class="nav-label">Dev</span>
@@ -327,7 +143,7 @@
           <div class="footer-actions">
             <span id="sidebar-version" class="version">Version…</span>
             <div class="footer-utilities">
-              <button class="settings-btn pin-btn" id="pin-btn" type="button" aria-label="Stay on top" aria-pressed="false" title="Keep SmoothyEdit above other windows">
+              <button class="settings-btn pin-btn" id="pin-btn" type="button" aria-label="Stay on top" aria-pressed="false" title="Keep SmoothyApp above other windows">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 17v5M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
               </button>
               <button class="settings-btn" id="discord-btn" type="button" aria-label="Join our Discord" title="Join our Discord">
@@ -358,23 +174,57 @@
     <main class="main-content">
       <div class="tab-content" id="tab-local-audio">
         <div class="content-scroll">
-          <div class="local-audio-shell">
-            <div class="local-audio-input" role="group" aria-label="Audio or video input">
-              <span id="local-audio-source" class="local-audio-source is-empty">Choose an audio or video file.</span>
-              <button type="button" id="local-audio-pick" class="btn btn-secondary">Choose file</button>
+          <div class="local-audio-shell" id="local-audio-root">
+            <header class="local-audio-intro">
+              <h1>Audio Cleanup</h1>
+              <p class="help-text">Remove background noise, separate voice from music, or isolate clean dialogue — locally on your computer, no credits.</p>
+            </header>
+            <div class="local-audio-modes" role="radiogroup" aria-label="Choose what you want to do">
+              <button type="button" class="local-audio-mode is-selected" role="radio" aria-checked="true" data-audio-mode="denoise">
+                <span class="local-audio-mode-top">
+                  <span class="local-audio-mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h2M6 8v8M10 5v14M14 9v6M18 11v2"/><path d="m19 3 1 2 2 1-2 1-1 2-1-2-2-1 2-1Z"/></svg></span>
+                  <span class="local-audio-mode-title">Remove Noise</span>
+                  <span class="local-audio-mode-pill">Direct</span>
+                </span>
+                <span class="local-audio-mode-desc">Clean mic hiss, fan, hum and room noise without splitting music.</span>
+              </button>
+              <button type="button" class="local-audio-mode" role="radio" aria-checked="false" data-audio-mode="separate">
+                <span class="local-audio-mode-top">
+                  <span class="local-audio-mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M4 17h10M17 7l3-3m0 0-3-3m3 3H14M17 17l3 3m0 0-3 3m3-3H14"/><circle cx="7" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></span>
+                  <span class="local-audio-mode-title">Separate Voice &amp; Music</span>
+                  <span class="local-audio-mode-pill">2 Tracks</span>
+                </span>
+                <span class="local-audio-mode-desc">Split a recording or song into separate Voice and Music WAVs.</span>
+              </button>
+              <button type="button" class="local-audio-mode" role="radio" aria-checked="false" data-audio-mode="isolate">
+                <span class="local-audio-mode-top">
+                  <span class="local-audio-mode-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"/></svg></span>
+                  <span class="local-audio-mode-title">Isolate Clean Voice</span>
+                  <span class="local-audio-mode-pill">Music + Noise</span>
+                </span>
+                <span class="local-audio-mode-desc">Strip both background music and noise in one step for clean dialogue.</span>
+              </button>
             </div>
-            <div class="local-audio-notes"><p class="local-audio-note">Splits speech from music. Enhanced also cleans the speech. Runs on your computer, no credits.</p>
-            <p id="local-audio-setup-note" class="local-audio-note hidden">First setup downloads the local engine and models. GPU runtimes can be several GB.</p><p id="local-audio-device" class="local-audio-note"></p></div>
+            <div id="local-audio-dropzone" class="local-audio-input" role="group" aria-label="Audio or video input">
+              <span class="local-audio-file-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span>
+              <span id="local-audio-source" class="local-audio-source is-empty">Drop an audio or video file here, or choose one.</span>
+              <button type="button" id="local-audio-pick" class="btn btn-secondary">Choose file</button>
+              <button type="button" id="local-audio-run" class="btn btn-primary" disabled>Remove Noise</button>
+            </div>
+            <div class="local-audio-notes">
+              <p id="local-audio-setup-note" class="local-audio-note hidden">First run downloads the local engine and models. GPU runtimes can be several GB.</p>
+              <p id="local-audio-device" class="local-audio-note"></p>
+            </div>
             <div id="local-audio-operation" class="local-audio-operation">
               <div id="local-audio-feedback" class="local-audio-feedback hidden">
                 <div id="local-audio-activity" class="local-audio-activity hidden"><span class="local-audio-spinner" aria-hidden="true"></span><strong id="local-audio-task"></strong><span id="local-audio-elapsed" aria-hidden="true"></span></div>
                 <p id="local-audio-status" class="help-text" role="status" aria-live="polite" aria-atomic="true"></p>
                 <div id="local-audio-progress" class="local-audio-progress hidden" role="progressbar" aria-label="Audio processing in progress"><span></span></div>
                 <p id="local-audio-progress-hint" class="help-text hidden">Running on your computer. Longer files can take several minutes.</p>
-                <div class="local-audio-actions"><button type="button" id="local-audio-cancel" class="btn btn-secondary hidden">Cancel</button><button type="button" id="local-audio-retry" class="btn btn-secondary hidden">Retry separation</button><button type="button" id="local-audio-setup" class="stock-text-button hidden">Repair engine &amp; retry</button></div>
+                <div class="local-audio-actions"><button type="button" id="local-audio-cancel" class="btn btn-secondary hidden">Cancel</button><button type="button" id="local-audio-retry" class="btn btn-secondary hidden">Retry</button><button type="button" id="local-audio-setup" class="stock-text-button hidden">Repair engine &amp; retry</button></div>
               </div>
             </div>
-            <div id="local-audio-results" class="local-audio-results hidden" aria-label="Audio preview and mix"></div>
+            <div id="local-audio-results" class="local-audio-results hidden" aria-label="Audio preview and export"></div>
             <p id="local-audio-playback-status" class="help-text hidden" role="status" aria-live="polite"></p>
           </div>
         </div>
@@ -382,14 +232,14 @@
       <div class="tab-content" id="tab-studio-text">
         <header id="studio-workspace-header" class="studio-workspace-header">
           <div class="studio-workspace-heading"><div><h1>Studio</h1><p id="studio-workspace-description" class="help-text">One input, more possibilities.</p></div><div class="studio-header-actions"><span id="studio-workspace-credits" class="photos-credit-pill">Studio credits</span><button type="button" id="studio-dashboard-btn" class="stock-text-button" title="Open Studio Dashboard in your browser">Dashboard ↗</button><button type="button" id="shorts-history-btn" class="btn btn-secondary btn-small hidden" disabled>History</button><button type="button" id="studio-text-history-toggle" class="btn btn-secondary btn-small">History</button></div></div>
-          <div class="studio-tool-buttons" role="group" aria-label="Studio tools"><button type="button" class="studio-tool-button" data-studio-mode="shorts" style="--tool-color:#B0EC9C" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="14" height="14" rx="3"/><path d="m17 10 5-3v10l-5-3"/></svg><span>Shorts</span></button><button type="button" class="studio-tool-button" data-studio-mode="condense" style="--tool-color:#ffc99a" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h6"/><path d="m17 10 3 3-3 3M20 13h-5"/></svg><span>Condense</span></button><button type="button" class="studio-tool-button" data-studio-mode="hook" style="--tool-color:#ffe08c" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11a5 5 0 0 1-10 0v-3l3 3"/><path d="m16 3 1.5 3L21 7l-3.5 1.5L16 12l-1.5-3.5L11 7l3.5-1L16 3Z"/></svg><span>Hooks</span></button><button type="button" class="studio-tool-button" data-studio-mode="title" style="--tool-color:#9edbf8" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M12 5v14M8 19h8M4 5v3M20 5v3"/></svg><span>Titles</span></button><button type="button" class="studio-tool-button" data-studio-mode="description" style="--tool-color:#abc8ff" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h6"/></svg><span>Descriptions</span></button><button type="button" class="studio-tool-button" data-studio-mode="thumbnail" style="--tool-color:#d3b5ff" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m3 17 5-5 4 4 4-6 5 7"/></svg><span>Thumbnails</span></button><button type="button" class="studio-tool-button" data-studio-mode="broll" style="--tool-color:#a5e4c9" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 8h4M3 16h4M17 8h4M17 16h4"/><path d="m10 9 5 3-5 3V9Z"/></svg><span>B-roll</span></button><button type="button" class="studio-tool-button" data-studio-mode="twitter" style="--tool-color:#ffc0df" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H4l-1 1v-9a9 9 0 0 1 18 0Z"/><path d="M7 10h10M7 14h7"/></svg><span>Social</span></button><button type="button" class="studio-tool-button" data-studio-mode="blog" style="--tool-color:#9de2df" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-2H4V4ZM20 4h-4a3 3 0 0 0-3 3v14a4 4 0 0 1 4-2h3V4Z"/></svg><span>Blog</span></button><button type="button" class="studio-tool-button" data-studio-mode="sfx" style="--tool-color:#bfb8ff" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m10 4-5 4H2v8h3l5 4V4ZM14 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg><span>SFX</span></button></div>
+          <div class="studio-tool-buttons" role="group" aria-label="Studio tools"><button type="button" class="studio-tool-button" data-studio-mode="shorts" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="14" height="14" rx="3"/><path d="m17 10 5-3v10l-5-3"/></svg><span>Shorts</span></button><button type="button" class="studio-tool-button" data-studio-mode="condense" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h6"/><path d="m17 10 3 3-3 3M20 13h-5"/></svg><span>Condense</span></button><button type="button" class="studio-tool-button" data-studio-mode="hook" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11a5 5 0 0 1-10 0v-3l3 3"/><path d="m16 3 1.5 3L21 7l-3.5 1.5L16 12l-1.5-3.5L11 7l3.5-1L16 3Z"/></svg><span>Hooks</span></button><button type="button" class="studio-tool-button" data-studio-mode="title" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M12 5v14M8 19h8M4 5v3M20 5v3"/></svg><span>Titles</span></button><button type="button" class="studio-tool-button" data-studio-mode="description" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h6"/></svg><span>Descriptions</span></button><button type="button" class="studio-tool-button" data-studio-mode="thumbnail" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="m3 17 5-5 4 4 4-6 5 7"/></svg><span>Thumbnails</span></button><button type="button" class="studio-tool-button" data-studio-mode="broll" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 8h4M3 16h4M17 8h4M17 16h4"/><path d="m10 9 5 3-5 3V9Z"/></svg><span>B-roll</span></button><button type="button" class="studio-tool-button" data-studio-mode="twitter" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-8 8H4l-1 1v-9a9 9 0 0 1 18 0Z"/><path d="M7 10h10M7 14h7"/></svg><span>Social</span></button><button type="button" class="studio-tool-button" data-studio-mode="blog" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-2H4V4ZM20 4h-4a3 3 0 0 0-3 3v14a4 4 0 0 1 4-2h3V4Z"/></svg><span>Blog</span></button><button type="button" class="studio-tool-button" data-studio-mode="sfx" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m10 4-5 4H2v8h3l5 4V4ZM14 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg><span>SFX</span></button></div>
         </header>
         <div class="content-scroll studio-text-scroll">
           <section id="studio-text-signin" class="section"><h2>Your subtitles, more possibilities</h2><p class="help-text">Sign in to use your Studio credits and shared history. Local editing tools stay free.</p><button type="button" id="studio-text-signin-btn" class="btn btn-primary">Sign in</button></section>
           <div id="studio-text-workspace" class="hidden">
-            <section id="studio-text-pro" class="section hidden"><p class="help-text">This tool is part of Smoothy Pro. Your local editing tools stay free.</p><button type="button" id="studio-text-upgrade" class="btn btn-secondary btn-small">View Smoothy Pro ↗</button></section>
+            <section id="studio-text-pro" class="section hidden"><p class="help-text">This tool is part of Smoothy Pro. Your local editing tools stay free.</p><button type="button" id="studio-text-upgrade" class="btn btn-pro btn-small">Get Smoothy Pro ↗</button></section>
             <section id="studio-text-empty" class="studio-empty"><span class="studio-empty-icon" aria-hidden="true">✦</span><h2 id="studio-text-heading">Condense plan</h2><p id="studio-text-description" class="help-text"></p><span>Choose a tool above. Add your subtitles below to get started.</span></section>
-            <section id="studio-text-result-section" class="section hidden"><div class="studio-source-heading"><h2 id="studio-text-result-heading">Your edit plan</h2><div class="studio-source-actions"><button type="button" id="studio-text-copy" class="btn btn-secondary btn-small">Copy</button><button type="button" id="studio-text-save" class="btn btn-secondary btn-small">Save TXT</button></div></div><p id="studio-text-result-help" class="help-text">Review these suggestions and make the edit yourself.</p><div id="studio-result-cards" class="studio-result-cards" aria-label="Formatted Studio result"></div><button id="studio-result-edit" type="button" class="stock-text-button studio-edit-toggle" aria-pressed="false">Edit as text</button><textarea id="studio-text-result" hidden class="studio-textarea studio-draft" aria-label="Editable Studio draft" rows="12"></textarea><label for="studio-text-refine" class="help-text">Refine this draft (uses Studio credits)</label><div class="studio-inline"><input id="studio-text-refine" class="text-input" maxlength="10000" placeholder="Make it shorter, change the tone…"><button type="button" id="studio-text-refine-btn" class="btn btn-secondary btn-small">Refine</button></div></section>
+            <section id="studio-text-result-section" class="section hidden"><div class="studio-source-heading"><h2 id="studio-text-result-heading">Your edit plan</h2><div class="studio-source-actions"><button type="button" id="studio-text-copy" class="btn btn-secondary btn-small">Copy all</button><button type="button" id="studio-text-save" class="btn btn-secondary btn-small">Save TXT</button></div></div><p id="studio-text-result-help" class="help-text">Review these suggestions and make the edit yourself.</p><div id="studio-result-cards" class="studio-result-cards" aria-label="Formatted Studio result"></div><button id="studio-result-edit" type="button" class="stock-text-button studio-edit-toggle" aria-pressed="false">Edit as text</button><textarea id="studio-text-result" hidden class="studio-textarea studio-draft" aria-label="Editable Studio draft" rows="12"></textarea><label for="studio-text-refine" class="help-text">Refine this draft (uses Studio credits)</label><div class="studio-inline"><input id="studio-text-refine" class="text-input" maxlength="10000" placeholder="Make it shorter, change the tone…"><button type="button" id="studio-text-refine-btn" class="btn btn-secondary btn-small">Refine</button></div></section>
           </div>
           <section id="studio-text-history" class="section hidden"><div class="studio-source-heading"><h2>Shared history</h2><button id="studio-text-history-refresh" type="button" class="btn btn-secondary btn-small">Refresh</button></div><div id="studio-text-history-items"></div><div class="studio-source-actions"><button id="studio-text-history-prev" type="button" class="btn btn-secondary btn-small">Previous</button><span id="studio-text-history-page" class="help-text"></span><button id="studio-text-history-next" type="button" class="btn btn-secondary btn-small">Next</button></div></section>
         </div>
@@ -455,12 +305,14 @@
           <div class="photo-composer"><div id="chat-attachments" class="chat-attachments" aria-label="Attached files"></div><textarea id="chat-prompt" rows="2" maxlength="10000" aria-label="Message Chat" placeholder="Ask anything…"></textarea><div class="photo-composer-toolbar">
             <button type="button" id="chat-add" class="photo-icon-button" aria-label="Add files or images" aria-expanded="false" popovertarget="chat-add-menu">＋</button>
             <button type="button" id="chat-thinking" class="chat-thinking-toggle" role="switch" aria-checked="false"><span class="chat-thinking-switch" aria-hidden="true"></span><span>Thinking</span></button>
+            <button type="button" id="chat-model" class="chat-model-trigger" aria-label="Chat model" aria-haspopup="listbox" aria-expanded="false" aria-controls="chat-model-list" popovertarget="chat-model-menu"><span id="chat-model-label">Luna</span><span aria-hidden="true">⌄</span></button>
             <div class="chat-send-controls">
             <button type="button" id="chat-send" class="photo-send-button" aria-label="Send message · uses Studio credits"><svg class="chat-send-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg><svg class="chat-stop-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
             </div>
           </div></div>
           <p id="chat-status" class="photos-status hidden" role="status" aria-live="polite"></p>
         </div>
+        <div id="chat-model-menu" class="photo-picker-popup chat-add-menu" popover><div id="chat-model-list" class="photo-picker-list" role="listbox" aria-label="Chat models"></div></div>
         <div id="chat-add-menu" class="photo-picker-popup chat-add-menu" popover><div class="photo-picker-list"><button type="button" id="chat-add-image">Add images</button><button type="button" id="chat-add-file">Add files</button></div><p class="photo-picker-footnote">Images, PDF, DOCX and text · up to 4 files / 10 MB each. Documents must contain readable text. Sent only when you send your message.</p></div>
       </div>
       <div class="tab-content" id="tab-community">
@@ -469,7 +321,7 @@
           <header class="community-head">
             <div>
               <h2>Community</h2>
-              <p class="help-text">Ask other editors. Text only: no links, pictures or spam.</p>
+              <p class="help-text">Ask other editors. Links from YouTube, X, Google Drive, Frame.io, Instagram and Reddit work; everything else is removed.</p>
             </div>
             <div class="community-head-actions">
               <span class="community-presence" id="community-presence" data-status="idle" role="status" aria-live="polite">
@@ -477,12 +329,17 @@
                 <span id="community-presence-text">Not connected</span>
               </span>
               <button type="button" class="btn btn-secondary btn-small hidden" id="community-reconnect">Reconnect</button>
+              <button type="button" class="btn btn-secondary btn-small" id="community-edit-profile" title="Edit your avatar and name">Profile</button>
             </div>
           </header>
           <p class="community-guest hidden" id="community-guest-banner">
             <span id="community-guest-text">You’re chatting as a guest.</span>
             <button type="button" class="btn btn-primary btn-small" id="community-signin">Sign in to keep your name</button>
           </p>
+          <p class="community-guest community-timeout hidden" id="community-timeout" role="status">
+            <span id="community-timeout-text">You’re on a timeout.</span>
+          </p>
+          <p class="community-error hidden" id="community-error" role="alert"></p>
           <div class="community-feed" id="community-feed" role="log" aria-live="polite" aria-label="Community messages"></div>
           <div class="community-composer">
             <textarea id="community-input" rows="2" maxlength="500" placeholder="Ask a question or share what worked…" aria-label="Message the community" autocomplete="off"></textarea>
@@ -546,6 +403,7 @@
         <div class="status-bar status-idle">Audio Library</div>
         <div class="audio-library-tabs" role="tablist" aria-label="Audio Library views">
           <button type="button" role="tab" id="audio-view-all" data-audio-view="all" aria-controls="audio-archive-panel" aria-selected="true">Music</button>
+          <button type="button" role="tab" id="audio-view-sfx" aria-controls="sfx-panel" aria-selected="false" tabindex="-1">Sound effects</button>
           <button type="button" role="tab" id="audio-view-favorites" data-audio-view="favorites" aria-controls="audio-archive-panel" aria-selected="false" tabindex="-1">Favorites</button>
           <button type="button" role="tab" id="audio-view-staff" data-audio-view="staff" aria-controls="audio-archive-panel" aria-selected="false" tabindex="-1">Staff picks</button>
           <button type="button" role="tab" id="audio-view-saved" data-audio-view="saved" aria-controls="audio-saved-panel" aria-selected="false" tabindex="-1">Saved MP3s</button>
@@ -563,6 +421,18 @@
             <div class="audio-table-scroll"><table class="audio-table"><thead><tr><th aria-label="Play"></th><th aria-label="Favorite"></th><th aria-label="Download"></th><th>Track title</th><th>Genre</th><th>Mood</th><th class="audio-artist-cell">Artist</th><th>Duration</th><th class="audio-license-cell">License type</th></tr></thead><tbody id="audio-archive-results"></tbody></table></div>
             <p class="help-text audio-empty-view hidden" id="audio-archive-empty"></p>
             <button type="button" class="stock-text-button hidden audio-more" id="audio-archive-more">Load more tracks</button>
+          </section>
+          <section id="sfx-panel" class="hidden" role="tabpanel" aria-labelledby="audio-view-sfx">
+            <form id="sfx-form" class="audio-filter-bar">
+              <span class="audio-filter-icon" aria-hidden="true">☷</span><input type="search" id="sfx-query" maxlength="100" aria-label="Search sound effects" placeholder="Search whoosh, riser, hit, pop, click…">
+            </form>
+            <div class="sfx-chips" id="sfx-categories" role="group" aria-label="Sound categories"></div>
+            <div class="audio-list-info"><span id="sfx-count" role="status" aria-live="polite">Loading sounds…</span><button class="stock-text-button" type="button" id="sfx-folder">Show saved sounds</button></div>
+            <div class="audio-table-scroll"><table class="audio-table"><thead><tr><th aria-label="Play"></th><th aria-label="Favorite"></th><th>Sound</th><th>Category</th><th>Length</th><th class="audio-license-cell">License</th><th aria-label="Save or send"></th></tr></thead><tbody id="sfx-results"></tbody></table></div>
+            <button type="button" class="stock-text-button hidden audio-more" id="sfx-more">Load more sounds</button>
+            <p class="help-text audio-empty-view hidden" id="sfx-empty">No sounds match. Try “whoosh”, “hit” or “click”.</p>
+            <p id="sfx-status" class="help-text sfx-status" role="status" aria-live="polite"></p>
+            <p class="sfx-note">Every sound here is either made for SmoothyApp or CC0, so you can use it in videos, including commercial ones, with no credit needed. Saved sounds go to your Sound Effects folder as lossless WAV. Premiere receives a 320 kbps MP3 copy.</p>
           </section>
           <section id="audio-saved-panel" class="hidden" role="tabpanel" aria-labelledby="audio-view-saved">
             <div class="audio-filter-bar"><span class="audio-filter-icon" aria-hidden="true">☷</span><input type="search" id="audio-query" aria-label="Search saved tracks" placeholder="Search saved tracks"><label class="audio-compact-filter">License<select id="audio-filter"><option value="">All licenses</option><option value="youtube-standard">YouTube</option><option value="cc-by">CC BY</option><option value="unverified">Not supplied</option></select></label><button class="stock-text-button" type="button" id="audio-pick">Add MP3s</button></div>
@@ -597,8 +467,8 @@
             <div class="audio-dock-controls"><button type="button" id="audio-dock-previous" aria-label="Previous track"></button><button type="button" id="audio-dock-play" aria-label="Play"></button><button type="button" id="audio-dock-next" aria-label="Next track"></button></div>
             <div class="audio-dock-track"><strong id="audio-dock-title">Choose a track to preview or download</strong><button type="button" class="audio-artist-link" id="audio-dock-artist" disabled></button><span id="audio-dock-status" role="status" aria-live="polite"></span></div>
             <div class="audio-dock-timeline"><span id="audio-dock-elapsed">0:00</span><input type="range" id="audio-dock-seek" min="0" max="0" value="0" step="0.1" aria-label="Playback position"><span id="audio-dock-duration">—</span></div>
-            <label class="audio-dock-volume" title="Volume"><span aria-hidden="true">♪</span><input type="range" id="audio-dock-volume" min="0" max="1" step="0.05" value="1" aria-label="Volume"></label>
-            <button type="button" id="audio-dock-star" class="audio-star" aria-label="Favorite track" aria-pressed="false">☆</button>
+            <label class="audio-dock-volume" title="Volume"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.4 18.4a9 9 0 0 0 0-12.8"/></svg><input type="range" id="audio-dock-volume" min="0" max="1" step="0.05" value="1" aria-label="Volume"></label>
+            <button type="button" id="audio-dock-star" class="audio-star" aria-label="Favorite track" aria-pressed="false" data-heart="off"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
           </div>
           <div class="audio-dock-footer"><p id="audio-archive-status" class="help-text" role="status" aria-live="polite"></p><span id="audio-dock-license" class="hidden"></span><button type="button" class="stock-text-button" id="audio-info-open" aria-haspopup="dialog">Licenses &amp; credits</button><button type="button" class="stock-text-button hidden" id="audio-dock-details">Track details</button><div class="audio-dock-actions"><button type="button" class="btn btn-primary btn-small hidden" id="audio-dock-save" aria-label="Download MP3"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></svg>Download MP3</button><button type="button" class="btn btn-secondary btn-small" id="audio-dock-send" data-editor-copy="Send to Premiere" data-editor-send><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>Send to Premiere</button><button type="button" class="stock-text-button hidden" id="audio-archive-cancel">Cancel download</button></div></div>
           <p id="audio-status" class="help-text" role="status" aria-live="polite"></p>
@@ -612,7 +482,7 @@
             <div id="audio-info-attribution" class="hidden"><p class="audio-info-eyebrow">SAVED ATTRIBUTION</p><p id="audio-info-credit" class="audio-info-credit"></p><button type="button" id="audio-info-copy" class="stock-text-button">Copy attribution</button></div>
             <button type="button" id="audio-info-studio" class="stock-text-button">Check in YouTube Studio ↗</button>
           </section>
-          <section class="audio-info-section"><h3>About this library</h3><p>This is an unofficial audio archive. SmoothyEdit is not affiliated with or endorsed by YouTube. License information may be incomplete or outdated. Check the track’s original license and include any required attribution before publishing your work.</p><div class="audio-info-links"><a href="https://github.com/ThibaultJanBeyer/YouTube-Free-Audio-Library-API" data-audio-external>Archive source ↗</a><a href="https://support.google.com/youtube/answer/3376882" data-audio-external>YouTube’s guidance ↗</a><a href="mailto:support@smoothyedit.com" data-audio-external>Contact us ↗</a></div></section>
+          <section class="audio-info-section"><h3>About this library</h3><p>This is an unofficial audio archive. Smoothy is not affiliated with or endorsed by YouTube. License information may be incomplete or outdated. Check the track’s original license and include any required attribution before publishing your work.</p><div class="audio-info-links"><a href="https://github.com/ThibaultJanBeyer/YouTube-Free-Audio-Library-API" data-audio-external>Archive source ↗</a><a href="https://support.google.com/youtube/answer/3376882" data-audio-external>YouTube’s guidance ↗</a><a href="mailto:support@smoothyedit.com" data-audio-external>Contact us ↗</a></div></section>
           <section class="audio-info-section audio-info-sharing"><label class="audio-sharing-label" for="audio-share-favorites"><span><strong>Share favorites to improve Staff picks</strong><small>Your stars help us discover the best tracks.</small></span><input id="audio-share-favorites" class="audio-sharing-toggle" type="checkbox" role="switch" checked disabled aria-describedby="audio-sharing-description audio-sharing-status"></label><p id="audio-sharing-description">We send track IDs, star/unstar state and update times with a random installation ID to prevent duplicate votes. The favorites payload contains no account details or audio files.</p><p id="audio-sharing-status" class="audio-info-muted"></p><a href="https://smoothyedit.com/privacy" data-audio-external>Privacy details ↗</a></section>
           <p id="audio-info-status" class="audio-info-status" role="status" aria-live="polite"></p>
         </dialog>
@@ -627,9 +497,9 @@
           </div>
           <p class="help-text" id="stock-source-note">Commons · Internet Archive · NASA. Check each clip’s usage terms.</p>
           <form class="stock-search-form" id="stock-search-form">
-            <label class="stock-field stock-query" for="stock-query">Search videos<input type="search" id="stock-query" placeholder="Ocean, city at night, people working…" maxlength="200" required></label>
+            <label class="stock-field stock-query" for="stock-query">Search videos<input type="search" id="stock-query" placeholder="Ocean, city at night, people working…" maxlength="200"></label>
             <div class="stock-search-controls">
-              <label class="stock-field" for="stock-provider">Source<select id="stock-provider"><option value="all">All sources</option><option value="pixabay" hidden>Pixabay</option><option value="commons">Wikimedia Commons</option><option value="archive">Internet Archive</option><option value="nasa">NASA · Earth &amp; space</option></select></label>
+              <label class="stock-field" for="stock-provider">Source<select id="stock-provider"><option value="all">All sources</option><option value="pixabay" hidden>Pixabay</option><option value="coverr" hidden>Coverr</option><option value="commons">Wikimedia Commons</option><option value="archive">Internet Archive</option><option value="nasa">NASA · Earth &amp; space</option></select></label>
               <label class="stock-field" for="stock-orientation">Orientation<select id="stock-orientation"><option value="">Any orientation</option><option value="landscape">Landscape</option><option value="portrait">Portrait</option><option value="square">Square</option></select></label>
               <label class="stock-field" for="stock-size">Minimum quality<select id="stock-size"><option value="">Any quality</option><option value="small">HD</option><option value="medium">Full HD</option><option value="large">4K</option></select></label>
               <button type="submit" class="btn btn-primary" id="stock-search-btn">Search</button>
@@ -664,6 +534,7 @@
 
         <!-- Scrollable content -->
         <div class="content-scroll">
+          <header class="brand-tool-header"><div><h1>Multicam</h1><p>Auto-switch cameras by active speaker on your timeline.</p></div></header>
           <section id="resolve-workflow" class="section resolve-workflow hidden" aria-labelledby="resolve-workflow-title">
             <div class="section-header-row"><h2 id="resolve-workflow-title">Multicam for Resolve Free</h2><span class="resolve-local-label">Runs locally</span></div>
             <p class="help-text">Apply reads the current Resolve timeline, saves the edit in SmoothyEdit Assets → Resolve, and sends it back automatically. Start Smoothy Connector once per Resolve session.</p>
@@ -784,6 +655,7 @@
 
         <!-- Scrollable content -->
         <div class="content-scroll">
+          <header class="brand-tool-header"><div><h1>Captions</h1><p>Timed captions in 100+ languages, on your machine.</p></div></header>
           <!-- Source: sequence or local file -->
           <section class="section">
             <h2>Source</h2>
@@ -833,11 +705,12 @@
             </div>
           </section>
           <!-- Sequence Info -->
-          <section class="section" id="captions-sequence-section"><button type="button" class="stock-text-button hidden" data-resolve-source data-resolve-load>Load Resolve timeline</button><p class="help-text hidden" data-resolve-source>Uses the loaded source timeline’s trims and microphone channels, without Resolve mixer effects. Load the timeline again here after changing it in Resolve.</p>
+          <section class="section" id="captions-sequence-section">
             <div class="section-header-row">
               <h2>Active Sequence</h2>
               <button id="captions-refresh-btn" class="btn btn-secondary btn-small">Refresh</button>
             </div>
+            <button type="button" class="stock-text-button hidden" data-resolve-source data-resolve-load>Load Resolve timeline</button><p class="help-text hidden" data-resolve-source>Uses the loaded source timeline’s trims and microphone channels, without Resolve mixer effects. Load the timeline again here after changing it in Resolve.</p>
             <p id="captions-sequence-name" class="sequence-info">No sequence loaded</p>
             <p id="captions-sequence-details" class="help-text"></p>
           </section>
@@ -866,34 +739,83 @@
             <div class="form-group">
               <label for="caption-max-chars">
                 Max Characters Per Line
-                <span class="value-display" id="caption-max-chars-value">42</span>
+                <span class="value-display" id="caption-max-chars-value">34</span>
               </label>
-              <input type="range" id="caption-max-chars" min="20" max="60" step="1" value="42">
+              <input type="range" id="caption-max-chars" min="1" max="60" step="1" value="34">
             </div>
 
             <div class="form-group">
               <label id="caption-max-lines-label">Max Lines</label>
               <div class="toggle-group" id="caption-max-lines-group" role="group" aria-labelledby="caption-max-lines-label">
-                <button type="button" class="toggle-btn" data-value="1" aria-pressed="false">1 Line</button>
-                <button type="button" class="toggle-btn active" data-value="2" aria-pressed="true">2 Lines</button>
+                <button type="button" class="toggle-btn active" data-value="1" aria-pressed="true">1 Line</button>
+                <button type="button" class="toggle-btn" data-value="2" aria-pressed="false">2 Lines</button>
               </div>
             </div>
 
             <div class="form-group">
               <label for="caption-max-duration">
                 Max Caption Duration
-                <span class="value-display" id="caption-max-duration-value">7.0s</span>
+                <span class="value-display" id="caption-max-duration-value">9.0s</span>
               </label>
-              <input type="range" id="caption-max-duration" min="3" max="15" step="0.5" value="7">
+              <input type="range" id="caption-max-duration" min="0.5" max="15" step="0.5" value="9">
             </div>
 
             <div class="form-group">
               <label>Text Style</label>
               <div class="caption-text-actions">
                 <button id="captions-capitalize-btn" type="button" class="btn btn-secondary btn-small" aria-pressed="false" title="Capitalise the first letter of every caption">Sentence case</button>
-                <button id="captions-remove-punct-btn" type="button" class="btn btn-secondary btn-small" aria-pressed="false" title="Strip punctuation from every caption">Remove Punctuation</button>
+                <button id="captions-remove-punct-btn" type="button" class="btn btn-secondary btn-small active" aria-pressed="true" title="Strip punctuation from every caption">Remove Punctuation</button>
               </div>
             </div>
+
+            <div class="form-group">
+              <label>Timing</label>
+              <div class="caption-text-actions">
+                <button id="captions-close-gaps-btn" type="button" class="btn btn-secondary btn-small active" aria-pressed="true" title="Hold each caption until the next one starts (up to Max Caption Duration), so captions touch with no empty frames">Close gaps</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- Smoothy Pro animated captions (Premiere only) -->
+          <section class="section pro-captions" id="pro-captions-section">
+            <h2>Animated captions <span class="pro-badge">Pro</span></h2>
+            <p class="help-text">Word-by-word captions as editable graphics on a new track in Premiere.</p>
+            <div class="pro-captions-preview" id="pro-captions-preview" data-template="box-highlight" aria-hidden="true">
+              <span class="pro-caption-line"><span class="is-spoken">Every</span> <span class="is-spoken">word</span> <span>lights</span> <span>up</span></span>
+            </div>
+            <div class="pro-captions-colors">
+              <label for="pro-captions-text-color">Text <input type="color" id="pro-captions-text-color" value="#151515"></label>
+              <label for="pro-captions-box-color">Box <input type="color" id="pro-captions-box-color" value="#92f388"></label>
+            </div>
+            <div class="form-group">
+              <label for="pro-captions-upcoming">Upcoming words <span class="value-display" id="pro-captions-upcoming-value">42%</span></label>
+              <input type="range" id="pro-captions-upcoming" min="0" max="100" step="1" value="42">
+            </div>
+            <div class="form-group">
+              <label for="pro-captions-radius">Corner radius <span class="value-display" id="pro-captions-radius-value">7</span></label>
+              <input type="range" id="pro-captions-radius" min="0" max="48" step="1" value="7">
+            </div>
+            <div class="form-group">
+              <label for="pro-captions-shadow">Text shadow <span class="value-display" id="pro-captions-shadow-value">0%</span></label>
+              <input type="range" id="pro-captions-shadow" min="0" max="100" step="5" value="0">
+            </div>
+            <div class="form-group">
+              <label for="pro-captions-size">Size <span class="value-display" id="pro-captions-size-value">100%</span></label>
+              <input type="range" id="pro-captions-size" min="50" max="200" step="5" value="100">
+            </div>
+            <div class="form-group">
+              <label id="pro-captions-position-label">Height on screen</label>
+              <div class="toggle-group" id="pro-captions-position" role="group" aria-labelledby="pro-captions-position-label">
+                <button type="button" class="toggle-btn active" data-value="93.1" aria-pressed="true">Bottom</button>
+                <button type="button" class="toggle-btn" data-value="71.55" aria-pressed="false" title="Halfway between the bottom and the centre">Lower</button>
+                <button type="button" class="toggle-btn" data-value="50" aria-pressed="false">Centre</button>
+              </div>
+            </div>
+            <div class="pro-captions-actions">
+              <button id="pro-captions-btn" type="button" class="btn btn-primary" disabled>Send animated captions</button>
+              <button id="pro-captions-upgrade" type="button" class="btn btn-pro hidden">Upgrade to Pro</button>
+            </div>
+            <p id="pro-captions-status" class="help-text" role="status" aria-live="polite"></p>
           </section>
 
           <!-- Generated Captions Preview -->
@@ -979,6 +901,7 @@
 
         <!-- Scrollable content -->
         <div class="content-scroll">
+          <header class="brand-tool-header"><div><h1>Silence Removal</h1><p>Trim pauses and repeated takes straight on your timeline.</p></div></header>
           <!-- Sequence Info -->
           <section class="section">
             <div class="section-header-row">
@@ -1035,6 +958,43 @@
             </div>
           </section>
 
+          <!-- Smoothy Pro Repeated Takes -->
+          <section class="section retakes-pro-section" id="retakes-pro-section">
+            <h2>Repeated Takes <span class="pro-badge">Pro</span></h2>
+            <p class="help-text">Detects repeated sentences and stumbled false starts using your local Whisper model, keeping the last take. Runs 100% locally — no cloud AI or credits.</p>
+
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="remove-retakes">
+                <span>Remove repeated sentences &amp; false starts</span>
+              </label>
+            </div>
+
+            <div id="retakes-pro-notice" class="retakes-pro-notice hidden">
+              <p id="retakes-pro-note" class="help-text">Part of Smoothy Pro. Subscribed? It unlocks with the same account.</p>
+              <div class="retakes-pro-actions">
+                <button id="retakes-upgrade-btn" type="button" class="btn btn-pro btn-small">Upgrade to Pro</button>
+                <button id="retakes-signin-btn" type="button" class="btn btn-secondary btn-small hidden">Sign in</button>
+              </div>
+            </div>
+
+            <div id="retakes-options" class="retakes-options hidden">
+              <div class="form-group">
+                <label for="retake-sensitivity">Match Sensitivity</label>
+                <select id="retake-sensitivity" class="select-input">
+                  <option value="conservative">Conservative (strict matches only)</option>
+                  <option value="balanced" selected>Balanced (recommended)</option>
+                  <option value="aggressive">Aggressive (shorter &amp; looser restarts)</option>
+                </select>
+                <p id="retake-sensitivity-hint" class="help-text"></p>
+              </div>
+              <div class="retakes-model-row">
+                <span id="retakes-model-note" class="help-text">Uses your local Whisper model from Captions settings.</span>
+                <button id="retakes-open-captions-settings" type="button" class="stock-text-button">Change in Captions settings</button>
+              </div>
+            </div>
+          </section>
+
           <!-- Preview Stats -->
           <section class="section" id="silence-stats-section" style="display: none;">
             <h2>Analysis Results</h2>
@@ -1047,6 +1007,10 @@
                 <span class="stat-value" id="stat-silence-removed">--</span>
                 <span class="stat-label">Silence Removed</span>
               </div>
+              <div class="stat-item hidden" id="stat-retakes-item">
+                <span class="stat-value" id="stat-retakes-removed">--</span>
+                <span class="stat-label">Retakes Removed</span>
+              </div>
               <div class="stat-item">
                 <span class="stat-value" id="stat-new-duration">--</span>
                 <span class="stat-label">New Duration</span>
@@ -1055,6 +1019,14 @@
                 <span class="stat-value" id="stat-cuts-count">--</span>
                 <span class="stat-label">Cuts Made</span>
               </div>
+            </div>
+
+            <div id="silence-retakes-list-wrap" class="retakes-list-wrap hidden">
+              <div class="section-header-row">
+                <h3>Removed Repeated Takes</h3>
+                <span id="silence-retakes-list-count" class="help-text"></span>
+              </div>
+              <div id="silence-retakes-list" class="retakes-list"></div>
             </div>
           </section>
         </div>
@@ -1071,7 +1043,7 @@
                 <line x1="17" y1="9" x2="23" y2="15"></line>
               </svg>
             </span>
-            Remove Silence
+            <span id="silence-remove-btn-label">Remove Silence</span>
           </button>
         </footer>
       </div>
@@ -1093,7 +1065,7 @@
               <span>Your saved results, shared with the web app</span>
             </div>
             <button id="bestshorts-login-btn" type="button" class="btn btn-primary">Sign in</button>
-            <p class="help-text">Use your SmoothyEdit account. Free accounts get 100 Studio credits each month.</p>
+            <p class="help-text">Use your Smoothy account. Free accounts get 100 Studio credits each month.</p>
           </section>
         </div>
 
@@ -1145,6 +1117,18 @@
                     <button type="button" class="btn btn-secondary btn-small" id="agentic-refresh-frame">Refresh frame</button>
                   </div>
             </header>
+            <div class="agentic-setup-banner hidden" id="agentic-setup-banner">
+              <div class="agentic-setup-copy">
+                <strong>Connect an AI agent</strong>
+                <span id="agentic-setup-meta">No MCP client connected yet. Copy a setup command for Claude Code, Cursor or Codex.</span>
+              </div>
+              <div class="agentic-setup-actions">
+                <button type="button" class="btn btn-primary btn-small" id="agentic-quick-claude">Copy Claude Code</button>
+                <button type="button" class="btn btn-secondary btn-small" id="agentic-quick-json">Copy MCP JSON</button>
+                <button type="button" class="btn btn-secondary btn-small" id="agentic-quick-skill">Copy skill</button>
+                <button type="button" class="btn btn-secondary btn-small" id="agentic-quick-settings">Settings</button>
+              </div>
+            </div>
             <div class="agentic-job hidden" id="agentic-job" role="status" aria-live="polite">
                 <div class="agentic-job-head"><strong id="agentic-job-title">Job</strong><span id="agentic-job-pct">0%</span></div>
                 <div class="agentic-job-track"><i id="agentic-job-bar"></i></div>
@@ -1211,18 +1195,6 @@
             </div>
           </aside>
         </div>
-
-        <div id="agentic-approval" class="agentic-approval hidden" role="dialog" aria-modal="true" aria-labelledby="agentic-approval-title">
-          <div class="agentic-approval-card">
-            <span class="agentic-overline">Approval required</span>
-            <h2 id="agentic-approval-title">Run this timeline action?</h2>
-            <pre id="agentic-approval-detail"></pre>
-            <div class="agentic-approval-actions">
-              <button type="button" class="btn btn-secondary" id="agentic-approval-deny">Deny</button>
-              <button type="button" class="btn btn-primary" id="agentic-approval-allow">Approve</button>
-            </div>
-          </div>
-        </div>
       </div>
 
       <!-- Dev tab: local UI previews and debug logs -->
@@ -1247,6 +1219,13 @@
             </div>
           </section>
           <section class="section">
+            <h2>Reminder preview</h2>
+            <p class="help-text" id="dev-nudge-preview-help">Shows the Smoothy Pro and social reminders now. Their buttons work for real (links open), but a preview is never counted and never changes when the real ones appear.</p>
+            <label class="checkbox-label"><input type="checkbox" id="dev-nudge-pro-toggle" aria-describedby="dev-nudge-preview-help"><span>Show Pro reminder</span></label>
+            <label class="checkbox-label"><input type="checkbox" id="dev-nudge-social-toggle" aria-describedby="dev-nudge-preview-help"><span>Show social reminder</span></label>
+            <p class="help-text dev-nudge-status" id="dev-nudge-status" aria-live="polite"></p>
+          </section>
+          <section class="section">
             <div class="section-header-row">
               <h2>Application Logs</h2>
               <button id="logs-clear-btn" class="btn btn-secondary btn-small">Clear</button>
@@ -1262,10 +1241,20 @@
           <span id="shortscuts-status-text">ShortsCuts</span>
         </div>
         <div class="content-scroll">
+          <header class="brand-tool-header"><div><h1>ShortsCuts</h1><p>Trigger Premiere effects, presets and macros from a key or your phone.</p></div></header>
           <section class="section">
             <div class="section-header-row">
               <h2>Your deck <span class="info-tip" tabindex="0" role="img" aria-label="Select clips in Premiere, then press a key while Premiere is in front. Transitions use Premiere’s QE bridge and can vary by version." title="Select clips in Premiere, then press a key while Premiere is in front. Transitions use Premiere’s QE bridge and can vary by version.">i</span></h2>
-              <button id="shortscuts-add" class="btn btn-primary btn-small shortscuts-add-btn" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add</button>
+              <div class="shortscuts-head-actions">
+                <select id="shortscuts-starter-pack" class="shortscuts-starter-select" aria-label="Load a starter pack">
+                  <option value="">Starter packs…</option>
+                  <option value="youtube">YouTube Talking Head</option>
+                  <option value="podcast">Podcast Cut</option>
+                  <option value="reels">Reels Transitions</option>
+                </select>
+                <button id="shortscuts-toolbar-capture" class="btn btn-secondary btn-small" type="button" title="Save effects from the clip selected in Premiere">Capture clip</button>
+                <button id="shortscuts-add" class="btn btn-primary btn-small shortscuts-add-btn" type="button"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add</button>
+              </div>
             </div>
 
             <div class="shortscuts-filters">
@@ -1275,6 +1264,7 @@
               </label>
               <div class="shortscuts-filter-chips" role="group" aria-label="Filter keys">
                 <button type="button" class="active" data-deck-filter="all">All</button>
+                <button type="button" data-deck-filter="actions">Actions</button>
                 <button type="button" data-deck-filter="effects">Effects</button>
                 <button type="button" data-deck-filter="transitions">Transitions</button>
                 <button type="button" data-deck-filter="presets">Presets</button>
@@ -1284,7 +1274,7 @@
 
             <div id="shortscuts-plan" class="shortscuts-plan hidden" role="status">
               <span id="shortscuts-plan-text"></span>
-              <button id="shortscuts-plan-upgrade" type="button" class="btn btn-secondary btn-small">Get unlimited keys</button>
+              <button id="shortscuts-plan-upgrade" type="button" class="btn btn-pro btn-small">Get unlimited keys</button>
             </div>
             <div id="shortscuts-deck" class="shortscuts-deck"></div>
             <p id="shortscuts-empty" class="empty-message">No keys match this view.</p>
@@ -1307,6 +1297,10 @@
                     <div class="shortscuts-device-head">
                       <button type="button" id="shortscuts-device-back" class="shortscuts-device-back hidden" aria-label="Back to all keys">‹</button>
                       <strong id="shortscuts-device-title">ShortsCuts</strong>
+                      <div class="shortscuts-device-history" role="group" aria-label="Undo and Redo">
+                        <button type="button" id="shortscuts-device-undo" class="shortscuts-device-hist-btn" data-device-history="undo" aria-label="Undo in Premiere" title="Undo in Premiere"></button>
+                        <button type="button" id="shortscuts-device-redo" class="shortscuts-device-hist-btn" data-device-history="redo" aria-label="Redo in Premiere" title="Redo in Premiere"></button>
+                      </div>
                     </div>
                     <div class="shortscuts-device-grid" id="shortscuts-device-grid" aria-label="Remote layout preview"></div>
                   </div>
@@ -1363,12 +1357,13 @@
             </div>
             <div class="shortscuts-catalog-tabs" role="tablist">
               <button type="button" class="shortscuts-catalog-tab active" data-catalog-tab="all" role="tab" aria-selected="true">All</button>
+              <button type="button" class="shortscuts-catalog-tab" data-catalog-tab="actions" role="tab" aria-selected="false">Actions</button>
               <button type="button" class="shortscuts-catalog-tab" data-catalog-tab="effects" role="tab" aria-selected="false">Effects</button>
               <button type="button" class="shortscuts-catalog-tab" data-catalog-tab="transitions" role="tab" aria-selected="false">Transitions</button>
               <button type="button" class="shortscuts-catalog-tab" data-catalog-tab="presets" role="tab" aria-selected="false">Presets</button>
             </div>
             <div class="shortscuts-catalog-search-row">
-              <input id="shortscuts-catalog-search" class="shortscuts-search" type="search" placeholder="Search effects, transitions and presets…" autocomplete="off">
+              <input id="shortscuts-catalog-search" class="shortscuts-search" type="search" placeholder="Search actions, effects, transitions and presets…" autocomplete="off">
               <button id="shortscuts-capture" class="btn btn-secondary btn-small hidden" type="button">Capture from clip</button>
               <button id="shortscuts-catalog-refresh" class="btn btn-secondary btn-small hidden" type="button">Refresh</button>
             </div>
@@ -1378,66 +1373,215 @@
         </div>
       </div>
 
-      <!-- Compressor Tab Content -->
+      <!-- Media Encoder / Compressor Tab Content -->
       <div class="tab-content" id="tab-compressor">
         <!-- Status bar -->
         <div id="compressor-status-bar" class="status-bar status-idle">
-          <span id="compressor-status-text">Compressor</span>
+          <span id="compressor-status-text">Media Encoder</span>
         </div>
 
         <!-- Scrollable content -->
         <div class="content-scroll">
+          <header class="brand-tool-header"><div><h1>Compressor</h1><p>Compress, convert and extract audio from videos locally.</p></div></header>
+          <!-- Mode Selector -->
+          <div class="encoder-modes" id="encoder-mode-group" role="radiogroup" aria-label="Choose what you want to do">
+            <button type="button" class="encoder-mode is-selected" role="radio" aria-checked="true" data-encoder-mode="compress">
+              <span class="encoder-mode-top">
+                <span class="encoder-mode-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m15 15 6 6m-6-6v4.8m0-4.8h4.8" />
+                    <path d="M9 19.8V15m0 0H4.2M9 15l-6 6" />
+                    <path d="M15 4.2V9m0 0h4.8M15 9l6-6" />
+                    <path d="M9 4.2V9m0 0H4.2M9 9 3 3" />
+                  </svg>
+                </span>
+                <span class="encoder-mode-title">Compress</span>
+                <span class="encoder-mode-pill">HEVC MP4</span>
+              </span>
+              <span class="encoder-mode-desc">Shrink large videos with hardware H.265 while keeping near-original quality.</span>
+            </button>
+            <button type="button" class="encoder-mode" role="radio" aria-checked="false" data-encoder-mode="convert">
+              <span class="encoder-mode-top">
+                <span class="encoder-mode-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M17 2l4 4-4 4" />
+                    <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+                    <path d="M7 22l-4-4 4-4" />
+                    <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+                  </svg>
+                </span>
+                <span class="encoder-mode-title">Convert Video</span>
+                <span class="encoder-mode-pill">H.264 · ProRes</span>
+              </span>
+              <span class="encoder-mode-desc">Turn WebM, MKV, AV1, H.265 or other formats into H.264 MP4, ProRes, WebM or remux.</span>
+            </button>
+            <button type="button" class="encoder-mode" role="radio" aria-checked="false" data-encoder-mode="extract_audio">
+              <span class="encoder-mode-top">
+                <span class="encoder-mode-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 18V5l12-2v13" />
+                    <circle cx="6" cy="18" r="3" />
+                    <circle cx="18" cy="16" r="3" />
+                  </svg>
+                </span>
+                <span class="encoder-mode-title">Extract Audio</span>
+                <span class="encoder-mode-pill">MP3 · WAV</span>
+              </span>
+              <span class="encoder-mode-desc">Extract MP3, WAV, M4A or FLAC from any video file or convert audio files.</span>
+            </button>
+          </div>
+
           <!-- Drop Zone -->
           <section class="section" id="compressor-drop-section">
-            <h2>Videos</h2>
+            <h2 id="compressor-drop-heading">Source Media</h2>
             <div id="compressor-drop-zone" class="drop-zone">
               <div class="drop-zone-content">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="opacity: 0.5; margin-bottom: 12px;">
-                  <path d="m4 4 6 6M4 10h6V4m10 16-6-6m6 0h-6v6"/>
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="opacity: 0.5; margin-bottom: 10px;">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" x2="12" y1="3" y2="15" />
                 </svg>
-                <p class="drop-text">Drop a video or folder, or browse</p>
-                <p class="help-text">Supports: MP4, MOV, MKV, AVI, WEBM, M4V, MTS</p>
+                <p class="drop-text" id="compressor-drop-text">Drop videos or a folder here, or browse</p>
+                <p class="help-text" id="compressor-drop-help">Supports WebM, MP4, MOV, MKV, AVI, FLV, WMV, TS, MXF, AV1, HEVC, GIF &amp; more</p>
               </div>
             </div>
-            <button id="compressor-browse-btn" class="btn btn-secondary btn-small" style="margin-top: 12px;">Browse Video or Folder</button>
+            <div class="encoder-browse-row">
+              <button id="compressor-browse-btn" class="btn btn-secondary btn-small">Choose Files</button>
+              <button id="compressor-browse-folder-btn" class="btn btn-secondary btn-small">Choose Folder</button>
+            </div>
           </section>
-
-          
 
           <!-- Selected Source Info -->
           <section class="section hidden" id="compressor-folder-section">
             <div class="section-header-row">
               <h2 id="compressor-source-heading">Selected Source</h2>
-              <button id="compressor-change-folder-btn" class="btn btn-secondary btn-small">Change</button>
+              <div class="encoder-source-actions">
+                <button id="compressor-change-folder-btn" class="btn btn-secondary btn-small">Choose Files</button>
+                <button id="compressor-change-dir-btn" class="btn btn-secondary btn-small">Choose Folder</button>
+                <button id="compressor-clear-source-btn" class="btn btn-secondary btn-small">Clear</button>
+              </div>
             </div>
-            <p id="compressor-folder-path" class="sequence-info">No folder selected</p>
+            <p id="compressor-folder-path" class="sequence-info">No files selected</p>
             <div id="compressor-large-file-warning" class="warning-banner hidden" style="margin-top: 8px;">
               <span class="warning-icon">⚠️</span>
-              <span class="warning-text">Large files detected (>10GB). Compression may take a while.</span>
+              <span class="warning-text">Large files detected (&gt;10GB). Encoding may take a while.</span>
             </div>
           </section>
 
-          <!-- Video Files List -->
+          <!-- Media Files List -->
           <section class="section hidden" id="compressor-files-section">
             <div class="section-header-row">
-              <h2>Videos Found</h2>
+              <h2 id="compressor-files-heading">Files Queued</h2>
               <span id="compressor-files-count" class="help-text">0 files</span>
             </div>
             <div id="compressor-files-list" class="tracks-list">
-              <p class="empty-message">No video files found</p>
+              <p class="empty-message">No supported files found</p>
             </div>
           </section>
 
-          <!-- Hardware Info -->
+          <!-- Encoding Settings -->
+          <section class="section hidden" id="compressor-settings-section">
+            <h2 id="compressor-settings-heading">Compression Settings</h2>
+
+            <!-- Video Output Format (Convert mode) -->
+            <div class="form-group hidden" id="encoder-video-format-group">
+              <label>Output Format</label>
+              <div class="toggle-group encoder-format-toggle" id="encoder-video-format-buttons">
+                <button type="button" class="toggle-btn active" data-value="mp4_h264">MP4 (H.264)</button>
+                <button type="button" class="toggle-btn" data-value="mp4_hevc">MP4 (HEVC)</button>
+                <button type="button" class="toggle-btn" data-value="mov_prores">MOV (ProRes)</button>
+                <button type="button" class="toggle-btn" data-value="webm_vp9">WebM (VP9)</button>
+                <button type="button" class="toggle-btn" data-value="mp4_remux">MP4 (Remux)</button>
+              </div>
+              <p class="help-text" id="encoder-video-format-help">Universal MP4 (H.264 + AAC) — converts AV1, H.265, WebM, MKV or weird formats for any player or editor.</p>
+            </div>
+
+            <!-- Audio Output Format (Extract Audio mode) -->
+            <div class="form-group hidden" id="encoder-audio-format-group">
+              <label>Audio Format</label>
+              <div class="toggle-group" id="encoder-audio-format-buttons">
+                <button type="button" class="toggle-btn active" data-value="mp3">MP3</button>
+                <button type="button" class="toggle-btn" data-value="wav">WAV</button>
+                <button type="button" class="toggle-btn" data-value="m4a">M4A (AAC)</button>
+                <button type="button" class="toggle-btn" data-value="flac">FLAC</button>
+              </div>
+              <p class="help-text" id="encoder-audio-format-help">MP3: Universal compressed audio extracted cleanly from any video or audio file.</p>
+            </div>
+
+            <!-- Audio Bitrate (MP3 / M4A only) -->
+            <div class="form-group hidden" id="encoder-audio-bitrate-group">
+              <label>Audio Bitrate</label>
+              <div class="toggle-group" id="encoder-audio-bitrate-buttons">
+                <button type="button" class="toggle-btn" data-value="320k">320 kbps</button>
+                <button type="button" class="toggle-btn active" data-value="192k">192 kbps</button>
+                <button type="button" class="toggle-btn" data-value="128k">128 kbps</button>
+              </div>
+              <p class="help-text" id="encoder-audio-bitrate-help">192 kbps: Crisp quality with compact file sizes.</p>
+            </div>
+
+            <!-- Video Quality Preset (Compress & Convert transcode) -->
+            <div class="form-group" id="compressor-quality-container">
+              <label id="compressor-quality-label">Quality Preset</label>
+              <div class="toggle-group" id="compressor-quality-group">
+                <button type="button" class="toggle-btn active" data-value="high">High</button>
+                <button type="button" class="toggle-btn" data-value="balanced">Balanced</button>
+                <button type="button" class="toggle-btn" data-value="fast">Fast</button>
+              </div>
+              <p class="help-text" id="compressor-quality-help">High: Near-original quality, larger files, slower encoding</p>
+            </div>
+
+            <!-- Optional Resolution & FPS (Video transcode modes) -->
+            <div class="encoder-video-extras" id="encoder-video-extras">
+              <div class="form-group">
+                <label for="encoder-resolution-select">Resolution</label>
+                <select id="encoder-resolution-select" class="select-input">
+                  <option value="original">Original (keep size)</option>
+                  <option value="2160">4K (2160p max)</option>
+                  <option value="1080">1080p max</option>
+                  <option value="720">720p max</option>
+                  <option value="480">480p max</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="encoder-fps-select">Frame Rate</label>
+                <select id="encoder-fps-select" class="select-input">
+                  <option value="original">Original (keep FPS)</option>
+                  <option value="60">60 fps (CFR)</option>
+                  <option value="30">30 fps (CFR)</option>
+                  <option value="24">24 fps (CFR)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Mute audio checkbox (Video modes) -->
+            <div class="form-group encoder-mute-row" id="encoder-mute-group">
+              <label class="encoder-checkbox-label">
+                <input type="checkbox" id="encoder-mute-audio">
+                <span>Remove audio track (mute output video)</span>
+              </label>
+            </div>
+
+            <!-- Output Folder -->
+            <div class="form-group">
+              <div class="section-header-row">
+                <label>Output Folder</label>
+                <button type="button" id="compressor-change-output-btn" class="btn btn-secondary btn-small">Change</button>
+              </div>
+              <p id="compressor-output-path" class="sequence-info">Created automatically next to source</p>
+              <p class="help-text" id="compressor-output-help">Compressed HEVC MP4 files will be saved here automatically</p>
+            </div>
+          </section>
+
+          <!-- Hardware / Engine Info -->
           <section class="section hidden" id="compressor-hardware-section">
-            <h2>Hardware Acceleration</h2>
+            <h2>Encoder Engine</h2>
             <div class="hardware-info-row">
               <span class="connection-dot" id="compressor-hardware-dot"></span>
               <span id="compressor-hardware-name">Detecting...</span>
             </div>
             <div class="hardware-detail-grid">
               <div class="hardware-detail-row">
-                <span class="hardware-detail-label">Detected system</span>
+                <span class="hardware-detail-label">System</span>
                 <span class="hardware-detail-value" id="compressor-hardware-system">Detecting...</span>
               </div>
               <div class="hardware-detail-row">
@@ -1449,36 +1593,13 @@
                 <span class="hardware-detail-value" id="compressor-hardware-acceleration">Detecting...</span>
               </div>
             </div>
-            <p class="help-text" id="compressor-hardware-help">Automatically detects NVIDIA, Apple Silicon, AMD, or Intel hardware</p>
-          </section>
-
-          <!-- Compression Settings -->
-          <section class="section hidden" id="compressor-settings-section">
-            <h2>Compression Settings</h2>
-
-            <div class="form-group">
-              <label>Quality Preset</label>
-              <div class="toggle-group" id="compressor-quality-group">
-                <button class="toggle-btn active" data-value="high">High</button>
-                <button class="toggle-btn" data-value="balanced">Balanced</button>
-                <button class="toggle-btn" data-value="fast">Fast</button>
-              </div>
-              <p class="help-text" id="compressor-quality-help">High: Near-original quality, larger files, slower encoding</p>
-            </div>
-
-            <div class="form-group">
-              <div class="section-header-row">
-                <label>Output Folder</label>
-              </div>
-              <p id="compressor-output-path" class="sequence-info">_compressed</p>
-              <p class="help-text">Compressed HEVC MP4 files will be saved here automatically</p>
-            </div>
+            <p class="help-text" id="compressor-hardware-help">Automatically uses Apple Silicon, NVIDIA, AMD, or Intel hardware when available</p>
           </section>
 
           <!-- Progress Section -->
           <section class="section hidden" id="compressor-progress-section">
             <div class="section-header-row">
-              <h2>Progress</h2>
+              <h2 id="compressor-progress-heading">Progress</h2>
               <button id="compressor-cancel-btn" class="btn btn-secondary btn-small">Cancel</button>
             </div>
 
@@ -1500,8 +1621,11 @@
 
           <!-- Results Section -->
           <section class="section hidden" id="compressor-results-section">
-            <h2>Compression Complete</h2>
-            <p id="compressor-results-summary" class="help-text">Compression finished</p>
+            <div class="section-header-row">
+              <h2 id="compressor-results-heading">Complete</h2>
+              <button type="button" id="compressor-open-output-btn" class="btn btn-secondary btn-small">Open Output Folder</button>
+            </div>
+            <p id="compressor-results-summary" class="help-text">Finished</p>
 
             <div class="stats-grid" id="compressor-stats-grid">
               <div class="stat-item">
@@ -1514,11 +1638,11 @@
               </div>
               <div class="stat-item">
                 <span class="stat-value" id="compressor-stat-output">0 MB</span>
-                <span class="stat-label">Compressed Size</span>
+                <span class="stat-label" id="compressor-stat-output-label">Output Size</span>
               </div>
               <div class="stat-item">
                 <span class="stat-value" id="compressor-stat-saved">0%</span>
-                <span class="stat-label">Space Saved</span>
+                <span class="stat-label" id="compressor-stat-saved-label">Space Saved</span>
               </div>
               <div class="stat-item">
                 <span class="stat-value" id="compressor-stat-time">0:00</span>
@@ -1530,7 +1654,7 @@
               </div>
             </div>
 
-            <div id="compressor-results-list" class="tracks-list" style="margin-top: 16px; max-height: 200px; overflow-y: auto;">
+            <div id="compressor-results-list" class="tracks-list" style="margin-top: 16px; max-height: 220px; overflow-y: auto;">
               <!-- Results will be inserted here -->
             </div>
           </section>
@@ -1546,7 +1670,7 @@
                 <path d="m4 4 6 6M4 10h6V4m10 16-6-6m6 0h-6v6"/>
               </svg>
             </span>
-            Start Compression
+            <span id="compressor-start-btn-label">Start Compression</span>
           </button>
         </footer>
       </div>
@@ -1560,6 +1684,7 @@
 
         <!-- Scrollable content -->
         <div class="content-scroll">
+          <header class="brand-tool-header"><div><h1>Assets</h1><p>Remove backgrounds, upscale and convert images on your device.</p></div></header>
           <section class="section assets-tools-section" aria-labelledby="assets-tools-heading">
             <div class="section-header-row"><h2 id="assets-tools-heading">Image tools</h2><span class="assets-free-badge">Free · on your device</span></div>
             <div class="assets-local-tools" aria-label="Local image tools">
@@ -1747,12 +1872,40 @@
     </div>
   </div>
 
+  <!-- Agentic approval modal (root-level so approvals appear from any tab) -->
+  <div id="agentic-approval" class="agentic-approval hidden" role="dialog" aria-modal="true" aria-labelledby="agentic-approval-title">
+    <div class="agentic-approval-card">
+      <span class="agentic-overline">Approval required</span>
+      <h2 id="agentic-approval-title">Run this timeline action?</h2>
+      <pre id="agentic-approval-detail"></pre>
+      <div class="agentic-approval-actions">
+        <button type="button" class="btn btn-secondary" id="agentic-approval-deny">Deny</button>
+        <button type="button" class="btn btn-secondary hidden" id="agentic-approval-session">Allow for this session</button>
+        <button type="button" class="btn btn-primary" id="agentic-approval-allow">Approve</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Error modal -->
-  <div id="error-modal" class="overlay hidden">
+  <div id="error-modal" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="error-modal-title">
     <div class="modal-content">
-      <h3>Error</h3>
+      <h3 id="error-modal-title">Error</h3>
       <p id="error-message"></p>
       <button id="error-close-btn" class="btn btn-primary">OK</button>
+    </div>
+  </div>
+
+  <!-- What's new modal -->
+  <div id="whats-new-modal" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="whats-new-title">
+    <div class="modal-content whats-new-modal">
+      <header class="whats-new-head">
+        <div>
+          <h3 id="whats-new-title">What’s new in SmoothyApp</h3>
+          <p id="whats-new-sub" class="help-text"></p>
+        </div>
+        <button id="whats-new-close" type="button" class="modal-close-btn" aria-label="Close what’s new">&times;</button>
+      </header>
+      <div id="whats-new-body" class="whats-new-body"></div>
     </div>
   </div>
 
@@ -1760,7 +1913,7 @@
   <div id="update-modal" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="update-modal-title">
     <div class="modal-content update-modal">
       <button id="update-modal-close" class="modal-close-btn" aria-label="Close update details">&times;</button>
-      <h3 id="update-modal-title" class="update-modal-title">What's new in SmoothyEdit v<span id="update-modal-version"></span></h3>
+      <h3 id="update-modal-title" class="update-modal-title">What's new in SmoothyApp <span id="update-modal-version"></span></h3>
       <p class="help-text">Read the fixes and new features, then choose whether to update. Skipping keeps your current version.</p>
       <div id="update-modal-body" class="update-modal-body"></div>
       <button id="update-modal-release-link" class="btn btn-secondary btn-small">Open release page</button>
@@ -1779,53 +1932,68 @@
         <aside class="settings-nav">
           <div class="settings-nav-head">
             <h3 id="settings-title">Settings</h3>
-            <p class="settings-version">SmoothyEdit <span id="settings-current-version">Version…</span></p>
+            <p class="settings-version">SmoothyApp <span id="settings-current-version">3.5.0</span></p>
           </div>
           <label class="settings-search">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg>
             <input id="settings-search" type="search" placeholder="Search settings…" autocomplete="off" aria-label="Search settings">
           </label>
           <nav class="settings-nav-list" id="settings-nav-list" aria-label="Settings sections">
-            <button type="button" class="settings-nav-item active" data-settings-pane="general" data-pane-title="General" data-pane-description="App visibility, Studio AI and developer tools." data-search="general studio ai appearance dev logs advanced">
-              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-              <span>General</span>
-            </button>
-            <button type="button" class="settings-nav-item" data-settings-pane="profile" data-pane-title="Profile" data-pane-description="Your name, password and account." data-search="profile account name password security delete sign out email plan">
-              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              <span>Profile</span>
-            </button>
-            <button type="button" class="settings-nav-item" data-settings-pane="chat" data-pane-title="Chat" data-pane-description="How the AI assistant replies." data-search="chat studio ai system prompt writing" data-studio-pane="true">
-              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              <span>Chat</span>
-            </button>
-            <button type="button" class="settings-nav-item" data-settings-pane="captions" data-pane-title="Captions" data-pane-description="Local transcription models." data-search="captions models whisper folder language">
-              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg>
-              <span>Captions</span>
-            </button>
-            <button type="button" class="settings-nav-item" data-settings-pane="editors" data-pane-title="Editors" data-pane-description="Which editor Smoothy talks to, and the Premiere bridge." data-search="editors premiere resolve bridge cep adobe nle">
-              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-              <span>Editors</span>
-            </button>
-            <button type="button" class="settings-nav-item" data-settings-pane="connections" data-pane-title="Connections" data-pane-description="Cloud account, credits and dashboard pairing." data-search="connections cloud dashboard token website credits subscription" data-studio-pane="true">
-              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11 5"/><path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07L13 19"/></svg>
-              <span>Connections</span>
-            </button>
-            <button type="button" class="settings-nav-item" data-settings-pane="updates" data-pane-title="Updates" data-pane-description="Check for a newer SmoothyApp." data-search="updates version download install">
-              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-              <span>Updates</span>
-            </button>
-            <button type="button" class="settings-nav-item" data-settings-pane="feedback" data-pane-title="Feedback" data-pane-description="Tell us what to build or fix." data-search="feedback bug feature request support email">
-              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
-              <span>Feedback</span>
-            </button>
-            <button type="button" class="settings-nav-item" data-settings-pane="community" data-pane-title="Community" data-pane-description="Meet other editors and keep in touch." data-search="community discord x instagram linkedin website social">
-              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              <span>Community</span>
-            </button>
-            <button type="button" class="settings-nav-item" data-settings-pane="agent" data-pane-title="Agent" data-pane-description="Connect Claude Code, Codex or another MCP agent." data-search="agent mcp claude code codex token connection tools activity premiere alongside">
-              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 8V4M9 14h.01M15 14h.01"/></svg>
-              <span>Agent</span>
-            </button>
+            <div class="settings-nav-group" data-settings-group="account">
+              <div class="settings-nav-group-label">Account</div>
+              <button type="button" class="settings-nav-item" data-settings-pane="profile" data-pane-title="Profile &amp; plan" data-pane-description="Your picture, display name, plan and account security." data-search="profile account name picture avatar password security delete sign out email plan credits subscription cloud dashboard">
+                <span class="settings-nav-icon" style="--settings-tint:var(--rose-tint)"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 256 256" fill="currentColor"><path d="M172,120a44,44,0,1,1-44-44A44.05,44.05,0,0,1,172,120Zm60,8A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88.09,88.09,0,0,0-91.47-87.93C77.43,41.89,39.87,81.12,40,128.25a87.65,87.65,0,0,0,22.24,58.16A79.71,79.71,0,0,1,84,165.1a4,4,0,0,1,4.83.32,59.83,59.83,0,0,0,78.28,0,4,4,0,0,1,4.83-.32,79.71,79.71,0,0,1,21.79,21.31A87.62,87.62,0,0,0,216,128Z"/></svg></span>
+                <span>Profile &amp; plan</span>
+              </button>
+            </div>
+            <div class="settings-nav-group" data-settings-group="app">
+              <div class="settings-nav-group-label">App</div>
+              <button type="button" class="settings-nav-item active" data-settings-pane="general" data-pane-title="General" data-pane-description="How SmoothyApp looks and behaves." data-search="general studio ai appearance theme dark light mode system dev logs advanced">
+                <span class="settings-nav-icon" style="--settings-tint:var(--lime-tint)"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 256 256" fill="currentColor"><path d="M237.94,107.21a8,8,0,0,0-3.89-5.4l-29.83-17-.12-33.62a8,8,0,0,0-2.83-6.08,111.91,111.91,0,0,0-36.72-20.67,8,8,0,0,0-6.46.59L128,41.85,97.88,25a8,8,0,0,0-6.47-.6A111.92,111.92,0,0,0,54.73,45.15a8,8,0,0,0-2.83,6.07l-.15,33.65-29.83,17a8,8,0,0,0-3.89,5.4,106.47,106.47,0,0,0,0,41.56,8,8,0,0,0,3.89,5.4l29.83,17,.12,33.63a8,8,0,0,0,2.83,6.08,111.91,111.91,0,0,0,36.72,20.67,8,8,0,0,0,6.46-.59L128,214.15,158.12,231a7.91,7.91,0,0,0,3.9,1,8.09,8.09,0,0,0,2.57-.42,112.1,112.1,0,0,0,36.68-20.73,8,8,0,0,0,2.83-6.07l.15-33.65,29.83-17a8,8,0,0,0,3.89-5.4A106.47,106.47,0,0,0,237.94,107.21ZM128,168a40,40,0,1,1,40-40A40,40,0,0,1,128,168Z"/></svg></span>
+                <span>General</span>
+              </button>
+              <button type="button" class="settings-nav-item" data-settings-pane="updates" data-pane-title="Updates" data-pane-description="Check for a newer SmoothyApp." data-search="updates version download install automatic">
+                <span class="settings-nav-icon" style="--settings-tint:var(--sky-tint)"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 256 256" fill="currentColor"><path d="M224,48V96a8,8,0,0,1-8,8H168a8,8,0,0,1-5.66-13.66L180.65,72a79.48,79.48,0,0,0-54.72-22.09h-.45A79.52,79.52,0,0,0,69.59,72.71,8,8,0,0,1,58.41,61.27,96,96,0,0,1,192,60.7l18.36-18.36A8,8,0,0,1,224,48ZM186.41,183.29A80,80,0,0,1,75.35,184l18.31-18.31A8,8,0,0,0,88,152H40a8,8,0,0,0-8,8v48a8,8,0,0,0,13.66,5.66L64,195.3a95.42,95.42,0,0,0,66,26.76h.53a95.36,95.36,0,0,0,67.07-27.33,8,8,0,0,0-11.18-11.44Z"/></svg></span>
+                <span>Updates</span>
+              </button>
+            </div>
+            <div class="settings-nav-group" data-settings-group="editors">
+              <div class="settings-nav-group-label">Editors</div>
+              <button type="button" class="settings-nav-item" data-settings-pane="editors" data-pane-title="Editors" data-pane-description="Premiere Pro bridge, DaVinci Resolve and website pairing." data-search="editors premiere resolve bridge cep adobe nle pairing token website connection">
+                <span class="settings-nav-icon" style="--settings-tint:var(--blueberry-tint)"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 256 256" fill="currentColor"><path d="M237.66,77.66,203.31,112l26.35,26.34a8,8,0,0,1-11.32,11.32L212,143.31l-53,53a40,40,0,0,1-56.57,0L86.75,180.57,37.66,229.66a8,8,0,0,1-11.32-11.32l49.09-49.09L59.72,153.54a40,40,0,0,1,0-56.57l53-53-6.35-6.34a8,8,0,0,1,11.32-11.32L144,52.69l34.34-34.35a8,8,0,1,1,11.32,11.32L155.31,64,192,100.69l34.34-34.35a8,8,0,0,1,11.32,11.32Z"/></svg></span>
+                <span>Premiere &amp; Resolve</span>
+              </button>
+            </div>
+            <div class="settings-nav-group" data-settings-group="tools">
+              <div class="settings-nav-group-label">Tools</div>
+              <button type="button" class="settings-nav-item" data-settings-pane="captions" data-pane-title="Captions" data-pane-description="Local transcription models." data-search="captions models whisper folder language">
+                <span class="settings-nav-icon" style="--settings-tint:var(--grape-tint)"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 256 256" fill="currentColor"><path d="M224,48H32A16,16,0,0,0,16,64V192a16,16,0,0,0,16,16H224a16,16,0,0,0,16-16V64A16,16,0,0,0,224,48ZM116,162.64a40,40,0,1,1,0-69.28,8,8,0,1,1-8,13.85,24,24,0,1,0,0,41.58,8,8,0,0,1,8,13.85Zm80,0a40,40,0,1,1,0-69.28,8,8,0,1,1-8,13.85,24,24,0,1,0,0,41.58,8,8,0,0,1,8,13.85Z"/></svg></span>
+                <span>Captions</span>
+              </button>
+              <button type="button" class="settings-nav-item" data-settings-pane="chat" data-pane-title="Chat" data-pane-description="How the AI assistant replies." data-search="chat studio ai system prompt writing" data-studio-pane="true">
+                <span class="settings-nav-icon" style="--settings-tint:var(--papaya-tint)"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 256 256" fill="currentColor"><path d="M232.07,186.76a80,80,0,0,0-62.5-114.17A80,80,0,1,0,23.93,138.76l-7.27,24.71a16,16,0,0,0,19.87,19.87l24.71-7.27a80.39,80.39,0,0,0,25.18,7.35,80,80,0,0,0,108.34,40.65l24.71,7.27a16,16,0,0,0,19.87-19.86Zm-16.25,1.47L224,216l-27.76-8.17a8,8,0,0,0-6,.63,64.05,64.05,0,0,1-85.87-24.88A79.93,79.93,0,0,0,174.7,89.71a64,64,0,0,1,41.75,92.48A8,8,0,0,0,215.82,188.23Z"/></svg></span>
+                <span>Chat</span>
+              </button>
+              <button type="button" class="settings-nav-item" data-settings-pane="agent" data-pane-title="Agent" data-pane-description="Connect Claude Code, Codex or another MCP agent." data-search="agent mcp claude code codex token connection tools activity premiere alongside">
+                <span class="settings-nav-icon" style="--settings-tint:var(--ink-tint)"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 256 256" fill="currentColor"><path d="M200,48H136V16a8,8,0,0,0-16,0V48H56A32,32,0,0,0,24,80V192a32,32,0,0,0,32,32H200a32,32,0,0,0,32-32V80A32,32,0,0,0,200,48ZM172,96a12,12,0,1,1-12,12A12,12,0,0,1,172,96ZM96,184H80a16,16,0,0,1,0-32H96ZM84,120a12,12,0,1,1,12-12A12,12,0,0,1,84,120Zm60,64H112V152h32Zm32,0H160V152h16a16,16,0,0,1,0,32Z"/></svg></span>
+                <span>Agent</span>
+              </button>
+              <button type="button" class="settings-nav-item" data-settings-pane="community" data-pane-title="Community" data-pane-description="Blocked people and lobby link previews." data-search="community lobby blocked previews moderation">
+                <span class="settings-nav-icon" style="--settings-tint:var(--grape-tint)"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 256 256" fill="currentColor"><path d="M64.12,147.8a4,4,0,0,1-4,4.2H16a8,8,0,0,1-7.8-6.17,8.35,8.35,0,0,1,1.62-6.93A67.79,67.79,0,0,1,37,117.51a40,40,0,1,1,66.46-35.8,3.94,3.94,0,0,1-2.27,4.18A64.08,64.08,0,0,0,64,144C64,145.28,64,146.54,64.12,147.8Zm182-8.91A67.76,67.76,0,0,0,219,117.51a40,40,0,1,0-66.46-35.8,3.94,3.94,0,0,0,2.27,4.18A64.08,64.08,0,0,1,192,144c0,1.28,0,2.54-.12,3.8a4,4,0,0,0,4,4.2H240a8,8,0,0,0,7.8-6.17A8.33,8.33,0,0,0,246.17,138.89Zm-89,43.18a48,48,0,1,0-58.37,0A72.13,72.13,0,0,0,65.07,212,8,8,0,0,0,72,224H184a8,8,0,0,0,6.93-12A72.15,72.15,0,0,0,157.19,182.07Z"/></svg></span>
+                <span>Community</span>
+              </button>
+            </div>
+            <div class="settings-nav-group" data-settings-group="help">
+              <div class="settings-nav-group-label">Help</div>
+              <button type="button" class="settings-nav-item" data-settings-pane="feedback" data-pane-title="Feedback" data-pane-description="Tell us what to build or fix." data-search="feedback bug feature request support email">
+                <span class="settings-nav-icon" style="--settings-tint:var(--papaya-tint)"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 256 256" fill="currentColor"><path d="M224,48H32a8,8,0,0,0-8,8V192a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A8,8,0,0,0,224,48Zm-8,144H40V74.19l82.59,75.71a8,8,0,0,0,10.82,0L216,74.19V192Z"/></svg></span>
+                <span>Feedback</span>
+              </button>
+              <button type="button" class="settings-nav-item" data-settings-pane="about" data-pane-title="About SmoothyApp" data-pane-description="Version, release notes and links." data-search="about smoothyapp version whats new discord x instagram linkedin website social smoothyrec founder">
+                <span class="settings-nav-icon" style="--settings-tint:var(--lime-tint)"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 256 256" fill="currentColor"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm-4,48a12,12,0,1,1-12,12A12,12,0,0,1,124,72Zm12,112a16,16,0,0,1-16-16V128a8,8,0,0,1,0-16,16,16,0,0,1,16,16v40a8,8,0,0,1,0,16Z"/></svg></span>
+                <span>About SmoothyApp</span>
+              </button>
+            </div>
           </nav>
         </aside>
 
@@ -1835,21 +2003,38 @@
               <h2 id="settings-pane-title">General</h2>
               <p id="settings-pane-description">App visibility, Studio AI and developer tools.</p>
             </div>
-            <button id="settings-close-btn" class="settings-done-btn" type="button" aria-label="Close settings and go back" title="Close settings (Esc)">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-              <span>Back</span>
-            </button>
+            <button id="settings-close-btn" class="settings-done-btn settings-close-btn" type="button" aria-label="Close settings" title="Close settings (Esc)"><span class="settings-close-x" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span><span class="settings-close-back" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5m6-6-6 6 6 6"/></svg><span>Back</span></span></button>
           </header>
 
           <div class="settings-panes" id="settings-panes">
             <section class="settings-pane active" data-pane="general">
+              <div class="settings-group">
+                <div class="settings-group-label">Appearance</div>
+                <div class="settings-section settings-row-group">
+                  <div class="settings-row">
+                    <div class="settings-row-copy">
+                      <strong>Theme</strong>
+                      <p>Match system follows your Mac or Windows setting.</p>
+                    </div>
+                    <div class="settings-row-control">
+                      <div class="settings-seg" id="appearance-control" role="radiogroup" aria-label="Theme">
+                        <button type="button" role="radio" data-appearance="light" aria-checked="false">Light</button>
+                        <button type="button" role="radio" data-appearance="dark" aria-checked="false">Dark</button>
+                        <button type="button" role="radio" data-appearance="system" aria-checked="true">Match system</button>
+                      </div>
+                    </div>
+                  </div>
+                  <p id="appearance-status" class="help-text settings-row-status" role="status"></p>
+                </div>
+              </div>
+
               <div class="settings-group">
                 <div class="settings-group-label">Application</div>
                 <div class="settings-section settings-row-group">
                   <div class="settings-row">
                     <div class="settings-row-copy">
                       <strong>Studio AI features</strong>
-                      <p>Hide Studio, Shorts, AI Photos and cloud pairing. Multicam, Silence Removal, Captions, Compressor, Assets and the media libraries stay available.</p>
+                      <p>Hide Studio, Shorts, AI Photos and cloud pairing. Multicam, Silence Removal, Captions, Media Encoder, Assets and the media libraries stay available.</p>
                     </div>
                     <div class="settings-row-control">
                       <label class="settings-switch"><input type="checkbox" id="studio-enabled-toggle" checked aria-label="Show Studio AI features"><span aria-hidden="true"></span></label>
@@ -1865,7 +2050,7 @@
                   <div class="settings-row">
                     <div class="settings-row-copy">
                       <strong>Developer tools</strong>
-                      <p>Show the hidden Dev tab with live debug logs and the update banner preview.</p>
+                      <p>Show the hidden Dev tab with live debug logs and the update banner and reminder previews.</p>
                     </div>
                     <div class="settings-row-control">
                       <label class="settings-switch"><input type="checkbox" id="show-logs-toggle" aria-label="Show the Dev tab"><span aria-hidden="true"></span></label>
@@ -1876,7 +2061,7 @@
             </section>
 
             <section class="settings-pane" data-pane="profile">
-              <div class="settings-group">
+              <div class="settings-group" id="profile-account-group">
                 <div class="settings-group-label">Account</div>
                 <div class="settings-section">
                   <div class="profile-identity">
@@ -1892,12 +2077,78 @@
                     <button id="settings-account-btn" class="btn btn-secondary btn-small" type="button">Sign in</button>
                     <button type="button" class="btn btn-secondary btn-small" data-account-page="subscription">Plan &amp; credits ↗</button>
                     <button type="button" class="btn btn-secondary btn-small" data-account-page="account/security">Account security ↗</button>
+                    <button id="settings-open-studio-btn" type="button" class="btn btn-secondary btn-small">Open Dashboard ↗</button>
                   </div>
                 </div>
               </div>
 
+              <div class="settings-group settings-group-wide" id="community-profile-group">
+                <div class="settings-group-label">Community avatar</div>
+                <div class="settings-section cs-profile">
+                  <!-- Live preview: how a message from you appears in the lobby -->
+                  <div class="cs-chat-preview" aria-label="Preview of how you appear in Community">
+                    <span class="cs-chat-avatar" id="cs-preview" aria-hidden="true"></span>
+                    <div class="cs-chat-copy">
+                      <div class="cs-chat-head"><strong id="cs-name">You</strong><span id="cs-badges"></span><time>now</time></div>
+                      <p id="cs-identity-note">Connect to the lobby to customize your avatar.</p>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-small hidden" id="cs-reconnect">Connect</button>
+                  </div>
+
+                  <div class="cs-section">
+                    <div class="cs-section-head">
+                      <span class="cs-label">Initials color</span>
+                      <span class="cs-section-hint" id="cs-color-hint">Shown when no photo is set</span>
+                    </div>
+                    <div class="cs-colors" id="cs-colors" role="radiogroup" aria-label="Initials color"></div>
+                  </div>
+
+                  <div class="cs-section">
+                    <div class="cs-section-head">
+                      <span class="cs-label">Profile photo</span>
+                      <span class="cs-section-hint" id="cs-photo-hint">Optional · overrides initials</span>
+                    </div>
+                    <div class="cs-drop" id="cs-drop">
+                      <span class="cs-drop-preview" id="cs-photo-preview" aria-hidden="true"></span>
+                      <div class="cs-drop-copy">
+                        <strong id="cs-drop-title">Upload a photo</strong>
+                        <p class="help-text" id="cs-upload-note">PNG, JPEG, GIF or WebP · up to 8 MB · cropped to a square.</p>
+                      </div>
+                      <div class="cs-drop-actions">
+                        <button type="button" class="btn btn-secondary btn-small" id="cs-upload">Upload…</button>
+                        <button type="button" class="btn btn-secondary btn-small hidden" id="cs-remove-photo">Remove</button>
+                      </div>
+                      <input type="file" id="cs-upload-input" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp" aria-label="Upload a profile picture">
+                    </div>
+                  </div>
+
+                  <div class="cs-save-row">
+                    <button type="button" class="cs-text-btn" id="cs-open-community-settings">Blocked people &amp; previews →</button>
+                    <span class="help-text cs-status" id="cs-save-status" role="status" aria-live="polite"></span>
+                    <button type="button" class="btn btn-secondary btn-small" id="cs-reset" disabled>Undo</button>
+                    <button type="button" class="btn btn-primary btn-small" id="cs-save" disabled>Save</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-group cs-name-group hidden" id="cs-guest-name">
+                <div class="settings-group-label">Guest name</div>
+                <div class="settings-section settings-row-group">
+                  <div class="settings-row">
+                    <div class="settings-row-copy">
+                      <strong>Name in the lobby</strong>
+                      <p>Shown with a Guest badge. Sign in to keep a permanent name.</p>
+                    </div>
+                    <div class="settings-row-control settings-row-inline">
+                      <input id="cs-name-input" type="text" maxlength="24" autocomplete="nickname" placeholder="Pick a name" aria-label="Community name">
+                      <button type="button" class="btn btn-secondary btn-small" id="cs-name-save">Save</button>
+                    </div>
+                  </div>
+                  <p class="help-text settings-row-status cs-status" id="cs-name-status" role="status" aria-live="polite"></p>
+                </div>
+              </div>
               <div id="profile-signed-in" class="settings-pane-group">
-                <div class="settings-group">
+                <div class="settings-group" id="profile-display-name-group">
                   <div class="settings-group-label">Display name</div>
                   <div class="settings-section settings-row-group">
                     <div class="settings-row">
@@ -1914,7 +2165,7 @@
                   </div>
                 </div>
 
-                <div class="settings-group">
+                <div class="settings-group" id="profile-password-group">
                   <div class="settings-group-label">Password</div>
                   <div class="settings-section settings-row-group">
                     <div class="settings-row">
@@ -1934,7 +2185,7 @@
                   </div>
                 </div>
 
-                <div class="settings-group">
+                <div class="settings-group" id="profile-session-group">
                   <div class="settings-group-label">Session</div>
                   <div class="settings-section settings-row-group">
                     <div class="settings-row">
@@ -1982,7 +2233,7 @@
                     <div class="settings-row-control"><span id="chat-writing-count" class="help-text"></span></div>
                   </div>
                   <textarea id="chat-writing-prompt" rows="4" maxlength="4000" spellcheck="true" aria-label="System prompt" aria-describedby="chat-writing-help"></textarea>
-                  <div class="settings-actions"><button type="button" id="chat-writing-save" class="btn btn-primary btn-small">Save</button><button type="button" id="chat-writing-reset" class="btn btn-secondary btn-small">Clear</button></div>
+                  <div class="settings-actions"><button type="button" id="chat-writing-save" class="btn btn-primary btn-small hidden">Save</button><button type="button" id="chat-writing-reset" class="btn btn-secondary btn-small">Clear</button></div>
                   <p id="chat-writing-help" class="help-text">Kept offline; it is only used for your own Chat requests.</p>
                   <p id="chat-writing-status" class="help-text settings-row-status" role="status" aria-live="polite"></p>
                 </div>
@@ -2023,7 +2274,8 @@
                   <p class="help-text">Premiere uses its live bridge. Resolve Free uses Smoothy Connector for automatic sends and timeline loads. Start it from Workspace → Scripts once per Resolve session.</p>
                   <div class="nle-selector">
                     <button class="nle-option" id="nle-auto-btn" data-nle="null">
-                      <span class="nle-icon">Auto</span>
+                      <span class="nle-icon nle-icon-auto"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l2.3 6.7 6.7 2.3-6.7 2.3L12 20.5l-2.3-6.7L3 11.5l6.7-2.3z"/></svg></span>
+                      <span class="nle-label">Auto</span>
                     </button>
                     <button class="nle-option" id="nle-premiere-btn" data-nle="premiere">
                       <span class="nle-icon"><img src="./editor-logos/premiere-pro.svg" width="28" height="28" alt=""/></span>
@@ -2038,7 +2290,7 @@
               <div class="settings-group">
                 <div class="settings-group-label">Premiere Pro bridge</div>
                 <div class="settings-section">
-                  <p class="help-text">The CEP extension connects SmoothyEdit to Premiere Pro. On Windows, the installer sets it up automatically. On macOS, it auto-installs when the app launches. If missing, click Install below, then restart Premiere and open Window &gt; Extensions &gt; SmoothyEdit.</p>
+                  <p class="help-text">The CEP extension connects SmoothyApp to Premiere Pro. On Windows, the installer sets it up automatically. On macOS, it auto-installs when the app launches. If missing, click Install below, then restart Premiere and open Window &gt; Extensions &gt; SmoothyEdit.</p>
 
                   <div class="bridge-status-row">
                     <span class="connection-dot" id="bridge-status-dot"></span>
@@ -2048,7 +2300,7 @@
                   <div class="form-group">
                     <label for="cep-path-input">CEP Extensions Path</label>
                     <div class="cep-path-row">
-                      <input type="text" id="cep-path-input" placeholder="Loading..." readonly>
+                      <input type="text" id="cep-path-input" placeholder="Not set" readonly>
                       <button id="cep-browse-btn" class="btn btn-secondary btn-small">Browse</button>
                     </div>
                     <p class="help-text">Default location where Adobe looks for CEP extensions.</p>
@@ -2057,27 +2309,6 @@
                   <div class="settings-actions">
                     <button id="cep-install-btn" class="btn btn-primary btn-small">Install CEP Bridge</button>
                     <button id="cep-reset-btn" class="btn btn-secondary btn-small">Reset Path</button>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section class="settings-pane" data-pane="connections" data-studio-only>
-              <div class="settings-group">
-                <div class="settings-group-label">Dashboard</div>
-                <div class="settings-section">
-                  <div class="settings-row">
-                    <div class="settings-row-copy">
-                      <strong>Cloud tools</strong>
-                      <p>Sign in for AI Photos, Shorts and shared history. Cloud tools use credits; local tools remain free.</p>
-                    </div>
-                    <div class="settings-row-control">
-                      <button type="button" data-account-page="subscription" class="btn btn-secondary btn-small">Plan &amp; credits ↗</button>
-                      <button type="button" data-account-page="account/security" class="btn btn-secondary btn-small">Account security ↗</button>
-                    </div>
-                  </div>
-                  <div class="settings-actions">
-                    <button id="settings-open-studio-btn" class="btn btn-secondary btn-small">Open Dashboard</button>
                   </div>
                 </div>
               </div>
@@ -2102,24 +2333,33 @@
               </div>
             </section>
 
+
+
             <section class="settings-pane" data-pane="updates">
               <div class="settings-group">
-                <div class="settings-group-label">Application</div>
-                <div class="settings-section" id="settings-update-section">
+                <div class="settings-group-label">SmoothyApp updates</div>
+<div class="settings-section settings-row-group" id="settings-update-section">
                   <div class="settings-row">
                     <div class="settings-row-copy">
-                      <strong>App updates</strong>
-                      <p id="settings-update-help">SmoothyEdit checks for updates on startup and every six hours. Downloads and installation only start when you choose.</p>
+                      <strong id="settings-updates-version">Version…</strong>
+                      <p id="settings-update-status" role="status" aria-live="polite">No updates checked yet</p>
                     </div>
                     <div class="settings-row-control">
                       <button id="check-update-btn" class="btn btn-secondary btn-small">Check for Updates</button>
                       <button id="settings-install-update-btn" class="btn btn-primary btn-small hidden">View update</button>
                     </div>
                   </div>
-                  <div class="update-status-row">
-                    <span id="settings-update-status" role="status" aria-live="polite">No updates checked yet</span>
-                  </div>
                   <div id="settings-update-notes" class="settings-update-notes hidden"></div>
+                  <div class="settings-row">
+                    <div class="settings-row-copy">
+                      <strong>Automatic updates</strong>
+                      <p id="settings-update-help">SmoothyApp checks for updates on startup and every six hours.</p>
+                    </div>
+                    <div class="settings-row-control">
+                      <label class="settings-switch"><input type="checkbox" id="auto-updates-toggle" checked aria-label="Automatic updates"><span aria-hidden="true"></span></label>
+                    </div>
+                  </div>
+                  <p id="auto-updates-status" class="help-text settings-row-status" role="status"></p>
                 </div>
               </div>
             </section>
@@ -2143,12 +2383,13 @@
               <div class="settings-group">
                 <div class="settings-group-label">Agent access</div>
                 <div class="settings-section">
-                  <p class="help-text">Timeline edits always ask for your approval.</p>
+                  <p class="help-text">Timeline edits always ask for your approval. Exports, downloads and write folders can be allowed for the rest of the session.</p>
                   <div class="agentic-status-card" id="agentic-status-card">
               <div class="agentic-status-line"><span class="agentic-dot" id="agentic-dot"></span><strong id="agentic-status-text">Starting…</strong></div>
               <span class="agentic-meta" id="agentic-status-meta">—</span>
               <label class="agentic-toggle"><input type="checkbox" id="agentic-enabled" checked><span>Agent access</span></label>
-              
+              <div class="agentic-grants hidden" id="agentic-grants"><span class="agentic-meta" id="agentic-grants-text"></span><button type="button" class="btn btn-secondary btn-small" id="agentic-grants-revoke">Revoke</button></div>
+
             </div>
                   <label class="checkbox-label"><input type="checkbox" id="agentic-alongside"> <span>Show the Agent view while editing in Premiere or Resolve</span></label>
                 </div>
@@ -2166,6 +2407,7 @@
                   <button type="button" class="btn btn-secondary btn-small" id="agentic-copy-json">Copy MCP JSON</button>
                   <button type="button" class="btn btn-secondary btn-small" id="agentic-copy-skill">Copy agent skill</button>
                 </div>
+                <p class="agentic-flash hidden" id="agentic-settings-flash" role="status" aria-live="polite"></p>
               </section>
                 </div>
               </div>
@@ -2186,17 +2428,126 @@
             </section>
             <section class="settings-pane" data-pane="community">
               <div class="settings-group">
-                <div class="settings-group-label">Follow along</div>
+                <div class="settings-group-label">Blocked people</div>
                 <div class="settings-section">
-                  <p class="help-text">Follow SmoothyEdit, meet other editors, and keep in touch with the creator.</p>
-                  <div class="settings-actions">
-                    <button id="settings-discord-btn" class="btn btn-secondary btn-small">Join our Discord</button>
-                    <button id="settings-smoothy-twitter-btn" class="btn btn-secondary btn-small" type="button">SmoothyEdit on X</button>
-                    <button id="settings-twitter-btn" class="btn btn-secondary btn-small">Ali on X</button>
-                    <button id="settings-instagram-btn" class="btn btn-secondary btn-small">Instagram</button>
-                    <button id="settings-linkedin-btn" class="btn btn-secondary btn-small" type="button">LinkedIn</button>
-                    <button id="settings-website-btn" class="btn btn-secondary btn-small" type="button">Personal website</button>
+                  <p class="help-text">Blocking is mutual: you stop seeing each other’s messages in the lobby. They aren’t told.</p>
+                  <ul class="cs-blocked" id="cs-blocked" aria-live="polite"></ul>
+                  <p class="help-text cs-status" id="cs-blocked-status" role="status" aria-live="polite"></p>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <div class="settings-group-label">Lobby</div>
+                <div class="settings-section settings-row-group">
+                  <div class="settings-row">
+                    <div class="settings-row-copy">
+                      <strong>Link previews</strong>
+                      <p>Show pictures and YouTube thumbnails from allowed links. Loading a preview contacts that site from your computer; turn it off to only show link names.</p>
+                    </div>
+                    <div class="settings-row-control">
+                      <label class="cs-switch"><input type="checkbox" id="cs-previews" checked aria-label="Show link previews"><span></span></label>
+                    </div>
                   </div>
+                </div>
+              </div>
+
+            </section>
+            <section class="settings-pane" data-pane="about">
+              <div class="settings-group">
+                <div class="settings-section">
+                  <div class="about-brand-lockup">
+                    <span class="about-brand-icon" aria-hidden="true"><img src="./logo.svg" width="28" height="28" alt=""></span>
+                    <div>
+                      <div class="about-brand-wordmark"><strong>Smoothy</strong><span>App</span></div>
+                      <p class="help-text" id="settings-about-version" style="margin:2px 0 0">Version 3.5.0</p>
+                    </div>
+                  </div>
+                  <div class="settings-row" style="padding:14px 0 0;margin-top:16px;border-top:1px solid var(--border)">
+                    <div class="settings-row-copy">
+                      <strong>Release notes</strong>
+                      <p>See what’s new in this version of SmoothyApp.</p>
+                    </div>
+                    <div class="settings-row-control">
+                      <button type="button" id="whats-new-btn" class="whats-new-btn" aria-haspopup="dialog">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17v4M17 19h4"/></svg>
+                  <span>What’s new in SmoothyApp</span>
+                </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="settings-group settings-group-wide cs-social-group">
+                <div class="settings-group-label">Smoothy</div>
+                <div class="settings-section">
+                  <p class="help-text">Updates, tips and behind-the-scenes from Smoothy, plus other editors to chat with.</p>
+                  <div class="cs-social-grid">
+                    <button type="button" class="cs-social" data-open-url="https://discord.gg/KmJRqUZzDe" style="--social:#AFCFFF">
+                      <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg></span>
+                      <span class="cs-social-text"><strong>Discord</strong><small>Join the community</small></span>
+                      <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                    </button>
+                    <button type="button" class="cs-social" data-open-url="https://x.com/smoothyedit" style="--social:#E6E4DF">
+                      <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z"/></svg></span>
+                      <span class="cs-social-text"><strong>X</strong><small>@smoothyedit</small></span>
+                      <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                    </button>
+                    <button type="button" class="cs-social" data-open-url="https://www.instagram.com/smoothyedit/" style="--social:var(--rose-tint)">
+                      <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.03.084c-1.277.06-2.149.264-2.911.563-.789.308-1.458.72-2.123 1.388C1.331 2.703.921 3.372.616 4.162.321 4.926.121 5.798.064 7.076.008 8.353-.005 8.764.001 12.023c.006 3.259.021 3.667.083 4.947.061 1.277.264 2.148.564 2.911.308.789.72 1.457 1.388 2.123.668.665 1.336 1.074 2.128 1.38.763.295 1.636.496 2.914.552 1.277.056 1.688.069 4.946.063 3.258-.006 3.668-.021 4.948-.081 1.28-.061 2.147-.265 2.91-.563.789-.309 1.458-.72 2.123-1.388.665-.668 1.074-1.338 1.379-2.128.296-.763.497-1.636.552-2.912.056-1.281.069-1.69.063-4.948-.006-3.258-.021-3.667-.082-4.947-.061-1.28-.264-2.149-.563-2.912-.308-.789-.72-1.457-1.388-2.123C21.298 1.33 20.628.921 19.838.617 19.074.321 18.202.12 16.924.065 15.647.009 15.236-.005 11.977.001 8.718.008 8.31.022 7.03.084m.14 21.693c-1.17-.051-1.805-.245-2.229-.408-.561-.216-.96-.477-1.382-.895-.422-.418-.681-.819-.9-1.378-.164-.423-.362-1.058-.417-2.228-.06-1.265-.072-1.644-.079-4.848-.007-3.204.005-3.583.061-4.848.05-1.169.246-1.805.408-2.228.216-.561.476-.96.895-1.382.419-.422.818-.681 1.378-.9.423-.165 1.058-.362 2.227-.417 1.266-.06 1.645-.072 4.848-.079 3.203-.007 3.584.005 4.85.061 1.169.051 1.805.244 2.228.408.561.216.96.475 1.382.895.422.419.682.818.901 1.379.165.422.362 1.056.417 2.226.06 1.266.074 1.645.08 4.848.006 3.203-.006 3.583-.061 4.848-.051 1.17-.245 1.806-.408 2.229-.216.56-.476.96-.895 1.381-.419.422-.818.681-1.379.9-.422.165-1.057.362-2.226.418-1.266.059-1.645.072-4.849.079-3.204.007-3.583-.006-4.848-.061M16.953 5.586a1.44 1.44 0 1 0 2.88-.005 1.44 1.44 0 0 0-2.88.005M5.839 12.012a6.162 6.162 0 1 0 12.323-.024 6.162 6.162 0 0 0-12.323.024M8 12.008a4 4 0 1 1 8-.016 4 4 0 0 1-8 .016"/></svg></span>
+                      <span class="cs-social-text"><strong>Instagram</strong><small>@smoothyedit</small></span>
+                      <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                    </button>
+                    <button type="button" class="cs-social" data-open-url="https://www.threads.com/@smoothyedit" style="--social:var(--grape-tint)">
+                      <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.263 11.097c-.03-3.486-1.92-5.586-5.111-5.586-2.13 0-3.922.963-4.863 2.499l2.062 1.438c.535-.843 1.272-1.543 2.628-1.543 1.528 0 2.318.85 2.544 2.431a15 15 0 0 0-2.236-.173c-4.125 0-6.068 1.867-6.068 4.336s1.943 3.99 4.804 3.99c3.139 0 5.013-2.115 5.781-4.735.798.361 1.348 1.204 1.348 2.47 0 3.387-3.907 5.232-7.22 5.232-4.885 0-8.077-3.207-8.077-8.424 0-6.392 4.223-10.487 9.9-10.487 3.808 0 5.69 1.671 6.97 3.914l2.108-1.475C21.44 2.078 18.331 0 13.663 0 6.227 0 1.168 5.277 1.168 12.934c0 7 4.953 11.066 10.856 11.066 4.878 0 9.809-2.846 9.809-7.716 0-2.545-1.46-4.231-3.569-5.187m-6.33 4.855c-1.077 0-2.026-.512-2.026-1.453 0-1.483 1.822-1.934 3.606-1.934.678 0 1.34.045 1.927.173-.422 1.927-1.671 3.215-3.508 3.214Z"/></svg></span>
+                      <span class="cs-social-text"><strong>Threads</strong><small>@smoothyedit</small></span>
+                      <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                    </button>
+                    <button type="button" class="cs-social" data-open-url="https://www.linkedin.com/company/140813934/" style="--social:var(--sky-tint)">
+                      <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></span>
+                      <span class="cs-social-text"><strong>LinkedIn</strong><small>Smoothy page</small></span>
+                      <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-group settings-group-wide cs-social-group">
+                <div class="settings-group-label">Ali Bahrawy</div>
+                <div class="settings-section">
+                  <p class="help-text">Keep in touch with the person building Smoothy.</p>
+                  <div class="cs-social-grid">
+                    <button type="button" class="cs-social" data-open-url="https://x.com/alibahrawy34" style="--social:#E6E4DF">
+                      <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z"/></svg></span>
+                      <span class="cs-social-text"><strong>X</strong><small>@alibahrawy34</small></span>
+                      <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                    </button>
+                    <button type="button" class="cs-social" data-open-url="https://www.instagram.com/alibahrawy34/" style="--social:var(--rose-tint)">
+                      <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.03.084c-1.277.06-2.149.264-2.911.563-.789.308-1.458.72-2.123 1.388C1.331 2.703.921 3.372.616 4.162.321 4.926.121 5.798.064 7.076.008 8.353-.005 8.764.001 12.023c.006 3.259.021 3.667.083 4.947.061 1.277.264 2.148.564 2.911.308.789.72 1.457 1.388 2.123.668.665 1.336 1.074 2.128 1.38.763.295 1.636.496 2.914.552 1.277.056 1.688.069 4.946.063 3.258-.006 3.668-.021 4.948-.081 1.28-.061 2.147-.265 2.91-.563.789-.309 1.458-.72 2.123-1.388.665-.668 1.074-1.338 1.379-2.128.296-.763.497-1.636.552-2.912.056-1.281.069-1.69.063-4.948-.006-3.258-.021-3.667-.082-4.947-.061-1.28-.264-2.149-.563-2.912-.308-.789-.72-1.457-1.388-2.123C21.298 1.33 20.628.921 19.838.617 19.074.321 18.202.12 16.924.065 15.647.009 15.236-.005 11.977.001 8.718.008 8.31.022 7.03.084m.14 21.693c-1.17-.051-1.805-.245-2.229-.408-.561-.216-.96-.477-1.382-.895-.422-.418-.681-.819-.9-1.378-.164-.423-.362-1.058-.417-2.228-.06-1.265-.072-1.644-.079-4.848-.007-3.204.005-3.583.061-4.848.05-1.169.246-1.805.408-2.228.216-.561.476-.96.895-1.382.419-.422.818-.681 1.378-.9.423-.165 1.058-.362 2.227-.417 1.266-.06 1.645-.072 4.848-.079 3.203-.007 3.584.005 4.85.061 1.169.051 1.805.244 2.228.408.561.216.96.475 1.382.895.422.419.682.818.901 1.379.165.422.362 1.056.417 2.226.06 1.266.074 1.645.08 4.848.006 3.203-.006 3.583-.061 4.848-.051 1.17-.245 1.806-.408 2.229-.216.56-.476.96-.895 1.381-.419.422-.818.681-1.379.9-.422.165-1.057.362-2.226.418-1.266.059-1.645.072-4.849.079-3.204.007-3.583-.006-4.848-.061M16.953 5.586a1.44 1.44 0 1 0 2.88-.005 1.44 1.44 0 0 0-2.88.005M5.839 12.012a6.162 6.162 0 1 0 12.323-.024 6.162 6.162 0 0 0-12.323.024M8 12.008a4 4 0 1 1 8-.016 4 4 0 0 1-8 .016"/></svg></span>
+                      <span class="cs-social-text"><strong>Instagram</strong><small>@alibahrawy34</small></span>
+                      <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                    </button>
+                    <button type="button" class="cs-social" data-open-url="https://www.linkedin.com/in/alibahrawy/" style="--social:var(--sky-tint)">
+                      <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></span>
+                      <span class="cs-social-text"><strong>LinkedIn</strong><small>Ali Bahrawy</small></span>
+                      <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                    </button>
+                    <button type="button" class="cs-social" data-open-url="https://www.alibahrawy.com/" style="--social:var(--lime-tint)">
+                      <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span>
+                      <span class="cs-social-text"><strong>Website</strong><small>alibahrawy.com</small></span>
+                      <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-group settings-group-wide cs-social-group">
+                <div class="settings-group-label">Also from Smoothy</div>
+                <div class="cs-promo">
+                  <span class="cs-promo-icon"><img src="./assets/smoothyrec-icon.svg" width="44" height="44" alt="" aria-hidden="true"/></span>
+                  <div class="cs-promo-copy">
+                    <strong>SmoothyREC <em>Free</em></strong>
+                    <p>A native Mac recorder for screen and camera. One take, with the cursor, and separate synchronized files when you stop. No account needed.</p>
+                  </div>
+                  <button type="button" class="cs-promo-btn" data-open-url="https://smoothyedit.com/smoothyrec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg><span>Get SmoothyREC</span></button>
                 </div>
               </div>
             </section>
@@ -2210,7 +2561,7 @@
   <div id="login-modal" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="account-heading">
     <div class="modal-content login-modal">
       <div class="modal-header">
-        <h3 id="account-heading">Sign in to SmoothyEdit</h3>
+        <h3 id="account-heading">Sign in to Smoothy</h3>
         <button id="account-header-switch" type="button" class="account-header-switch">Sign up</button>
         <button id="login-close-btn" class="modal-close-btn" aria-label="Close account dialog">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2281,6 +2632,7 @@
   <script type="module" src="custom-select.js"></script>
   <script type="module" src="app.js"></script>
   <script type="module" src="pro-lock.js"></script>
+  <script type="module" src="nudges.js"></script>
   <script type="module" src="nav-order.js"></script>
 </body>
 </html>

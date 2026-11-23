@@ -5,9 +5,26 @@ export const SHORTSCUT_KINDS = [
   'audio-transition',
   'preset',
   'multi',
+  'unnest',
+  'motion-to-transform',
+  'adjustment-layer',
+  'open-app',
+  'open-folder',
 ] as const;
 
 export type ShortsCutKind = (typeof SHORTSCUT_KINDS)[number];
+export const PRO_SHORTSCUT_KINDS = ['unnest', 'motion-to-transform'] as const;
+export const SYSTEM_SHORTSCUT_KINDS = ['open-app', 'open-folder'] as const;
+
+export function isProOnlyShortsCutKind(kind: string): boolean {
+  return (PRO_SHORTSCUT_KINDS as readonly string[]).includes(kind);
+}
+
+export function isSystemShortsCutKind(kind: string): boolean {
+  return (SYSTEM_SHORTSCUT_KINDS as readonly string[]).includes(kind);
+}
+
+export type ShortsCutHistoryAction = 'undo' | 'redo';
 export type ShortsCutEdge = 'start' | 'end' | 'both';
 export type ShortsCutValue = number | boolean | string | number[];
 
@@ -91,6 +108,7 @@ export interface ShortsCutsApplyResult {
   failed?: number;
   message?: string;
   error?: string;
+  code?: string;
   details?: string[];
   nle?: string;
 }
@@ -125,4 +143,6 @@ export const MAX_MULTI_STEPS = 16;
 export const PHONE_COLUMNS = { min: 2, max: 5, default: 3 } as const;
 export const TABLET_COLUMNS = { min: 3, max: 8, default: 5 } as const;
 export const MAX_PRESET_BYTES = 512 * 1024;
+export const MAX_TARGET_PATH_LENGTH = 1024;
+export const DEFAULT_ADJUSTMENT_DURATION = 5;
 export const DEFAULT_SERVER_PORT = 4789;

@@ -23,7 +23,8 @@ export function registerPhotos(deps: { window: () => BrowserWindow | null; conne
     try {
       const url = new URL(request.url);
       if (url.hostname !== 'image' || !/^\/[0-9a-f-]{36}$/.test(url.pathname)) return new Response('', { status: 404 });
-      return new Response(await service.bytes(url.pathname.slice(1)), { headers: { 'content-type': 'image/png', 'cache-control': 'no-store' } });
+      const bytes = await service.bytes(url.pathname.slice(1));
+      return new Response(new Uint8Array(bytes), { headers: { 'content-type': 'image/png', 'cache-control': 'no-store' } });
     } catch { return new Response('', { status: 404 }); }
   });
   ipcMain.handle('photos-cancel', () => { service.cancel(); return { success: true }; });

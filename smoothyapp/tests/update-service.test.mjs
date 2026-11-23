@@ -4,7 +4,8 @@ import { EventEmitter } from 'node:events';
 import { build } from 'esbuild';
 const bundle = await build({ entryPoints: [process.getBuiltinModule('node:url').fileURLToPath(new URL('../src/main/update-service.ts', import.meta.url))], bundle: true, format: 'esm', platform: 'node', write: false });
 const { createUpdateService } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}`);
-function fixture({ saved = new Map(), packaged = true, configured = packaged, fetchNotes = async () => '## Fixed\n- Camera clips preserved\n## New\n- Update choices' } = {}) {
+function fixture({ saved = new Map(), auto = false, packaged = true, configured = packaged, fetchNotes = async () => '## Fixed\n- Camera clips preserved\n## New\n- Update choices' } = {}) {
+  if (auto === false) saved.set('autoUpdatesEnabled', false);
   const updater = new EventEmitter(), calls = { checks: 0, downloads: 0, installs: [] }, events = [];
   let release = '2.0.1', downloadError = false;
   updater.checkForUpdates = async () => { calls.checks++; updater.emit('checking-for-update'); updater.emit('update-available', { version: release }); };
@@ -80,4 +81,28 @@ test('packaged local preview without release configuration never checks, downloa
   assert.equal(f.service.skip('2.0.1').success, false);
   assert.equal(f.service.snapshot().status, 'dev-build');
   assert.equal(f.calls.checks, 0); assert.equal(f.calls.downloads, 0); assert.deepEqual(f.calls.installs, []);
+});
+
+test('automatic updates are on by default: download in the background, install only on quit or restart', async () => {
+  const f = fixture({ auto: null }); assert.equal(f.service.snapshot().autoUpdates, true); await f.service.check();
+  assert.equal(f.calls.downloads, 1); assert.equal(f.service.snapshot().status, 'downloaded'); assert.equal(f.updater.autoInstallOnAppQuit, true); assert.deepEqual(f.calls.installs, []);
+  await f.service.install('2.0.1'); assert.deepEqual(f.calls.installs, [[false, true]]);
+});
+test('automatic updates never download a skipped release, and skipping disables install-on-quit', async () => {
+  const f = fixture({ auto: null, saved: new Map([['skippedUpdateVersion', '2.0.1']]) }); await f.service.check();
+  assert.equal(f.service.snapshot().status, 'skipped'); assert.equal(f.calls.downloads, 0);
+  await f.service.check(true); assert.equal(f.service.snapshot().status, 'available'); assert.equal(f.calls.downloads, 0);
+  const g = fixture({ auto: null }); await g.service.check(); g.service.skip('2.0.1'); assert.equal(g.updater.autoInstallOnAppQuit, false); assert.deepEqual(g.calls.installs, []);
+});
+test('turning automatic updates off keeps releases manual and the choice survives restart', async () => {
+  const f = fixture({ auto: null }); assert.deepEqual(await f.service.setAutoUpdates(false), { success: true, autoUpdates: false });
+  await f.service.check(); assert.equal(f.service.snapshot().status, 'available'); assert.equal(f.calls.downloads, 0); assert.equal(f.updater.autoInstallOnAppQuit, false);
+  assert.equal(fixture({ auto: null, saved: f.saved }).service.snapshot().autoUpdates, false);
+  await f.service.setAutoUpdates(true); await new Promise(done => setImmediate(done)); assert.equal(f.calls.downloads, 1); assert.equal(f.service.snapshot().status, 'downloaded');
+  assert.equal((await f.service.setAutoUpdates('yes')).success, false);
+});
+test('a failed automatic download reports the error and retries on the next check', async () => {
+  const f = fixture({ auto: null }); f.failDownload(true); await f.service.check(); await new Promise(done => setImmediate(done));
+  assert.equal(f.service.snapshot().status, 'error'); assert.equal(f.updater.autoInstallOnAppQuit, false);
+  f.failDownload(false); await f.service.check(); await new Promise(done => setImmediate(done)); assert.equal(f.service.snapshot().status, 'downloaded');
 });

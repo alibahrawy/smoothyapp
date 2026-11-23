@@ -12,7 +12,7 @@ const isDev = process.env.NODE_ENV === 'development';
 const LOCAL_WS_URL = 'ws://localhost:4321/api/ws';
 const PRODUCTION_WS_URL = process.env.SMOOTHY_WS_URL || 'wss://smoothyedit.com/api/ws';
 const WS_URLS = isDev ? [LOCAL_WS_URL, PRODUCTION_WS_URL] : [PRODUCTION_WS_URL];
-const LOCAL_API_URL = 'http://localhost:3000';
+const LOCAL_API_URL = 'http://localhost:4321';
 const PRODUCTION_API_URL = 'https://smoothyedit.com';
 const API_URLS = isDev ? [LOCAL_API_URL, PRODUCTION_API_URL] : [PRODUCTION_API_URL];
 const CONNECTION_TIMEOUT_MS = 8000;
@@ -152,17 +152,18 @@ function connectToWebsiteAt(index: number): Promise<boolean> {
     };
 
     try {
-      console.log('[Website] Connecting to', wsUrl);
+      const safeWsUrl = wsBase;
+      console.log('[Website] Connecting to', safeWsUrl);
       socket = new WebSocket(wsUrl);
       websocket = socket;
 
       timeout = setTimeout(() => {
-        console.error('[Website] Connection timed out:', wsUrl);
+        console.error('[Website] Connection timed out:', safeWsUrl);
         finish(false, true);
       }, CONNECTION_TIMEOUT_MS);
 
       socket.on('open', () => {
-        console.log('[Website] Socket opened:', wsUrl);
+        console.log('[Website] Socket opened:', safeWsUrl);
 
         // Send handshake. The connection token is the only credential.
         const handshake: any = {

@@ -1,14 +1,17 @@
 import { randomUUID } from 'crypto';
 import { isShortsCutColor, isShortsCutIcon } from '../../shared/shortscuts-icons';
 import {
+  DEFAULT_ADJUSTMENT_DURATION,
   DEFAULT_SERVER_PORT,
   MAX_DECK_ITEMS,
   MAX_FOLDERS,
   MAX_MULTI_STEPS,
   MAX_PRESET_BYTES,
+  MAX_TARGET_PATH_LENGTH,
   PHONE_COLUMNS,
   TABLET_COLUMNS,
   SHORTSCUT_KINDS,
+  isSystemShortsCutKind,
   type ShortsCutEdge,
   type ShortsCutFolder,
   type ShortsCutItem,
@@ -119,6 +122,12 @@ function duration(value: unknown): number {
   return Math.min(10, Math.max(0.05, Math.round(numeric * 100) / 100));
 }
 
+function adjustmentDuration(value: unknown): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return DEFAULT_ADJUSTMENT_DURATION;
+  return Math.min(600, Math.max(0.1, Math.round(numeric * 100) / 100));
+}
+
 function shortcut(value: unknown): string | undefined {
   const raw = text(value);
   if (!raw) return undefined;
@@ -195,8 +204,10 @@ function deckItem(value: unknown, index: number, usedIds: Set<string>): ShortsCu
   if (!itemKind) return null;
   const label = boundedText(value.label, 60);
   if (!label) return null;
-  const target = itemKind === 'multi' ? '' : boundedText(value.target, 160);
-  if ((itemKind === 'video-effect' || itemKind === 'audio-effect') && !target) return null;
+  const noTarget = itemKind === 'multi' || itemKind === 'unnest' || itemKind === 'motion-to-transform' || itemKind === 'adjustment-layer';
+  const maxTarget = isSystemShortsCutKind(itemKind) ? MAX_TARGET_PATH_LENGTH : 160;
+  const target = noTarget ? '' : boundedText(value.target, maxTarget);
+  if ((itemKind === 'video-effect' || itemKind === 'audio-effect' || isSystemShortsCutKind(itemKind)) && !target) return null;
   const sanitizedPreset = itemKind === 'preset' ? preset(value.preset) : undefined;
   if (itemKind === 'preset' && !sanitizedPreset) return null;
   let id = boundedText(value.id, 80) || randomUUID();
@@ -206,6 +217,11 @@ function deckItem(value: unknown, index: number, usedIds: Set<string>): ShortsCu
     ? value.steps.map((step) => boundedText(step, 80)).filter(Boolean).slice(0, MAX_MULTI_STEPS)
     : undefined;
   const folderId = boundedText(value.folderId, 80);
+  const itemDuration = itemKind.endsWith('transition')
+    ? duration(value.duration)
+    : itemKind === 'adjustment-layer'
+      ? adjustmentDuration(value.duration)
+      : undefined;
   return {
     id,
     label,
@@ -213,7 +229,7 @@ function deckItem(value: unknown, index: number, usedIds: Set<string>): ShortsCu
     target,
     shortcut: shortcut(value.shortcut),
     edge: itemKind.endsWith('transition') ? edge(value.edge) : undefined,
-    duration: itemKind.endsWith('transition') ? duration(value.duration) : undefined,
+    duration: itemDuration,
     preset: sanitizedPreset,
     icon: isShortsCutIcon(value.icon) ? value.icon : undefined,
     color: isShortsCutColor(value.color) ? value.color : undefined,

@@ -7,7 +7,7 @@ export function initAccount({ getUser, enabled, onSignedIn }) {
   const verificationStatus = text => { $('account-verification-status').textContent = text; };
   function render() {
     const verification = view === 'verification', signup = view === 'signup';
-    $('account-heading').textContent = googleBusy ? 'Continue in your browser' : verification ? 'Verify your email' : signup ? 'Create your SmoothyEdit account' : 'Sign in to SmoothyEdit';
+    $('account-heading').textContent = googleBusy ? 'Continue in your browser' : verification ? 'Verify your email' : signup ? 'Create your Smoothy account' : 'Sign in to Smoothy';
     $('account-signup-credits').classList.toggle('hidden', !signup);
     $('login-form').classList.toggle('hidden', verification || googleBusy);
     $('account-form-footer').classList.toggle('hidden', verification || googleBusy);
@@ -112,7 +112,7 @@ export function initAccount({ getUser, enabled, onSignedIn }) {
       await onSignedIn(); if (stamp !== epoch || !enabled()) return;
       $('login-password').value = ''; $('signup-confirm').value = '';
       if (getUser()?.emailVerified === false) verifyView(); else close();
-    } catch { if (stamp === epoch) error('Could not reach SmoothyEdit. Please try again.'); }
+    } catch { if (stamp === epoch) error('Could not reach Smoothy. Please try again.'); }
     finally { if (stamp === epoch) { busy = false; render(); if (!$('totp-group').classList.contains('hidden')) $('login-totp').focus(); } }
   }
   $('login-form').addEventListener('submit', submit);

@@ -7,10 +7,15 @@ export type UpdateState = {
   percent: number;
   notes: string | null;
   notesLoading: boolean;
+  /** Whether new releases download in the background and install when the app quits. */
+  autoUpdates: boolean;
   error?: string;
 };
 
-/** Checking is automatic; downloading and restarting always require a user action. */
+/**
+ * Checking is always automatic. With automatic updates on (the default) new releases also download in
+ * the background and install when the app quits; with it off, downloading and restarting need a user action.
+ */
 export function createUpdateService({ updater, store, packaged, configured = packaged, send, fetchNotes }: {
   updater: AppUpdater;
   store: Pick<Store, 'get' | 'set' | 'delete'>;
@@ -22,17 +27,23 @@ export function createUpdateService({ updater, store, packaged, configured = pac
   updater.autoDownload = false;
   updater.autoInstallOnAppQuit = false;
   updater.allowDowngrade = false;
+  const autoUpdatesOn = () => store.get('autoUpdatesEnabled') !== false;
   // This old marker treated an intentionally deferred restart as a broken update.
   store.delete('lastDownloadedUpdateVersion');
 
   // Local --dir packages have no app-update.yml. They must never call the release updater.
   const updatesEnabled = packaged && configured;
-  let state: UpdateState = { status: updatesEnabled ? 'idle' : 'dev-build', version: null, percent: 0, notes: null, notesLoading: false };
+  let state: UpdateState = { status: updatesEnabled ? 'idle' : 'dev-build', version: null, percent: 0, notes: null, notesLoading: false, autoUpdates: autoUpdatesOn() };
   let checking = false;
   let manual = false;
   let downloadedVersion: string | null = null;
   const snapshot = () => ({ ...state });
-  const publish = (patch: Partial<UpdateState>) => { state = { ...state, ...patch }; send(snapshot()); };
+  const publish = (patch: Partial<UpdateState>) => {
+    state = { ...state, ...patch };
+    // Only a finished, unskipped download may install itself when the app quits.
+    updater.autoInstallOnAppQuit = updatesEnabled && state.autoUpdates && state.status === 'downloaded';
+    send(snapshot());
+  };
   const fail = (error: unknown) => publish({ status: 'error', error: error instanceof Error ? error.message : 'Update service unavailable' });
 
   updater.on('checking-for-update', () => publish({ status: 'checking', version: null, percent: 0, notes: null, notesLoading: false, error: undefined }));
@@ -61,7 +72,35 @@ export function createUpdateService({ updater, store, packaged, configured = pac
     manual = userRequested;
     try { await updater.checkForUpdates(); } catch (error) { fail(error); }
     finally { checking = false; manual = false; }
+    if (state.status === 'available') void autoDownload();
     return snapshot();
+  }
+
+  /** Downloads the discovered release in the background; never restarts the app. */
+  async function autoDownload() {
+    const version = state.version;
+    if (!updatesEnabled || !autoUpdatesOn() || !version || state.status !== 'available' || store.get('skippedUpdateVersion') === version) return;
+    if (downloadedVersion === version) { publish({ status: 'downloaded', percent: 100, error: undefined }); return; }
+    await download();
+  }
+
+  async function download() {
+    publish({ status: 'downloading', percent: 0, error: undefined });
+    try {
+      await updater.downloadUpdate();
+      return { success: true };
+    } catch (error) {
+      fail(error);
+      return { success: false };
+    }
+  }
+
+  async function setAutoUpdates(value: unknown) {
+    if (typeof value !== 'boolean') return { success: false, error: 'Choose whether automatic updates are on.' };
+    store.set('autoUpdatesEnabled', value);
+    publish({ autoUpdates: value });
+    if (value) void autoDownload();
+    return { success: true, autoUpdates: value };
   }
 
   function skip(version: unknown) {
@@ -83,15 +122,8 @@ export function createUpdateService({ updater, store, packaged, configured = pac
       try { updater.quitAndInstall(false, true); } catch (error) { fail(error); return { success: false }; }
       return { success: true };
     }
-    publish({ status: 'downloading', percent: 0, error: undefined });
-    try {
-      await updater.downloadUpdate();
-      return { success: true };
-    } catch (error) {
-      fail(error);
-      return { success: false };
-    }
+    return download();
   }
 
-  return { snapshot, check, skip, install };
+  return { snapshot, check, skip, install, setAutoUpdates };
 }

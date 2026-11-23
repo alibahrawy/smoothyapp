@@ -1,69 +1,21 @@
 {
-  "library": "Lucide",
-  "version": "0.468.0",
-  "website": "https://lucide.dev",
-  "license": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/LICENSE",
-  "note": "Glyph choices mirror the website app mockup (web/src/components/MiniApp.svelte). Captions, AI Photos and Chat keep distinct glyphs because the mockup reuses one bubble/image icon for two tools.",
+  "pack": "@phosphor-icons/core",
+  "weight": "fill",
+  "license": "MIT",
   "icons": {
-    "multicam": {
-      "icon": "monitor",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/monitor.svg",
-      "sha256": "d1a443233345724859de8e4fb48968ba91e885e12ddbd710701548bd91b39428"
-    },
-    "silence": {
-      "icon": "volume-x",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/volume-x.svg",
-      "sha256": "59b3477f34d36b7bdccde4ca162f4c93808d5c052c5aafd3e909b031c29201c5"
-    },
-    "local-audio": {
-      "icon": "audio-waveform",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/audio-waveform.svg",
-      "sha256": "d4b6f62b0d72b7ad223f9abeb51e64875e4533123d7898d07acfa74154eb14b3"
-    },
-    "captions": {
-      "icon": "captions",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/captions.svg",
-      "sha256": "5abaf98577eaa7989d1b955d32b50e8d8958619f774280f3925d34b39f23ab22"
-    },
-    "compressor": {
-      "icon": "shrink",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/shrink.svg",
-      "sha256": "cb474c603545297822c641aae9e55523af4f5368f9e68b4b0464dc1126b1ee4f"
-    },
-    "assets": {
-      "icon": "image",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/image.svg",
-      "sha256": "619c9db58c879dce6250376ba67d9c9102ca6dbb3b1efb9294c9f180e22273a5"
-    },
-    "stock": {
-      "icon": "film",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/film.svg",
-      "sha256": "85cfa80821b34f512bd401a1249957c9f2f612497602ecc31dff39517823ee52"
-    },
-    "audio": {
-      "icon": "music",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/music.svg",
-      "sha256": "8721b8a3594219c1313c4083049e5a5c049f49c47b1cd93fdb61d52a0803e42b"
-    },
-    "studio-text": {
-      "icon": "layout-dashboard",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/layout-dashboard.svg",
-      "sha256": "281ab865b4c04dab32a04023473e448f58be6a7ad90769450ac3349d79dc4aed"
-    },
-    "photos": {
-      "icon": "image-plus",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/image-plus.svg",
-      "sha256": "19a5bef8f17d2397b2c41422553f53746e7c8ad9886a11e7ad397c5371368ec0"
-    },
-    "chat": {
-      "icon": "messages-square",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/messages-square.svg",
-      "sha256": "eecf35710e7a26095c49f0e8261452f92a3909b4f9e2020ef242211285f7e922"
-    },
-    "logs": {
-      "icon": "terminal",
-      "source": "https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/terminal.svg",
-      "sha256": "1ec2382658b6fe0642253ba75d3bbd8f48d03c9aa79c9cdb0dbbc269e112b8a1"
-    }
+    "volume-x": "speaker-slash-fill.svg",
+    "audio-waveform": "waveform-fill.svg",
+    "captions": "closed-captioning-fill.svg",
+    "zap": "lightning-fill.svg",
+    "shrink": "arrows-in-fill.svg",
+    "image": "image-fill.svg",
+    "bot": "robot-fill.svg",
+    "film": "film-strip-fill.svg",
+    "music": "music-notes-fill.svg",
+    "layout-dashboard": "squares-four-fill.svg",
+    "image-plus": "sparkle-fill.svg",
+    "messages-square": "chats-circle-fill.svg",
+    "users": "users-three-fill.svg",
+    "terminal": "terminal-window-fill.svg"
   }
 }

@@ -291,8 +291,7 @@ body:not(.window-expanded) .audio-table { min-width: 560px; }
 .settings-pane[data-pane="agent"] .checkbox-label { margin-top: 4px; }
 
 /* Tab accents the tab itself lacked */
-#tab-local-audio { --tab-accent: #A8D8FF; --cleanup-mint: #A8D8FF; }
-#tab-shortscuts { --tab-accent: #C2E67F; }
+#tab-local-audio { --cleanup-mint: var(--tab-accent); }
 .stock-heading h1 { display: none; }
 .stock-heading:has(#stock-powered.hidden) { display: none; }
 
@@ -305,7 +304,7 @@ body:not(.window-expanded) .audio-table { min-width: 560px; }
 .nav-item.drop-before::before, .nav-item.drop-after::after { content: ""; position: absolute; left: 10px; right: 10px; height: 2px; border-radius: 2px; background: var(--text-primary, #23302d); }
 .nav-item.drop-before::before { top: -2px; }
 .nav-item.drop-after::after { bottom: -2px; }
-.nav-order-menu { position: fixed; z-index: 1000; min-width: 150px; padding: 5px; border: 1px solid var(--border); border-radius: 10px; background: #fff; box-shadow: 0 12px 32px rgb(0 0 0 / 0.14); }
+.nav-order-menu { position: fixed; z-index: 1000; min-width: 150px; padding: 5px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); box-shadow: 0 12px 32px rgb(0 0 0 / 0.14); }
 .nav-order-menu button { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
 .nav-order-menu button:hover:not(:disabled) { background: var(--background-tertiary, #efede6); }
 .nav-order-menu button:disabled { opacity: 0.35; cursor: default; }

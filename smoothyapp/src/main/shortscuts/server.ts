@@ -4,9 +4,9 @@ import { networkInterfaces } from 'node:os';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
-import type { ShortsCutKind, ShortsCutsLayout, ShortsCutsServerState } from './types';
+import type { ShortsCutHistoryAction, ShortsCutKind, ShortsCutsLayout, ShortsCutsServerState } from './types';
 import { makeQrDataUrl } from './qr';
-import { SHORTSCUT_ICONS, resolveShortsCutIcon, shortsCutColorValue, shortsCutIconSvg } from '../../shared/shortscuts-icons';
+import { SHORTSCUT_ICONS, resolveShortsCutIcon, shortsCutColorValue, shortsCutIconSvg, shortsCutKeyInk } from '../../shared/shortscuts-icons';
 
 export interface ShortsCutsMobileDeckItem {
   id: string;
@@ -15,6 +15,7 @@ export interface ShortsCutsMobileDeckItem {
   icon: string;
   color?: string;
   folderId?: string | null;
+  system?: boolean;
 }
 
 export interface ShortsCutsMobileFolder {
@@ -93,7 +94,7 @@ function scriptJson(value: unknown): string {
 }
 
 function keyMarkup(attr: string, icon: string, label: string, color: string, extra = ''): string {
-  return `<button class="key${extra}" type="button" ${attr} style="--key:${escapeHtml(color)}" aria-label="${escapeHtml(label)}"><span class="key-icon">${shortsCutIconSvg(icon, 30)}</span><span class="key-label">${escapeHtml(label)}</span></button>`;
+  return `<button class="key${extra}" type="button" ${attr} style="--key:${escapeHtml(color)};--key-ink:${shortsCutKeyInk(color)}" aria-label="${escapeHtml(label)}"><span class="key-icon">${shortsCutIconSvg(icon, 30)}</span><span class="key-label">${escapeHtml(label)}</span></button>`;
 }
 
 const fontCache = new Map<string, string>();
@@ -164,6 +165,7 @@ export class ShortsCutsServer {
   constructor(private readonly options: {
     getState: () => ShortsCutsMobileState;
     apply: (id: string) => Promise<ShortsCutsApplyResponse>;
+    history?: (action: ShortsCutHistoryAction) => Promise<ShortsCutsApplyResponse>;
     onAction?: (message: string) => void;
   }) {}
 
@@ -387,6 +389,45 @@ export class ShortsCutsServer {
       sendJson(response, result.success ? 200 : 409, result);
       return;
     }
+    if (request.method === 'POST' && endpoint === 'history') {
+      if (this.limited(this.actionRates, address, RATE_ACTIONS)) {
+        sendJson(response, 429, { error: 'Too many shortcuts. Wait a minute and try again.' });
+        return;
+      }
+      this.markClient(address);
+      let body: string;
+      try {
+        body = await this.readBody(request);
+      } catch (error) {
+        sendJson(response, 413, { success: false, error: error instanceof Error ? error.message : 'Request too large.' });
+        return;
+      }
+      let action = '';
+      try {
+        const parsed = JSON.parse(body);
+        action = parsed?.action === 'undo' || parsed?.action === 'redo' ? parsed.action : '';
+      } catch {
+        sendJson(response, 400, { success: false, error: 'Invalid undo/redo request.' });
+        return;
+      }
+      if (!action) {
+        sendJson(response, 400, { success: false, error: 'Choose undo or redo.' });
+        return;
+      }
+      const result = this.options.history
+        ? await this.options.history(action as ShortsCutHistoryAction)
+        : { success: false, error: 'Undo and Redo are not available.' };
+      this.lastAction = result.success
+        ? `${action === 'undo' ? 'Undo' : 'Redo'} from phone at ${new Date().toLocaleTimeString()}`
+        : `Phone ${action} failed at ${new Date().toLocaleTimeString()}`;
+      try {
+        this.options.onAction?.(this.lastAction);
+      } catch {
+        // Never let UI feedback break the action.
+      }
+      sendJson(response, result.success ? 200 : 409, result);
+      return;
+    }
     sendJson(response, 404, { error: 'Not found.' });
   }
 
@@ -431,47 +472,52 @@ export class ShortsCutsServer {
       icon: item.icon || resolveShortsCutIcon(item),
       color: item.color || shortsCutColorValue(undefined, item.kind),
       folderId: item.folderId || null,
+      system: Boolean(item.system),
     }));
     const folders = state.folders || [];
     const layout = state.layout || { phoneColumns: 3, tabletColumns: 5 };
     const initial = scriptJson({ connected: state.connected, deck, folders, layout });
     const iconsJson = scriptJson(SHORTSCUT_ICONS);
-    const regular = fontBase64('Bunch-Regular.woff2');
-    const bold = fontBase64('Bunch-Bold.woff2');
+    const onest = fontBase64('onest-latin-wght-normal.woff2');
     const folderIds = new Set(folders.map((folder) => folder.id));
     const cards = [
       ...folders.map((folder) => keyMarkup(`data-folder-id="${escapeHtml(folder.id)}"`, folder.icon, folder.label, folder.color, ' key-folder')),
-      ...deck.filter((item) => !item.folderId || !folderIds.has(item.folderId)).map((item) => keyMarkup(`data-cut-id="${escapeHtml(item.id)}"`, item.icon, item.label, item.color)),
+      ...deck.filter((item) => !item.folderId || !folderIds.has(item.folderId)).map((item) => keyMarkup(`data-cut-id="${escapeHtml(item.id)}"${item.system ? ' data-system="true"' : ''}`, item.icon, item.label, item.color)),
     ];
     return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#faf9f5">
+<meta name="theme-color" content="#FBFAF8">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>ShortsCuts · Smoothy</title>
 <style>
-${regular ? `@font-face{font-family:Bunch;font-style:normal;font-weight:400;src:url(data:font/woff2;base64,${regular}) format("woff2")}` : ''}
-${bold ? `@font-face{font-family:Bunch;font-style:normal;font-weight:700;src:url(data:font/woff2;base64,${bold}) format("woff2")}` : ''}
-:root{color-scheme:light;--bg:#faf9f5;--ink:#23302d;--muted:#79807b;--line:#e7e4db;--card:#fff;--bad:#c4543f;--cols:${layout.phoneColumns}}
+${onest ? `@font-face{font-family:Onest;font-style:normal;font-weight:100 900;src:url(data:font/woff2;base64,${onest}) format("woff2-variations")}` : ''}
+:root{color-scheme:light;--bg:#FBFAF8;--ink:#151515;--muted:#6D6C68;--line:#E4E3DF;--card:#FFFFFF;--bad:#AF2934;--cols:${layout.phoneColumns}}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{min-height:100%}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:Bunch,-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;-webkit-text-size-adjust:100%;-webkit-user-select:none;user-select:none}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Onest,-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;-webkit-text-size-adjust:100%;-webkit-user-select:none;user-select:none}
 main{width:min(100%,1100px);margin-inline:auto;padding:calc(14px + env(safe-area-inset-top)) 14px calc(24px + env(safe-area-inset-bottom))}
-header{display:flex;align-items:center;gap:10px;min-height:40px;margin-bottom:12px}
+header{display:flex;align-items:center;gap:8px;min-height:42px;margin-bottom:12px}
 h1{flex:1;min-width:0;margin:0;overflow:hidden;font-size:20px;letter-spacing:-.03em;line-height:1.1;text-overflow:ellipsis;white-space:nowrap}
-.back{display:none;place-items:center;width:38px;height:38px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:inherit;font-size:20px;cursor:pointer}
+.back{display:none;place-items:center;flex:none;width:38px;height:38px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:inherit;font-size:20px;cursor:pointer}
 .in-folder .back{display:grid}
 .state{display:none;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;background:color-mix(in srgb,var(--bad) 12%,transparent);color:var(--bad);font-size:12px;font-weight:700;white-space:nowrap}
 .state[data-connected="false"]{display:inline-flex}
 .state::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.history{display:inline-flex;align-items:center;gap:6px;flex:none}
+.hist-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-width:40px;height:38px;padding:0 10px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);font:inherit;font-size:12px;font-weight:700;cursor:pointer;touch-action:manipulation;box-shadow:0 1px 2px rgb(0 0 0 / .06);transition:transform .08s ease,background .12s ease,opacity .12s ease}
+.hist-btn svg{flex:none}
+.hist-btn:active,.hist-btn.is-pressed{transform:scale(.94);background:var(--line)}
+.hist-btn:disabled{opacity:.42;cursor:default}
+@media (max-width:430px){.hist-btn span{display:none}.hist-btn{padding:0;width:38px}}
 .deck{display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:10px}
-.key{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;aspect-ratio:1;min-width:0;padding:10px 6px;border:0;border-radius:18px;background:var(--key);color:#fff;font:inherit;text-align:center;cursor:pointer;touch-action:manipulation;box-shadow:inset 0 -3px 0 rgb(0 0 0 / .14),0 1px 2px rgb(0 0 0 / .08);transition:transform .08s ease,filter .12s ease}
+.key{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;aspect-ratio:1;min-width:0;padding:10px 6px;border:0;border-radius:18px;background:var(--key);color:var(--key-ink,#fff);font:inherit;text-align:center;cursor:pointer;touch-action:manipulation;box-shadow:0 1px 1px rgb(17 17 17 / .10),0 2px 4px -2px rgb(17 17 17 / .16);transition:transform .08s ease,filter .12s ease}
 .key-icon{display:grid;place-items:center;width:44%;max-width:44px;aspect-ratio:1}
 .key-icon svg{width:100%;height:100%}
-.key-label{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;width:100%;overflow:hidden;font-size:clamp(11px,3.2vw,14px);font-weight:700;line-height:1.15;letter-spacing:-.01em;overflow-wrap:anywhere;text-shadow:0 1px 1px rgb(0 0 0 / .12)}
-.key-folder::after{content:"";position:absolute;top:8px;right:8px;width:6px;height:6px;border-radius:50%;background:rgb(255 255 255 / .75)}
+.key-label{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;width:100%;overflow:hidden;font-size:clamp(11px,3.2vw,14px);font-weight:700;line-height:1.15;letter-spacing:-.01em;overflow-wrap:anywhere}
+.key-folder::after{content:"";position:absolute;top:8px;right:8px;width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.65}
 .key:active,.key.is-pressed{transform:scale(.95);filter:brightness(.92)}
 .key:disabled{opacity:.42;cursor:default}
 .key-folder:disabled{opacity:1}
@@ -479,7 +525,7 @@ h1{flex:1;min-width:0;margin:0;overflow:hidden;font-size:20px;letter-spacing:-.0
 .hint:empty{display:none}
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));z-index:5;transform:translate(-50%,20px);max-width:min(90vw,420px);padding:12px 16px;border-radius:12px;background:var(--ink);color:#fff;font-size:13px;font-weight:700;box-shadow:0 12px 30px rgb(0 0 0 / .2);opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease}
 #toast.show{opacity:1;transform:translate(-50%,0)}
-@media (prefers-reduced-motion:reduce){.key{transition:none}}
+@media (prefers-reduced-motion:reduce){.key,.hist-btn{transition:none}}
 </style>
 </head>
 <body>
@@ -488,6 +534,10 @@ h1{flex:1;min-width:0;margin:0;overflow:hidden;font-size:20px;letter-spacing:-.0
 <button class="back" id="back" type="button" aria-label="Back">‹</button>
 <h1 id="title">ShortsCuts</h1>
 <span class="state" id="state" data-connected="${state.connected ? 'true' : 'false'}">Premiere offline</span>
+<div class="history" role="group" aria-label="Undo and Redo">
+<button class="hist-btn" id="undo" type="button" data-history="undo" aria-label="Undo" title="Undo"${state.connected ? '' : ' disabled'}>${shortsCutIconSvg('undo', 18)}<span>Undo</span></button>
+<button class="hist-btn" id="redo" type="button" data-history="redo" aria-label="Redo" title="Redo"${state.connected ? '' : ' disabled'}>${shortsCutIconSvg('redo', 18)}<span>Redo</span></button>
+</div>
 </header>
 <section class="deck" id="deck" aria-label="ShortsCuts deck">${cards.join('')}</section>
 <p class="hint" id="hint"></p>
@@ -502,12 +552,24 @@ const hint=document.getElementById('hint');
 const stateEl=document.getElementById('state');
 const titleEl=document.getElementById('title');
 const mainEl=document.getElementById('main');
-let state=initial,folder=null,toastTimer,lastSignature='';
+const undoBtn=document.getElementById('undo');
+const redoBtn=document.getElementById('redo');
+let state=initial,computerOnline=true,folder=null,toastTimer,lastSignature='';
 function iconSvg(id){const inner=ICONS[id]||ICONS.sparkle;return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">'+inner+'</svg>'}
 function esc(value){return String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function key(attr,icon,label,color,extra){return '<button class="key'+(extra||'')+'" type="button" '+attr+' style="--key:'+esc(color)+'" aria-label="'+esc(label)+'"><span class="key-icon">'+iconSvg(icon)+'</span><span class="key-label">'+esc(label)+'</span></button>'}
+const LIGHT_KEYS=new Set(['#92F388','#FBCB2A','#F48E20','#FB6769','#FC9AC9','#4BC6FA']);
+function keyInk(color){return LIGHT_KEYS.has(String(color||'').toUpperCase())?'#151515':'#FFFFFF'}
+function key(attr,icon,label,color,extra){return '<button class="key'+(extra||'')+'" type="button" '+attr+' style="--key:'+esc(color)+';--key-ink:'+keyInk(color)+'" aria-label="'+esc(label)+'"><span class="key-icon">'+iconSvg(icon)+'</span><span class="key-label">'+esc(label)+'</span></button>'}
 function columns(){const layout=state.layout||{};const tablet=Math.min(window.innerWidth,window.innerHeight)>=600||window.innerWidth>=820;document.documentElement.style.setProperty('--cols',String(tablet?(layout.tabletColumns||5):(layout.phoneColumns||3)))}
 function toast(message){const el=document.getElementById('toast');el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2200)}
+function syncButtons(){
+  deckEl.querySelectorAll('[data-cut-id]').forEach(button=>{
+    const isSystem=button.dataset.system==='true';
+    button.disabled=!computerOnline||(!isSystem&&!state.connected);
+  });
+  undoBtn.disabled=!computerOnline||!state.connected;
+  redoBtn.disabled=!computerOnline||!state.connected;
+}
 function renderDeck(){
   const folders=state.folders||[];
   const ids=new Set(folders.map(f=>f.id));
@@ -517,20 +579,22 @@ function renderDeck(){
   titleEl.textContent=current?current.label:'ShortsCuts';
   const items=(state.deck||[]).filter(item=>current?item.folderId===current.id:!(item.folderId&&ids.has(item.folderId)));
   const keys=current?[]:folders.map(f=>key('data-folder-id="'+esc(f.id)+'"',f.icon,f.label,f.color,' key-folder'));
-  for(const item of items)keys.push(key('data-cut-id="'+esc(item.id)+'"',item.icon,item.label,item.color));
+  for(const item of items)keys.push(key('data-cut-id="'+esc(item.id)+'"'+(item.system?' data-system="true"':''),item.icon,item.label,item.color));
   deckEl.innerHTML=keys.join('');
-  deckEl.querySelectorAll('[data-cut-id]').forEach(button=>{button.disabled=!state.connected});
-  if(!state.connected)hint.textContent='Open Premiere and connect the Smoothy panel.';
+  syncButtons();
+  if(!state.connected)hint.textContent='Open Premiere and connect the Smoothy panel. App and folder shortcuts still work.';
   else if(!keys.length)hint.textContent=current?'This folder is empty. Add keys to it on your computer.':'Add keys on your computer to fill this deck.';
   else hint.textContent='';
 }
 function applyState(next){
+  computerOnline=true;
   const signature=JSON.stringify([next.connected,next.deck,next.folders,next.layout]);
   state=next;
   stateEl.dataset.connected=String(!!next.connected);
   stateEl.textContent='Premiere offline';
   columns();
   if(signature!==lastSignature){lastSignature=signature;renderDeck()}
+  else syncButtons();
 }
 async function refresh(){
   try{
@@ -538,15 +602,17 @@ async function refresh(){
     if(!response.ok)throw new Error((await response.json()).error||'Connection lost');
     applyState(await response.json());
   }catch(error){
-    state.connected=false;lastSignature='';
+    computerOnline=false;state.connected=false;lastSignature='';
     stateEl.dataset.connected='false';
     stateEl.textContent='Computer offline';
     hint.textContent='Lost the connection to Smoothy on your computer.';
-    deckEl.querySelectorAll('[data-cut-id]').forEach(button=>{button.disabled=true});
+    syncButtons();
   }
 }
 async function apply(id,button){
-  if(!state.connected){toast('Connect Premiere on your computer first');return}
+  const isSystem=button.dataset.system==='true';
+  if(!computerOnline){toast('Lost connection to Smoothy on your computer');return}
+  if(!isSystem&&!state.connected){toast('Connect Premiere on your computer first');return}
   button.disabled=true;button.classList.add('is-pressed');
   try{
     const response=await fetch(api+'/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
@@ -558,7 +624,24 @@ async function apply(id,button){
     toast(error.message||'Could not apply that shortcut');
     if(navigator.vibrate)navigator.vibrate([20,40,20]);
   }finally{
-    setTimeout(()=>{button.classList.remove('is-pressed');button.disabled=!state.connected},170);
+    setTimeout(()=>{button.classList.remove('is-pressed');syncButtons()},170);
+    refresh();
+  }
+}
+async function runHistory(action,button){
+  if(!computerOnline||!state.connected){toast('Connect Premiere on your computer first');return}
+  button.disabled=true;button.classList.add('is-pressed');
+  try{
+    const response=await fetch(api+'/history',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+    const result=await response.json();
+    if(!response.ok||!result.success)throw new Error(result.error||'Could not '+action);
+    toast(result.message||(action==='undo'?'Undo':'Redo'));
+    if(navigator.vibrate)navigator.vibrate(12);
+  }catch(error){
+    toast(error.message||'Could not '+action);
+    if(navigator.vibrate)navigator.vibrate([20,40,20]);
+  }finally{
+    setTimeout(()=>{button.classList.remove('is-pressed');syncButtons()},170);
     refresh();
   }
 }
@@ -568,6 +651,8 @@ deckEl.addEventListener('click',event=>{
   const button=event.target.closest('[data-cut-id]');
   if(button)apply(button.dataset.cutId,button);
 });
+undoBtn.addEventListener('click',()=>runHistory('undo',undoBtn));
+redoBtn.addEventListener('click',()=>runHistory('redo',redoBtn));
 document.getElementById('back').addEventListener('click',()=>{folder=null;renderDeck()});
 window.addEventListener('resize',columns);
 applyState(initial);

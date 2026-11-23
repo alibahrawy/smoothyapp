@@ -48,7 +48,7 @@ if (typeof JSON === 'undefined') {
   };
 }
 
-var SMOOTHY_CEP_HOST_VERSION = "20261101-shortscuts-v38";
+var SMOOTHY_CEP_HOST_VERSION = "20261123-box-highlight-captions-v42";
 
 function getSmoothyCepHostVersion() {
   return SMOOTHY_CEP_HOST_VERSION;
@@ -977,12 +977,18 @@ function exportSequenceAudio() {
     // Prefer the built-in MP3 audio presets. This avoids exporting video.
     var presetPath = "";
 
-    // Try to find an audio preset
-    var presetsFolder = new Folder(Folder.appPackage.fsName + "/MediaIO/systempresets/58444341_4d703300/");
-    if (presetsFolder.exists) {
-      var presets = presetsFolder.getFiles("*.epr");
-      if (presets.length > 0) {
-        presetPath = presets[0].fsName;
+    // Try to find an audio preset (check both Windows/root and macOS Contents/ paths)
+    var presetRoots = [
+      Folder.appPackage.fsName + "/MediaIO/systempresets/58444341_4d703300/",
+      Folder.appPackage.fsName + "/Contents/MediaIO/systempresets/58444341_4d703300/"
+    ];
+    for (var pIdx = 0; pIdx < presetRoots.length && !presetPath; pIdx++) {
+      var presetsFolder = new Folder(presetRoots[pIdx]);
+      if (presetsFolder.exists) {
+        var presets = presetsFolder.getFiles("*.epr");
+        if (presets.length > 0) {
+          presetPath = presets[0].fsName;
+        }
       }
     }
 
@@ -1183,35 +1189,53 @@ function addMarkersFromWebsite(markersJSON) {
 
       try {
         // Parse times
-        var startTime = safeMarkerTime(m.time || m.startTime || m.start);
-        var endTime = safeMarkerTime(m.endTime || m.end || m.outTime || m.out);
-        if (endTime <= 0 || endTime <= startTime) {
-          endTime = startTime + 60; // Default 60 second duration
-        }
+        var startTime = safeMarkerTime(m.time !== undefined ? m.time : (m.startTime !== undefined ? m.startTime : m.start));
+        var rawEnd = m.endTime !== undefined ? m.endTime : (m.end !== undefined ? m.end : (m.outTime !== undefined ? m.outTime : m.out));
+        var hasExplicitEnd = rawEnd !== undefined && rawEnd !== null && rawEnd !== "";
+        var endTime = hasExplicitEnd ? safeMarkerTime(rawEnd) : 0;
 
-        // Short number for display
-        var shortNum = i + 1;
-        var shortName = "Short " + shortNum;
+        // Pick a color for this marker (cycles through 7 distinct colors unless caller chose one)
+        var colorIndex = (typeof m.color === "number" && !isNaN(m.color)) ? m.color : colors[i % colors.length];
+        var customName = typeof m.name === "string" ? m.name.replace(/^\s+|\s+$/g, "") : "";
+        var customComment = typeof m.comment === "string" ? m.comment.replace(/^\s+|\s+$/g, "") : "";
 
-        // Pick a color for this short (cycles through 7 distinct colors)
-        var colorIndex = colors[i % colors.length];
+        if (customName) {
+          // Named/agent marker: create one marker preserving name, comment, and optional duration.
+          var namedMarker = seqMarkers.createMarker(startTime);
+          if (namedMarker) {
+            safeSetMarkerName(namedMarker, customName);
+            namedMarker.comments = customComment
+              ? (customComment.indexOf("[SmoothyEdit]") === 0 ? customComment : "[SmoothyEdit] " + customComment)
+              : "[SmoothyEdit]";
+            if (hasExplicitEnd && endTime > startTime) {
+              try { namedMarker.end = endTime; } catch (e) {}
+            }
+            safeSetMarkerColor(namedMarker, colorIndex);
+            addedCount++;
+          }
+        } else {
+          // Best Shorts pair: START + END markers
+          if (endTime <= 0 || endTime <= startTime) {
+            endTime = startTime + 60; // Default 60 second duration
+          }
+          var shortNum = i + 1;
+          var shortName = "Short " + shortNum;
 
-        // Create START marker
-        var startMarker = seqMarkers.createMarker(startTime);
-        if (startMarker) {
-          safeSetMarkerName(startMarker, "START: " + shortName);
-          startMarker.comments = "[SmoothyEdit] Short start";
-          safeSetMarkerColor(startMarker, colorIndex);
-          addedCount++;
-        }
+          var startMarker = seqMarkers.createMarker(startTime);
+          if (startMarker) {
+            safeSetMarkerName(startMarker, "START: " + shortName);
+            startMarker.comments = customComment ? ("[SmoothyEdit] " + customComment) : "[SmoothyEdit] Short start";
+            safeSetMarkerColor(startMarker, colorIndex);
+            addedCount++;
+          }
 
-        // Create END marker
-        var endMarker = seqMarkers.createMarker(endTime);
-        if (endMarker) {
-          safeSetMarkerName(endMarker, "END: " + shortName);
-          endMarker.comments = "[SmoothyEdit] Short end";
-          safeSetMarkerColor(endMarker, colorIndex);
-          addedCount++;
+          var endMarker = seqMarkers.createMarker(endTime);
+          if (endMarker) {
+            safeSetMarkerName(endMarker, "END: " + shortName);
+            endMarker.comments = "[SmoothyEdit] Short end";
+            safeSetMarkerColor(endMarker, colorIndex);
+            addedCount++;
+          }
         }
 
       } catch (markerErr) {
@@ -1251,7 +1275,7 @@ function clearAllMarkers(scope, sequenceId) {
   try {
     var seq = app.project.activeSequence;
     if (!seq) return JSON.stringify({ success: false, error: "No active sequence" });
-    if (!sequenceId || String(seq.sequenceID) !== String(sequenceId)) {
+    if (sequenceId && String(seq.sequenceID) !== String(sequenceId)) {
       return JSON.stringify({ success: false, error: "The active sequence changed. Refresh before clearing markers." });
     }
     var targets = [];
@@ -2308,6 +2332,755 @@ function getShortsCutsCatalog() {
   }
 }
 
+function smoothyShortsCutsFindParam(component, names, fallbackIndex) {
+  if (!component || !component.properties) return null;
+  var count = component.properties.numItems;
+  for (var n = 0; n < names.length; n++) {
+    var wanted = String(names[n]).toLowerCase();
+    for (var i = 0; i < count; i++) {
+      var prop = component.properties[i];
+      try {
+        if (String(prop.displayName || "").toLowerCase() === wanted) return prop;
+      } catch (e) {}
+    }
+  }
+  if (typeof fallbackIndex === "number" && fallbackIndex >= 0 && fallbackIndex < count) {
+    return component.properties[fallbackIndex];
+  }
+  return null;
+}
+
+function smoothyShortsCutsCopyParam(sourceParam, targetParam) {
+  if (!sourceParam || !targetParam) return false;
+  var timeVarying = false;
+  try {
+    timeVarying = typeof sourceParam.isTimeVarying === "function" && !!sourceParam.isTimeVarying();
+  } catch (e) {
+    timeVarying = false;
+  }
+  if (timeVarying) {
+    var keys = null;
+    try {
+      keys = sourceParam.getKeys();
+    } catch (e) {
+      keys = null;
+    }
+    if (keys && keys.length > 0) {
+      try {
+        targetParam.setTimeVarying(true);
+      } catch (e) {}
+      var copied = 0;
+      for (var k = 0; k < keys.length; k++) {
+        var kt = keys[k];
+        try {
+          var kv = sourceParam.getValueAtKey(kt);
+          targetParam.addKey(kt);
+          targetParam.setValueAtKey(kt, kv, true);
+          try {
+            if (typeof sourceParam.getInterpolationTypeAtKey === "function" && typeof targetParam.setInterpolationTypeAtKey === "function") {
+              var interp = sourceParam.getInterpolationTypeAtKey(kt);
+              targetParam.setInterpolationTypeAtKey(kt, interp, true);
+            }
+          } catch (interpErr) {}
+          copied++;
+        } catch (keyErr) {}
+      }
+      if (copied > 0) return true;
+    }
+  }
+  try {
+    targetParam.setValue(sourceParam.getValue(), true);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function smoothyShortsCutsResetParam(param, defaultValue) {
+  if (!param) return;
+  try {
+    if (typeof param.isTimeVarying === "function" && param.isTimeVarying()) {
+      param.setTimeVarying(false);
+    }
+  } catch (e) {}
+  try {
+    param.setValue(defaultValue, true);
+  } catch (e) {}
+}
+
+function smoothyShortsCutsMoveMotionToTransform(seq, qeSeq) {
+  var pairs = smoothyShortsCutsSelected(seq, true);
+  if (!pairs.length) {
+    return JSON.stringify({ success: false, error: "Select one or more video clips first." });
+  }
+  var applied = 0, failed = 0, details = [];
+  for (var i = 0; i < pairs.length; i++) {
+    var pair = pairs[i];
+    var motion = smoothyShortsCutsComponent(pair.clip, "AE.ADBE Motion");
+    if (!motion) {
+      failed++;
+      if (details.length < 4) details.push("Clip on V" + (pair.track + 1) + " has no Motion component.");
+      continue;
+    }
+    var qeClip = smoothyShortsCutsQeClip(seq, qeSeq, true, pair.track, pair.index);
+    if (!qeClip) {
+      failed++;
+      if (details.length < 4) details.push("Could not map the selected clip on V" + (pair.track + 1) + ".");
+      continue;
+    }
+    try {
+      var beforeCount = pair.clip.components.numItems;
+      smoothyShortsCutsAddEffect(qeClip, true, "Transform");
+      var transform = null;
+      for (var c = pair.clip.components.numItems - 1; c >= beforeCount; c--) {
+        var comp = pair.clip.components[c];
+        var mn = String(comp.matchName || "");
+        var dn = String(comp.displayName || "");
+        if (mn === "AE.ADBE Geometry2" || mn === "AE.ADBE Geometry" || /transform/i.test(dn)) {
+          transform = comp;
+          break;
+        }
+      }
+      if (!transform) {
+        transform = smoothyShortsCutsComponent(pair.clip, "AE.ADBE Geometry2") || smoothyShortsCutsComponent(pair.clip, "AE.ADBE Geometry");
+      }
+      if (!transform) {
+        failed++;
+        if (details.length < 4) details.push("Premiere added Transform, but its properties could not be read.");
+        continue;
+      }
+
+      var mPos = smoothyShortsCutsFindParam(motion, ["Position"], 0);
+      var mScale = smoothyShortsCutsFindParam(motion, ["Scale"], 1);
+      var mScaleW = smoothyShortsCutsFindParam(motion, ["Scale Width"], 2);
+      var mUniform = smoothyShortsCutsFindParam(motion, ["Uniform Scale"], 3);
+      var mRot = smoothyShortsCutsFindParam(motion, ["Rotation"], 4);
+      var mAnchor = smoothyShortsCutsFindParam(motion, ["Anchor Point"], 5);
+
+      var tAnchor = smoothyShortsCutsFindParam(transform, ["Anchor Point"], 0);
+      var tPos = smoothyShortsCutsFindParam(transform, ["Position"], 1);
+      var tUniform = smoothyShortsCutsFindParam(transform, ["Uniform Scale"], 2);
+      var tScaleH = smoothyShortsCutsFindParam(transform, ["Scale Height", "Scale"], 3);
+      var tScaleW = smoothyShortsCutsFindParam(transform, ["Scale Width"], 4);
+      var tRot = smoothyShortsCutsFindParam(transform, ["Rotation"], 7);
+
+      var isUniform = true;
+      try {
+        if (mUniform) isUniform = !!mUniform.getValue();
+      } catch (e) {
+        isUniform = true;
+      }
+      if (mUniform && tUniform) smoothyShortsCutsCopyParam(mUniform, tUniform);
+      if (mAnchor && tAnchor) smoothyShortsCutsCopyParam(mAnchor, tAnchor);
+      if (mPos && tPos) smoothyShortsCutsCopyParam(mPos, tPos);
+      if (mScale && tScaleH) smoothyShortsCutsCopyParam(mScale, tScaleH);
+      if (!isUniform && mScaleW && tScaleW) smoothyShortsCutsCopyParam(mScaleW, tScaleW);
+      if (mRot && tRot) smoothyShortsCutsCopyParam(mRot, tRot);
+
+      // Reset built-in Motion so transforms are not doubled.
+      smoothyShortsCutsResetParam(mUniform, true);
+      smoothyShortsCutsResetParam(mPos, [0.5, 0.5]);
+      smoothyShortsCutsResetParam(mAnchor, [0.5, 0.5]);
+      smoothyShortsCutsResetParam(mScale, 100);
+      smoothyShortsCutsResetParam(mScaleW, 100);
+      smoothyShortsCutsResetParam(mRot, 0);
+
+      applied++;
+    } catch (error) {
+      failed++;
+      if (details.length < 4) details.push(error.message || "Could not move Motion to Transform.");
+    }
+  }
+  var message = "Moved Motion to Transform on " + applied + (applied === 1 ? " clip." : " clips.");
+  if (failed) message += " " + failed + " clip(s) could not be changed.";
+  return JSON.stringify({ success: applied > 0, applied: applied, failed: failed, message: message, details: details });
+}
+
+function smoothyShortsCutsFindSequenceForItem(projectItem, excludeSeqId) {
+  if (!projectItem || !app.project || !app.project.sequences) return null;
+  var isSeq = false;
+  try {
+    isSeq = typeof projectItem.isSequence === "function" && !!projectItem.isSequence();
+  } catch (e) {
+    isSeq = false;
+  }
+  if (!isSeq) return null;
+  var nodeId = "";
+  var treePath = "";
+  var name = "";
+  try { nodeId = String(projectItem.nodeId || ""); } catch (e) {}
+  try { treePath = String(projectItem.treePath || ""); } catch (e) {}
+  try { name = String(projectItem.name || ""); } catch (e) {}
+  var byTree = null, byName = null;
+  for (var i = 0; i < app.project.sequences.numSequences; i++) {
+    var candidate = app.project.sequences[i];
+    if (!candidate || String(candidate.sequenceID) === String(excludeSeqId)) continue;
+    var pi = candidate.projectItem;
+    if (pi && nodeId && String(pi.nodeId || "") === nodeId) return candidate;
+    if (pi && treePath && String(pi.treePath || "") === treePath) byTree = candidate;
+    if (name && String(candidate.name || "") === name) byName = candidate;
+  }
+  return byTree || byName;
+}
+
+function smoothyShortsCutsCaptureClipComponents(clip) {
+  var out = [];
+  if (!clip || !clip.components) return out;
+  for (var i = 0; i < clip.components.numItems; i++) {
+    var comp = clip.components[i];
+    var matchName = String(comp.matchName || "");
+    if (!matchName || matchName === "AE.ADBE Time Remapping") continue;
+    var props = [];
+    try {
+      for (var j = 0; j < comp.properties.numItems; j++) {
+        var prop = comp.properties[j];
+        var pName = String(prop.displayName || "");
+        if (!pName) continue;
+        var timeVarying = false;
+        try { timeVarying = typeof prop.isTimeVarying === "function" && !!prop.isTimeVarying(); } catch (e) {}
+        if (timeVarying) {
+          var keys = null;
+          try { keys = prop.getKeys(); } catch (e) { keys = null; }
+          if (keys && keys.length > 0) {
+            var kList = [];
+            for (var k = 0; k < keys.length; k++) {
+              try {
+                var kv = smoothyShortsCutsValue(prop.getValueAtKey(keys[k]));
+                if (kv === null) continue;
+                var interp = null;
+                try {
+                  if (typeof prop.getInterpolationTypeAtKey === "function") interp = prop.getInterpolationTypeAtKey(keys[k]);
+                } catch (ie) {}
+                kList.push({ ticks: String(keys[k].ticks), value: kv, interp: interp });
+              } catch (ke) {}
+            }
+            if (kList.length > 0) {
+              props.push({ name: pName, index: j, keyframes: kList });
+              continue;
+            }
+          }
+        }
+        try {
+          var val = smoothyShortsCutsValue(prop.getValue());
+          if (val !== null) props.push({ name: pName, index: j, value: val });
+        } catch (ve) {}
+      }
+    } catch (e) {}
+    out.push({
+      matchName: matchName,
+      displayName: String(comp.displayName || matchName),
+      properties: props
+    });
+  }
+  return out;
+}
+
+function smoothyShortsCutsRestoreClipComponents(clip, qeClip, video, components, tickDelta) {
+  if (!clip || !components || !components.length) return;
+  for (var i = 0; i < components.length; i++) {
+    var entry = components[i];
+    try {
+      var intrinsic = smoothyShortsCutsIsIntrinsic(entry.matchName);
+      var target = intrinsic ? smoothyShortsCutsComponent(clip, entry.matchName) : null;
+      if (!intrinsic && qeClip) {
+        smoothyShortsCutsAddEffect(qeClip, video, entry.displayName || entry.matchName);
+        target = smoothyShortsCutsComponent(clip, entry.matchName);
+      }
+      if (!target || !target.properties) continue;
+      for (var j = 0; j < entry.properties.length; j++) {
+        var wanted = entry.properties[j];
+        var prop = smoothyShortsCutsFindParam(target, [wanted.name], wanted.index);
+        if (!prop) continue;
+        try {
+          if (wanted.keyframes && wanted.keyframes.length) {
+            prop.setTimeVarying(true);
+            for (var k = 0; k < wanted.keyframes.length; k++) {
+              var kf = wanted.keyframes[k];
+              var shifted = Number(kf.ticks) + tickDelta;
+              var t = new Time();
+              t.ticks = String(Math.round(shifted));
+              prop.addKey(t);
+              prop.setValueAtKey(t, kf.value, true);
+              if (kf.interp !== null && typeof prop.setInterpolationTypeAtKey === "function") {
+                try { prop.setInterpolationTypeAtKey(t, kf.interp, true); } catch (ie) {}
+              }
+            }
+          } else {
+            prop.setValue(wanted.value, true);
+          }
+        } catch (pe) {}
+      }
+    } catch (ce) {}
+  }
+}
+
+function smoothyShortsCutsSaveItemBounds(projectItem, mediaType) {
+  var saved = { hasIn: false, hasOut: false, inTicks: "", outTicks: "" };
+  try {
+    var curIn = projectItem.getInPoint(mediaType);
+    if (curIn && curIn.ticks !== undefined && Number(curIn.ticks) >= 0) {
+      saved.hasIn = true;
+      saved.inTicks = String(curIn.ticks);
+    }
+  } catch (e) {}
+  try {
+    var curOut = projectItem.getOutPoint(mediaType);
+    if (curOut && curOut.ticks !== undefined && Number(curOut.ticks) >= 0) {
+      saved.hasOut = true;
+      saved.outTicks = String(curOut.ticks);
+    }
+  } catch (e) {}
+  return saved;
+}
+
+function smoothyShortsCutsRestoreItemBounds(projectItem, mediaType, saved) {
+  try {
+    if (saved && saved.hasIn) projectItem.setInPoint(saved.inTicks, mediaType);
+    else if (typeof projectItem.clearInPoint === "function") projectItem.clearInPoint(mediaType);
+  } catch (e) {}
+  try {
+    if (saved && saved.hasOut) projectItem.setOutPoint(saved.outTicks, mediaType);
+    else if (typeof projectItem.clearOutPoint === "function") projectItem.clearOutPoint(mediaType);
+  } catch (e) {}
+}
+
+function smoothyShortsCutsFindClipNear(track, targetStartTicks, nodeId, frameTicks) {
+  if (!track || !track.clips) return null;
+  var best = null, bestDiff = frameTicks * 4 + 1;
+  for (var i = 0; i < track.clips.numItems; i++) {
+    var c = track.clips[i];
+    var diff = Math.abs(Number(c.start.ticks) - targetStartTicks);
+    if (diff >= bestDiff) continue;
+    if (nodeId && c.projectItem && String(c.projectItem.nodeId || "") !== nodeId) continue;
+    best = { clip: c, index: i };
+    bestDiff = diff;
+  }
+  return best;
+}
+
+function smoothyShortsCutsUnnest(seq, qeSeq) {
+  var selectedVideo = smoothyShortsCutsSelected(seq, true);
+  var selectedAudio = selectedVideo.length ? [] : smoothyShortsCutsSelected(seq, false);
+  var candidates = selectedVideo.length ? selectedVideo : selectedAudio;
+  var fromVideo = selectedVideo.length > 0;
+  if (!candidates.length) {
+    return JSON.stringify({ success: false, error: "Select a nested sequence clip first." });
+  }
+  var nests = [];
+  for (var i = 0; i < candidates.length; i++) {
+    var pair = candidates[i];
+    var inner = smoothyShortsCutsFindSequenceForItem(pair.clip.projectItem, seq.sequenceID);
+    if (inner) nests.push({ pair: pair, inner: inner, fromVideo: fromVideo });
+  }
+  if (!nests.length) {
+    return JSON.stringify({ success: false, error: "Select a nested sequence clip to unnest." });
+  }
+
+  var frameTicks = 10160640000; // ~25fps fallback
+  try { frameTicks = Number(seq.timebase) || frameTicks; } catch (e) {}
+
+  var unnestedCount = 0, placedTotal = 0, details = [], placedClips = [];
+  for (var n = 0; n < nests.length; n++) {
+    var entry = nests[n];
+    var nestClip = entry.pair.clip;
+    var innerSeq = entry.inner;
+    var nestNodeId = String(nestClip.projectItem.nodeId || "");
+    var nestStart = Number(nestClip.start.ticks);
+    var nestEnd = Number(nestClip.end.ticks);
+    var nestIn = Number(nestClip.inPoint.ticks);
+    var nestOut = Number(nestClip.outPoint.ticks);
+    var baseVTrack = entry.fromVideo ? entry.pair.track : 0;
+
+    // Locate any linked nested audio clips matching this nested sequence span.
+    var parentAudioClips = [];
+    var audioBaseTrack = entry.fromVideo ? -1 : entry.pair.track;
+    if (entry.fromVideo) {
+      for (var at = 0; at < seq.audioTracks.numTracks; at++) {
+        var aTrack = seq.audioTracks[at];
+        for (var ac = 0; ac < aTrack.clips.numItems; ac++) {
+          var aClip = aTrack.clips[ac];
+          if (!aClip.projectItem || String(aClip.projectItem.nodeId || "") !== nestNodeId) continue;
+          if (Math.abs(Number(aClip.start.ticks) - nestStart) <= frameTicks * 2 &&
+              Math.abs(Number(aClip.end.ticks) - nestEnd) <= frameTicks * 2) {
+            parentAudioClips.push(aClip);
+            if (audioBaseTrack < 0 || at < audioBaseTrack) audioBaseTrack = at;
+          }
+        }
+      }
+    } else {
+      parentAudioClips.push(nestClip);
+    }
+    var includeAudio = parentAudioClips.length > 0;
+    if (audioBaseTrack < 0) audioBaseTrack = 0;
+
+    // Gather visible inner video and audio clips.
+    var innerVideos = [], innerAudios = [];
+    var maxVTrack = -1, maxATrack = -1;
+    if (entry.fromVideo) {
+      for (var vt = 0; vt < innerSeq.videoTracks.numTracks; vt++) {
+        var vTrack = innerSeq.videoTracks[vt];
+        for (var vc = 0; vc < vTrack.clips.numItems; vc++) {
+          var ic = vTrack.clips[vc];
+          if (!ic.projectItem) continue;
+          var icStart = Number(ic.start.ticks);
+          var icEnd = Number(ic.end.ticks);
+          var visStart = Math.max(icStart, nestIn);
+          var visEnd = Math.min(icEnd, nestOut);
+          if (visEnd <= visStart) continue;
+          var srcIn = Number(ic.inPoint.ticks) + (visStart - icStart);
+          var srcOut = Number(ic.outPoint.ticks) - (icEnd - visEnd);
+          innerVideos.push({
+            projectItem: ic.projectItem,
+            nodeId: String(ic.projectItem.nodeId || ""),
+            trackOffset: vt,
+            destStart: nestStart + (visStart - nestIn),
+            destEnd: nestStart + (visEnd - nestIn),
+            srcIn: srcIn,
+            srcOut: srcOut,
+            tickDelta: (nestStart - nestIn),
+            disabled: !!ic.disabled,
+            components: smoothyShortsCutsCaptureClipComponents(ic)
+          });
+          if (vt > maxVTrack) maxVTrack = vt;
+        }
+      }
+    }
+    if (includeAudio) {
+      for (var iat = 0; iat < innerSeq.audioTracks.numTracks; iat++) {
+        var iaTrack = innerSeq.audioTracks[iat];
+        for (var iac = 0; iac < iaTrack.clips.numItems; iac++) {
+          var ia = iaTrack.clips[iac];
+          if (!ia.projectItem) continue;
+          var iaStart = Number(ia.start.ticks);
+          var iaEnd = Number(ia.end.ticks);
+          var aVisStart = Math.max(iaStart, nestIn);
+          var aVisEnd = Math.min(iaEnd, nestOut);
+          if (aVisEnd <= aVisStart) continue;
+          var aSrcIn = Number(ia.inPoint.ticks) + (aVisStart - iaStart);
+          var aSrcOut = Number(ia.outPoint.ticks) - (iaEnd - aVisEnd);
+          innerAudios.push({
+            projectItem: ia.projectItem,
+            nodeId: String(ia.projectItem.nodeId || ""),
+            trackOffset: iat,
+            destStart: nestStart + (aVisStart - nestIn),
+            destEnd: nestStart + (aVisEnd - nestIn),
+            srcIn: aSrcIn,
+            srcOut: aSrcOut,
+            tickDelta: (nestStart - nestIn),
+            disabled: !!ia.disabled,
+            components: smoothyShortsCutsCaptureClipComponents(ia)
+          });
+          if (iat > maxATrack) maxATrack = iat;
+        }
+      }
+    }
+
+    if (!innerVideos.length && !innerAudios.length) {
+      if (details.length < 4) details.push('"' + String(innerSeq.name || "Nested sequence") + '" has no clips in this range.');
+      continue;
+    }
+
+    // Ensure enough tracks exist on the parent sequence.
+    var needV = maxVTrack >= 0 ? (baseVTrack + maxVTrack + 1) - seq.videoTracks.numTracks : 0;
+    var needA = maxATrack >= 0 ? (audioBaseTrack + maxATrack + 1) - seq.audioTracks.numTracks : 0;
+    if (needV > 0 && typeof qeSeq.addTracks === "function") {
+      try { qeSeq.addTracks(needV, seq.videoTracks.numTracks, 0); } catch (e) {}
+    }
+    if (needA > 0 && typeof qeSeq.addTracks === "function") {
+      try { qeSeq.addTracks(0, seq.videoTracks.numTracks, 1, needA, seq.audioTracks.numTracks); } catch (e) {}
+    }
+
+    // Remove the nested clip(s) on the parent sequence without rippling.
+    try {
+      if (entry.fromVideo) nestClip.remove(false, false);
+    } catch (e) {}
+    for (var pa = 0; pa < parentAudioClips.length; pa++) {
+      try { parentAudioClips[pa].remove(false, false); } catch (e) {}
+    }
+
+    // Snapshot remaining audio clips so any unwanted auto-linked audio created
+    // during video overwriteClip can be removed cleanly before placing audio.
+    var audioSnapshot = {};
+    for (var sat = 0; sat < seq.audioTracks.numTracks; sat++) {
+      var saTrack = seq.audioTracks[sat];
+      for (var sac = 0; sac < saTrack.clips.numItems; sac++) {
+        var saClip = saTrack.clips[sac];
+        var key = sat + "|" + String(saClip.start.ticks) + "|" + (saClip.projectItem ? String(saClip.projectItem.nodeId || "") : "");
+        audioSnapshot[key] = true;
+      }
+    }
+
+    var nestPlaced = 0;
+    for (var iv = 0; iv < innerVideos.length; iv++) {
+      var vSpec = innerVideos[iv];
+      var destVIdx = baseVTrack + vSpec.trackOffset;
+      if (destVIdx >= seq.videoTracks.numTracks) continue;
+      var destVTrack = seq.videoTracks[destVIdx];
+      var savedV = smoothyShortsCutsSaveItemBounds(vSpec.projectItem, 1);
+      try {
+        try {
+          vSpec.projectItem.setInPoint(String(Math.round(vSpec.srcIn)), 1);
+          vSpec.projectItem.setOutPoint(String(Math.round(vSpec.srcOut)), 1);
+        } catch (bErr) {
+          vSpec.projectItem.setInPoint(String(Math.round(vSpec.srcIn)), 4);
+          vSpec.projectItem.setOutPoint(String(Math.round(vSpec.srcOut)), 4);
+        }
+        var vTime = new Time();
+        vTime.ticks = String(Math.round(vSpec.destStart));
+        destVTrack.overwriteClip(vSpec.projectItem, vTime);
+      } catch (ovErr) {
+        if (details.length < 4) details.push("Could not place a video clip: " + ovErr.message);
+      } finally {
+        smoothyShortsCutsRestoreItemBounds(vSpec.projectItem, 1, savedV);
+      }
+      var foundV = smoothyShortsCutsFindClipNear(destVTrack, vSpec.destStart, vSpec.nodeId, frameTicks);
+      if (foundV) {
+        try {
+          if (Math.abs(Number(foundV.clip.end.ticks) - vSpec.destEnd) > frameTicks) {
+            var vEndTime = new Time();
+            vEndTime.ticks = String(Math.round(vSpec.destEnd));
+            foundV.clip.end = vEndTime;
+          }
+        } catch (endErr) {}
+        try { if (vSpec.disabled) foundV.clip.disabled = true; } catch (disErr) {}
+        var qePlacedV = smoothyShortsCutsQeClip(seq, qeSeq, true, destVIdx, foundV.index);
+        smoothyShortsCutsRestoreClipComponents(foundV.clip, qePlacedV, true, vSpec.components, vSpec.tickDelta);
+        placedClips.push(foundV.clip);
+        nestPlaced++;
+      }
+    }
+
+    // Strip any auto-linked audio clips spawned by video overwriteClip so our
+    // inner audio tracks match the nested sequence exactly.
+    for (var cat = 0; cat < seq.audioTracks.numTracks; cat++) {
+      var caTrack = seq.audioTracks[cat];
+      for (var cac = caTrack.clips.numItems - 1; cac >= 0; cac--) {
+        var caClip = caTrack.clips[cac];
+        var cKey = cat + "|" + String(caClip.start.ticks) + "|" + (caClip.projectItem ? String(caClip.projectItem.nodeId || "") : "");
+        if (!audioSnapshot[cKey]) {
+          try { caClip.remove(false, false); } catch (e) {}
+        }
+      }
+    }
+
+    for (var iaIdx = 0; iaIdx < innerAudios.length; iaIdx++) {
+      var aSpec = innerAudios[iaIdx];
+      var destAIdx = audioBaseTrack + aSpec.trackOffset;
+      if (destAIdx >= seq.audioTracks.numTracks) continue;
+      var destATrack = seq.audioTracks[destAIdx];
+      var savedA = smoothyShortsCutsSaveItemBounds(aSpec.projectItem, 2);
+      try {
+        try {
+          aSpec.projectItem.setInPoint(String(Math.round(aSpec.srcIn)), 2);
+          aSpec.projectItem.setOutPoint(String(Math.round(aSpec.srcOut)), 2);
+        } catch (abErr) {
+          aSpec.projectItem.setInPoint(String(Math.round(aSpec.srcIn)), 4);
+          aSpec.projectItem.setOutPoint(String(Math.round(aSpec.srcOut)), 4);
+        }
+        var aTime = new Time();
+        aTime.ticks = String(Math.round(aSpec.destStart));
+        destATrack.overwriteClip(aSpec.projectItem, aTime);
+      } catch (aovErr) {
+        if (details.length < 4) details.push("Could not place an audio clip: " + aovErr.message);
+      } finally {
+        smoothyShortsCutsRestoreItemBounds(aSpec.projectItem, 2, savedA);
+      }
+      var foundA = smoothyShortsCutsFindClipNear(destATrack, aSpec.destStart, aSpec.nodeId, frameTicks);
+      if (foundA) {
+        try {
+          if (Math.abs(Number(foundA.clip.end.ticks) - aSpec.destEnd) > frameTicks) {
+            var aEndTime = new Time();
+            aEndTime.ticks = String(Math.round(aSpec.destEnd));
+            foundA.clip.end = aEndTime;
+          }
+        } catch (aEndErr) {}
+        try { if (aSpec.disabled) foundA.clip.disabled = true; } catch (aDisErr) {}
+        var qePlacedA = smoothyShortsCutsQeClip(seq, qeSeq, false, destAIdx, foundA.index);
+        smoothyShortsCutsRestoreClipComponents(foundA.clip, qePlacedA, false, aSpec.components, aSpec.tickDelta);
+        placedClips.push(foundA.clip);
+        nestPlaced++;
+      }
+    }
+
+    if (nestPlaced > 0) {
+      unnestedCount++;
+      placedTotal += nestPlaced;
+    }
+  }
+
+  for (var pc = 0; pc < placedClips.length; pc++) {
+    try { placedClips[pc].setSelected(true, false); } catch (e) {}
+  }
+
+  if (!unnestedCount) {
+    return JSON.stringify({ success: false, error: "Could not unnest the selected sequence.", details: details });
+  }
+  var message = "Unnested " + unnestedCount + (unnestedCount === 1 ? " sequence (" : " sequences (") + placedTotal + (placedTotal === 1 ? " clip)." : " clips).");
+  return JSON.stringify({ success: true, applied: placedTotal, message: message, details: details });
+}
+
+function smoothyShortsCutsScanForAdjustmentLayer(bin) {
+  if (!bin || !bin.children) return null;
+  var fallback = null;
+  for (var i = 0; i < bin.children.numItems; i++) {
+    var child = bin.children[i];
+    if (!child) continue;
+    if (child.type === ProjectItemType.BIN) {
+      var nested = smoothyShortsCutsScanForAdjustmentLayer(child);
+      if (nested) return nested;
+      continue;
+    }
+    try {
+      if (typeof child.isAdjustmentLayer === "function" && child.isAdjustmentLayer()) return child;
+    } catch (e) {}
+    if (!fallback) {
+      try {
+        var isSeq = typeof child.isSequence === "function" && child.isSequence();
+        var mediaPath = typeof child.getMediaPath === "function" ? String(child.getMediaPath() || "") : "";
+        if (child.type === ProjectItemType.CLIP && !isSeq && !mediaPath && /adjustment\s*layer/i.test(String(child.name || ""))) {
+          fallback = child;
+        }
+      } catch (e) {}
+    }
+  }
+  return fallback;
+}
+
+function smoothyShortsCutsFindAdjustmentLayerItem(seq) {
+  // Check clips already on the active sequence first (exact match for sequence settings).
+  if (seq && seq.videoTracks) {
+    for (var t = seq.videoTracks.numTracks - 1; t >= 0; t--) {
+      var track = seq.videoTracks[t];
+      for (var c = 0; c < track.clips.numItems; c++) {
+        var clip = track.clips[c];
+        try {
+          if (typeof clip.isAdjustmentLayer === "function" && clip.isAdjustmentLayer() && clip.projectItem) {
+            return clip.projectItem;
+          }
+        } catch (e) {}
+      }
+    }
+  }
+  return smoothyShortsCutsScanForAdjustmentLayer(app.project.rootItem);
+}
+
+function smoothyShortsCutsTrackHasOverlap(track, startTicks, endTicks) {
+  if (!track || !track.clips) return false;
+  for (var i = 0; i < track.clips.numItems; i++) {
+    var clip = track.clips[i];
+    var cs = Number(clip.start.ticks);
+    var ce = Number(clip.end.ticks);
+    if (ce > startTicks && cs < endTicks) return true;
+  }
+  return false;
+}
+
+function smoothyShortsCutsAddAdjustmentLayer(seq, qeSeq, payload) {
+  var adjItem = smoothyShortsCutsFindAdjustmentLayerItem(seq);
+  if (!adjItem) {
+    return JSON.stringify({
+      success: false,
+      code: "NO_ADJUSTMENT_LAYER",
+      error: "No Adjustment Layer in this project yet."
+    });
+  }
+
+  var TICKS_PER_SECOND = 254016000000;
+  var selected = smoothyShortsCutsSelected(seq, true);
+  var startTicks = 0, endTicks = 0, minTrack = 0;
+
+  if (selected.length > 0) {
+    startTicks = Number(selected[0].clip.start.ticks);
+    endTicks = Number(selected[0].clip.end.ticks);
+    minTrack = selected[0].track + 1;
+    for (var i = 1; i < selected.length; i++) {
+      var s = Number(selected[i].clip.start.ticks);
+      var e = Number(selected[i].clip.end.ticks);
+      if (s < startTicks) startTicks = s;
+      if (e > endTicks) endTicks = e;
+      if (selected[i].track + 1 > minTrack) minTrack = selected[i].track + 1;
+    }
+  } else {
+    var hasInOut = false;
+    try {
+      var inT = seq.getInPointAsTime ? Number(seq.getInPointAsTime().ticks) : -1;
+      var outT = seq.getOutPointAsTime ? Number(seq.getOutPointAsTime().ticks) : -1;
+      if (inT >= 0 && outT > inT) {
+        startTicks = inT;
+        endTicks = outT;
+        hasInOut = true;
+      }
+    } catch (e) {}
+    if (!hasInOut) {
+      startTicks = Number(seq.getPlayerPosition().ticks) || 0;
+      var durSec = Number(payload && payload.duration) > 0 ? Number(payload.duration) : 5;
+      endTicks = startTicks + Math.round(durSec * TICKS_PER_SECOND);
+    }
+    var highestOccupied = -1;
+    for (var vt = 0; vt < seq.videoTracks.numTracks; vt++) {
+      if (smoothyShortsCutsTrackHasOverlap(seq.videoTracks[vt], startTicks, endTicks)) {
+        highestOccupied = vt;
+      }
+    }
+    minTrack = highestOccupied + 1;
+  }
+
+  var targetTrackIdx = minTrack;
+  while (targetTrackIdx < seq.videoTracks.numTracks &&
+         smoothyShortsCutsTrackHasOverlap(seq.videoTracks[targetTrackIdx], startTicks, endTicks)) {
+    targetTrackIdx++;
+  }
+  if (targetTrackIdx >= seq.videoTracks.numTracks) {
+    var toAdd = targetTrackIdx - seq.videoTracks.numTracks + 1;
+    if (typeof qeSeq.addTracks === "function") {
+      try { qeSeq.addTracks(toAdd, seq.videoTracks.numTracks, 0); } catch (e) {}
+    }
+  }
+  if (targetTrackIdx >= seq.videoTracks.numTracks) {
+    return JSON.stringify({ success: false, error: "Could not add a video track for the Adjustment Layer." });
+  }
+
+  var destTrack = seq.videoTracks[targetTrackIdx];
+  var wantedDur = Math.max(1, Math.round(endTicks - startTicks));
+  var savedBounds = smoothyShortsCutsSaveItemBounds(adjItem, 1);
+  try {
+    try {
+      adjItem.setInPoint("0", 1);
+      adjItem.setOutPoint(String(wantedDur), 1);
+    } catch (bErr) {}
+    var placeTime = new Time();
+    placeTime.ticks = String(Math.round(startTicks));
+    destTrack.overwriteClip(adjItem, placeTime);
+  } finally {
+    smoothyShortsCutsRestoreItemBounds(adjItem, 1, savedBounds);
+  }
+
+  var frameTicks = 10160640000;
+  try { frameTicks = Number(seq.timebase) || frameTicks; } catch (e) {}
+  var placed = smoothyShortsCutsFindClipNear(destTrack, startTicks, String(adjItem.nodeId || ""), frameTicks);
+  if (placed) {
+    try {
+      var targetEnd = new Time();
+      targetEnd.ticks = String(Math.round(endTicks));
+      placed.clip.end = targetEnd;
+    } catch (endErr) {}
+    // Select only the new Adjustment Layer so subsequent effects or multi-action steps target it.
+    for (var st = 0; st < seq.videoTracks.numTracks; st++) {
+      var tr = seq.videoTracks[st];
+      for (var sc = 0; sc < tr.clips.numItems; sc++) {
+        try { tr.clips[sc].setSelected(false, false); } catch (e) {}
+      }
+    }
+    try { placed.clip.setSelected(true, false); } catch (e) {}
+  }
+
+  return JSON.stringify({
+    success: true,
+    applied: 1,
+    message: "Added Adjustment Layer on V" + (targetTrackIdx + 1) + "."
+  });
+}
+
 function applyShortsCut(payloadJSON) {
   try {
     var payload = JSON.parse(payloadJSON);
@@ -2317,6 +3090,9 @@ function applyShortsCut(payloadJSON) {
     var qeSeq = qe.project.getActiveSequence();
     if (!qeSeq) return JSON.stringify({ success: false, error: "Could not read the active sequence." });
     if (payload.kind === "preset") return smoothyShortsCutsApplyPreset(seq, qeSeq, payload);
+    if (payload.kind === "motion-to-transform") return smoothyShortsCutsMoveMotionToTransform(seq, qeSeq);
+    if (payload.kind === "unnest") return smoothyShortsCutsUnnest(seq, qeSeq);
+    if (payload.kind === "adjustment-layer") return smoothyShortsCutsAddAdjustmentLayer(seq, qeSeq, payload);
     var video = payload.kind === "video-effect" || payload.kind === "video-transition";
     var pairs = smoothyShortsCutsSelected(seq, video);
     if (!pairs.length) {
@@ -2394,5 +3170,211 @@ function captureShortsCutPreset() {
     return JSON.stringify({ success: true, name: String(pair.clip.name || "Selected clip"), mediaType: mediaType, components: components });
   } catch (e) {
     return JSON.stringify({ success: false, error: "Could not capture this preset: " + e.message });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Smoothy Pro animated captions
+// ---------------------------------------------------------------------------
+// Places one Motion Graphics Template clip per caption ("Smoothy Box Highlight";
+// the panel picks the template file through payload.mogrtPath) on a
+// new video track at the top of the active sequence. The template animates
+// each word while it is spoken, driven by its "Word Timings" parameter
+// ("start,end;…" seconds from the clip start). Templates are built by
+// smoothyedit-app/scripts/pro-captions/build-mogrt.mjs.
+// Every setter takes updateUI: only the last write on a clip refreshes
+// Premiere, which keeps a long caption send from redrawing on every value.
+function smoothyProCaptionSetText(param, value, updateUI) {
+  if (!param) return;
+  var text = String(value).replace(/\r\n|\n/g, "\r");
+  var raw = param.getValue();
+  var parsed = null;
+  try { parsed = JSON.parse(raw); } catch (ignored) { parsed = null; }
+  if (parsed && typeof parsed === "object" && typeof parsed.textEditValue !== "undefined") {
+    parsed.textEditValue = text;
+    parsed.fontTextRunLength = [text.length];
+    param.setValue(JSON.stringify(parsed), updateUI);
+  } else {
+    param.setValue(text, updateUI);
+  }
+}
+function smoothyProCaptionByte(v) { return Math.max(0, Math.min(255, Math.round(Number(v) || 0))); }
+function smoothyProCaptionSetColor(param, rgb, updateUI) {
+  if (!param || !rgb || rgb.length < 3) return;
+  param.setColorValue(255, smoothyProCaptionByte(rgb[0]), smoothyProCaptionByte(rgb[1]), smoothyProCaptionByte(rgb[2]), updateUI);
+}
+function smoothyProCaptionSetNumber(param, value, updateUI) {
+  if (!param || typeof value !== "number" || !isFinite(value)) return;
+  param.setValue(value, updateUI);
+}
+// Caption templates are authored at 3840x2160 (sharp in 4K); Premiere places a
+// template at its own size, so scale each clip to the sequence frame.
+var SMOOTHY_PRO_CAPTION_COMP_WIDTH = 3840, SMOOTHY_PRO_CAPTION_COMP_HEIGHT = 2160;
+function smoothyProCaptionFitToSequence(clip, seq) {
+  var w = Number(seq.frameSizeHorizontal), h = Number(seq.frameSizeVertical);
+  if (!(w > 0 && h > 0)) return;
+  var scale = 100 * Math.min(w / SMOOTHY_PRO_CAPTION_COMP_WIDTH, h / SMOOTHY_PRO_CAPTION_COMP_HEIGHT);
+  if (Math.abs(scale - 100) < 0.001) return;
+  for (var c = 0; c < clip.components.numItems; c++) {
+    var component = clip.components[c];
+    if (component.displayName !== "Motion") continue;
+    for (var p = 0; p < component.properties.numItems; p++) {
+      if (component.properties[p].displayName === "Scale") { component.properties[p].setValue(scale, false); return; }
+    }
+  }
+}
+function smoothyProCaptionSetCheckbox(param, value, updateUI) {
+  if (!param || typeof value !== "boolean") return;
+  param.setValue(value, updateUI);
+}
+// True when the template already holds this value, so the write can be skipped.
+// Any read problem returns false and the value is written as before.
+function smoothyProCaptionMatches(param, kind, value) {
+  try {
+    if (!param) return true;
+    if (kind === "color") {
+      var current = param.getColorValue();
+      if (!current || current.length < 4 || !value || value.length < 3) return false;
+      for (var i = 0; i < 3; i++) if (Number(current[i + 1]) !== smoothyProCaptionByte(value[i])) return false;
+      var alpha = Number(current[0]); // Premiere 26.5 reports opaque as 1
+      return alpha === 255 || alpha === 1;
+    }
+    if (kind === "checkbox") { var on = param.getValue(); return typeof on === "boolean" && on === value; }
+    if (typeof value !== "number" || !isFinite(value)) return true;
+    return Math.abs(Number(param.getValue()) - value) < 0.0001;
+  } catch (ignored) { return false; }
+}
+function smoothyProCaptionWrite(param, kind, value, updateUI) {
+  if (kind === "text") smoothyProCaptionSetText(param, value, updateUI);
+  else if (kind === "color") smoothyProCaptionSetColor(param, value, updateUI);
+  else if (kind === "checkbox") smoothyProCaptionSetCheckbox(param, value, updateUI);
+  else smoothyProCaptionSetNumber(param, value, updateUI);
+}
+// Places another instance of the already imported template item. Each
+// instance keeps its own Graphic Parameters (verified in Premiere 26.5: a copy
+// starts at the template defaults, and its text renders independently), and
+// this skips re-reading the .mogrt that importMGT does per call. Returns null
+// when the copy cannot be confirmed so the caller falls back to importMGT.
+function smoothyProCaptionPlaceCopy(track, item, startTicks) {
+  try {
+    var before = track.clips.numItems;
+    track.overwriteClip(item, startTicks);
+    if (track.clips.numItems !== before + 1) return null;
+    for (var i = track.clips.numItems - 1; i >= 0; i--) {
+      var candidate = track.clips[i];
+      if (String(candidate.start.ticks) !== startTicks) continue;
+      return candidate.getMGTComponent() ? candidate : null;
+    }
+  } catch (ignored) {}
+  return null;
+}
+// Clip name in the timeline: the words of the caption on one line.
+function smoothyProCaptionName(text) {
+  var name = String(text).replace(/\s+/g, " ").replace(/^\s+|\s+$/g, "");
+  return name.length > 120 ? name.substring(0, 119) + "\u2026" : (name || "Caption");
+}
+function smoothyImportProCaptions(payloadJSON) {
+  var TICKS = 254016000000;
+  try {
+    var payload = JSON.parse(payloadJSON);
+    if (!app.project) return JSON.stringify({ success: false, error: "Open a Premiere project first." });
+    var seq = app.project.activeSequence;
+    if (!seq) return JSON.stringify({ success: false, error: "Open a sequence in Premiere first." });
+    if (payload.sequenceId && String(seq.sequenceID) !== String(payload.sequenceId)) {
+      return JSON.stringify({ success: false, error: "The active sequence changed. Refresh the sequence in Smoothy and try again." });
+    }
+    var captions = payload.captions || [];
+    if (!captions.length) return JSON.stringify({ success: false, error: "No captions to place." });
+    var mogrt = new File(payload.mogrtPath);
+    if (!mogrt.exists) return JSON.stringify({ success: false, error: "The Pro caption template is missing. Reinstall the Premiere panel from Smoothy." });
+
+    // Always add a fresh top track so existing edits are never overwritten.
+    app.enableQE();
+    var qeSeq = qe.project.getActiveSequence();
+    if (!qeSeq || typeof qeSeq.addTracks !== "function") return JSON.stringify({ success: false, error: "This Premiere version cannot add a caption track." });
+    var before = seq.videoTracks.numTracks;
+    qeSeq.addTracks(1, before, 0);
+    if (seq.videoTracks.numTracks !== before + 1 || seq.videoTracks[before].clips.numItems) {
+      return JSON.stringify({ success: false, error: "Premiere could not add an empty video track for the captions." });
+    }
+    var trackIndex = before;
+    var track = seq.videoTracks[trackIndex];
+    try { track.name = "Smoothy Captions"; } catch (ignored) {}
+
+    var style = payload.style || {};
+    // Style values are the same on every caption. The first clip shows which
+    // differ from the template defaults; later clips only write those.
+    var styleWrites = [
+      ["Text Color", "color", style.textColor],
+      ["Caption Size", "number", style.size],
+      ["Vertical Position", "number", style.verticalPosition],
+      ["Upcoming Word Opacity", "number", style.upcomingOpacity],
+      ["Box Color", "color", style.boxColor],
+      ["Box Opacity", "number", style.boxOpacity],
+      ["Box Radius", "number", style.boxRadius],
+      ["Box Padding", "number", style.boxPadding],
+      ["Box Height", "number", style.boxHeight],
+      ["Shadow Opacity", "number", style.shadowOpacity]
+    ];
+    var styleChecked = false, popInDefault = null;
+    // The first caption imports the template; later ones place copies of it.
+    var templateItem = null, trackEndTicks = 0, copied = 0;
+    var placed = 0, failed = 0, firstError = "";
+    var started = new Date().getTime();
+    for (var i = 0; i < captions.length; i++) {
+      var cap = captions[i];
+      try {
+        var start = Number(cap.start), end = Number(cap.end);
+        if (!(end > start) || start < 0) throw new Error("invalid timing");
+        var startTicks = String(Math.round(start * TICKS));
+        var clip = null;
+        // Copies are placed only after the last caption so their default
+        // length never covers a caption already on the track.
+        if (templateItem && Math.round(start * TICKS) >= trackEndTicks) {
+          clip = smoothyProCaptionPlaceCopy(track, templateItem, startTicks);
+          if (clip) copied++; else templateItem = null;
+        }
+        if (!clip) {
+          clip = seq.importMGT(mogrt.fsName, startTicks, trackIndex, 0);
+          if (!clip) throw new Error("Premiere did not place the template");
+          if (!templateItem && !placed) { try { templateItem = clip.projectItem || null; } catch (ignored) { templateItem = null; } }
+        }
+        clip.end = end;
+        trackEndTicks = Math.max(trackEndTicks, Math.round(end * TICKS));
+        try { clip.name = smoothyProCaptionName(cap.text); } catch (ignored) {}
+        smoothyProCaptionFitToSequence(clip, seq);
+        var params = clip.getMGTComponent().properties;
+        if (!styleChecked) {
+          var changed = [];
+          for (var s = 0; s < styleWrites.length; s++) {
+            if (!smoothyProCaptionMatches(params.getParamForDisplayName(styleWrites[s][0]), styleWrites[s][1], styleWrites[s][2])) changed.push(styleWrites[s]);
+          }
+          styleWrites = changed;
+          try { var popParam = params.getParamForDisplayName("Pop In"); var pop = popParam ? popParam.getValue() : null; popInDefault = typeof pop === "boolean" ? pop : null; } catch (ignored) { popInDefault = null; }
+          styleChecked = true;
+        }
+        var writes = [["Caption Text", "text", cap.text], ["Word Timings", "text", cap.timings]].concat(styleWrites);
+        if (typeof cap.popIn === "boolean" && cap.popIn !== popInDefault) writes.push(["Pop In", "checkbox", cap.popIn]);
+        for (var w = 0; w < writes.length; w++) {
+          smoothyProCaptionWrite(params.getParamForDisplayName(writes[w][0]), writes[w][1], writes[w][2], w === writes.length - 1);
+        }
+        placed++;
+      } catch (capError) {
+        failed++;
+        if (!firstError) firstError = "Caption " + (i + 1) + ": " + capError.message;
+      }
+    }
+    if (!placed) return JSON.stringify({ success: false, error: firstError || "No captions were placed." });
+    return JSON.stringify({
+      success: true,
+      count: placed,
+      failed: failed,
+      track: trackIndex + 1,
+      copied: copied,
+      seconds: Math.round((new Date().getTime() - started) / 100) / 10,
+      message: "Placed " + placed + " animated caption" + (placed === 1 ? "" : "s") + " on V" + (trackIndex + 1) + (failed ? " (" + failed + " skipped: " + firstError + ")" : "") + "."
+    });
+  } catch (e) {
+    return JSON.stringify({ success: false, error: "Could not place Pro captions: " + e.message });
   }
 }

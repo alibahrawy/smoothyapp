@@ -5,7 +5,7 @@ import { createResolveReceiver } from './resolve/receiver';
 
 import './development-profile';
 import { createResolveHandoff, resolveScriptDirectory, sendToSmoothyScript } from './resolve/handoff';
-import { app, BrowserWindow, ipcMain, shell, dialog, Menu, clipboard } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, dialog, Menu, clipboard, session, nativeTheme } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import './assets-image-ipc';
 import { registerLocalAudio } from './local-audio-ipc';
@@ -14,7 +14,9 @@ import { getFFmpegPath, getFFprobePath } from './ffmpeg-path';
 import { windowChromeOptions, setWindowTitlebarColor } from './window-chrome';
 import { createUpdateService } from './update-service';
 import Store from 'electron-store';
-import { initTelemetry, trackEvent, trackTool, startHeartbeat } from './telemetry';
+import { initTelemetry, trackEvent, trackTool, startHeartbeat, setToolRunListener } from './telemetry';
+import { createNudges, type NudgeAction, type NudgeKind } from './nudges';
+import { createProCheckout } from './pro-checkout';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -51,10 +53,20 @@ import {
   setBridgeToken,
   getShortsCutsCatalog,
   applyShortsCut,
-  captureShortsCutPreset
+  captureShortsCutPreset,
+  sendProCaptionsToPremiere,
+  importXMLToPremiere
 } from './websocket-server';
+import { buildProCaptionPayload, type ProCaptionStyle } from './captions/pro-captions';
 import { createShortsCutsService } from './shortscuts/service';
+import {
+  createPremiereAdjustmentLayerViaMenu,
+  openConfiguredApp,
+  openConfiguredFolder,
+  sendPremiereHistory,
+} from './shortscuts/system-actions';
 import { createCommunityService } from './community-service';
+import { safeCommunityLink } from '../shared/community-links';
 import { listPremierePresets, getPremierePreset } from './shortscuts/premiere-presets';
 import {
   setWebsiteCallbacks,
@@ -79,6 +91,8 @@ import {
   cancelGoogleSignIn,
   logout,
   refreshUserData,
+  getApiBase,
+  getSessionToken,
   updateDisplayName,
   changePassword,
   deleteAccount,
@@ -124,13 +138,23 @@ import {
   cleanupTempFile,
   TimelineAudioClip
 } from './autocut/audio-extractor';
-import videoCompressor, { CompressionSettings, VideoFile } from './compressor/video-compressor';
+import videoCompressor, {
+  AUDIO_EXTENSIONS,
+  CompressionSettings,
+  EncoderMode,
+  HardwareCodecTarget,
+  MEDIA_EXTENSIONS,
+  resolveMediaEncoderFeatureId,
+  VIDEO_EXTENSIONS,
+  VideoFile
+} from './compressor/video-compressor';
 import * as webApi from './web-api';
 import type { StudioShort } from './web-api';
 import { runShortsAnalysis, type ShortsAnalysisConfig } from './shorts-service';
 import { registerStockFootage } from './stock-footage-ipc';
+import { STOCK_USER_AGENT } from './stock-footage';
 import { registerAudioLibrary } from './audio-library-ipc';
-import { createLibraryService, createSpeechService } from './agent/edit-services';
+import { createLibraryService, createModelInstaller, createSpeechService, whisperEngineInfo } from './agent/edit-services';
 import { registerPhotos } from './photo-ipc';
 import { registerStudioTools } from './studio-ipc';
 import { createStudioSourceService } from './studio-source-service';
@@ -159,13 +183,25 @@ const isLinux = process.platform === 'linux';
 const store = new Store();
 const shortsCuts = createShortsCutsService({
   store,
-  applyToPremiere: (item) => applyShortsCut({
-    kind: item.kind,
-    target: item.target,
-    edge: item.edge,
-    duration: item.duration,
-    preset: item.preset,
-  }),
+  applyToPremiere: async (item) => {
+    const payload = {
+      kind: item.kind,
+      target: item.target,
+      edge: item.edge,
+      duration: item.duration,
+      preset: item.preset,
+    };
+    const first = await applyShortsCut(payload);
+    if (item.kind === 'adjustment-layer' && !first?.success && first?.code === 'NO_ADJUSTMENT_LAYER') {
+      const created = await createPremiereAdjustmentLayerViaMenu();
+      if (!created.success) return created;
+      return applyShortsCut(payload);
+    }
+    return first;
+  },
+  openApp: openConfiguredApp,
+  openFolder: openConfiguredFolder,
+  sendHistory: sendPremiereHistory,
   readCatalog: getShortsCutsCatalog,
   capturePreset: captureShortsCutPreset,
   connected: () => getActiveNLE() !== 'resolve' && getPremiereConnectionStatus(),
@@ -178,6 +214,7 @@ const community = createCommunityService({
   store,
   track: trackTool,
   onState: (state) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('community-state', state); },
+  onProfiles: (profiles) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('community-profiles', profiles); },
 });
 const resolveHandoff = createResolveHandoff({
   directory: path.join(app.getPath('userData'), 'resolve-handoff'),
@@ -203,20 +240,104 @@ ipcMain.handle('resolve-send-result',async()=>{const file=getResolveOutput();if(
 app.on('before-quit',()=>{ resolveReceive.close(); shortsCuts.dispose(); community.dispose(); });
 const appPreferences = createAppPreferences(store, () => mainWindow?.webContents.send('app-preferences-changed', appPreferences.snapshot()), trackTool);
 configureStudioPreference(() => appPreferences.snapshot().studioEnabled);
+// Light, Dark or Match system: nativeTheme drives prefers-color-scheme in the renderer,
+// native scrollbars/menus and the window background before the first paint.
+const applyAppearance = () => { nativeTheme.themeSource = appPreferences.snapshot().appearance; };
+applyAppearance();
 let studioToolsService: ReturnType<typeof registerStudioTools> | null = null;
 let chatService: ReturnType<typeof registerChat> | null = null;
 ipcMain.handle('get-app-preferences', () => appPreferences.snapshot());
 
 ipcMain.handle('shortscuts-state', () => shortsCuts.state());
+// After any Upgrade click, re-check the plan each time SmoothyApp regains focus (for
+// 30 minutes), so Pro unlocks when the user comes back from checkout instead of at
+// the next launch or the 6-hour plan check.
+let upgradeWatchUntil = 0;
+let lastUpgradeCheck = 0;
+function watchForUpgrade() { upgradeWatchUntil = Date.now() + 30 * 60 * 1000; }
+function checkUpgradeOnFocus() {
+  if (Date.now() > upgradeWatchUntil || hasPro() || !getAuthState().isLoggedIn) return;
+  if (Date.now() - lastUpgradeCheck < 10_000) return;
+  lastUpgradeCheck = Date.now();
+  void refreshUserData().then(() => { if (hasPro()) upgradeWatchUntil = 0; }).catch(() => {});
+}
+
+// Every Upgrade button opens the Pro checkout in a SmoothyApp window, already
+// signed in with the app's account (see pro-checkout.ts); signed out, it opens
+// the website's pricing checkout in the browser.
+const proCheckout = createProCheckout({
+  apiBase: getApiBase,
+  token: getSessionToken,
+  isPro: hasPro,
+  refresh: refreshUserData,
+  parent: () => mainWindow,
+  onUnlocked: () => {
+    mainWindow?.webContents.send('pro-checkout-complete');
+    if (mainWindow?.isMinimized()) mainWindow.restore();
+    mainWindow?.focus();
+  },
+});
+// Founder offer for the Pro reminder (public: spots left and current price). Old
+// website deployments omit it; the reminder then keeps its built-in wording.
+ipcMain.handle('pro-founder-offer', async () => {
+  try {
+    const response = await fetch(`${getApiBase()}/api/paddle/config`, { signal: AbortSignal.timeout(5000), redirect: 'error' });
+    if (!response.ok) return null;
+    const founder = (await response.json())?.founder;
+    if (!founder || typeof founder.open !== 'boolean') return null;
+    const num = (value: unknown) => (Number.isFinite(Number(value)) ? Number(value) : 0);
+    return { open: founder.open, left: num(founder.left), limit: num(founder.limit), price: num(founder.price) };
+  } catch { return null; }
+});
+ipcMain.handle('pro-checkout-open', async () => {
+  watchForUpgrade();
+  return proCheckout.open();
+});
+
 // An explicit click on a locked screen's Upgrade button (not merely opening the tab).
 ipcMain.handle('pro-upgrade-click', (_, feature?: unknown) => {
-  if (feature === 'shortscuts' || feature === 'agent') trackTool(`pro_upgrade_${feature}`);
+  watchForUpgrade();
+  if (feature === 'shortscuts' || feature === 'agent' || feature === 'pro_captions' || feature === 'silence_retakes') trackTool(`pro_upgrade_${feature}`);
+  return { success: true };
+});
+// Pro and social reminders: counted on this device after finished tools (see nudges.ts).
+const nudges = createNudges({
+  store,
+  isPro: hasPro,
+  notify: payload => mainWindow?.webContents.send('nudge-show', payload),
+  track: trackTool,
+});
+setToolRunListener(tool => nudges.recordRun(tool));
+const nudgeKind = (value: unknown): NudgeKind | null => (value === 'pro' || value === 'social' ? value : null);
+ipcMain.handle('nudge-shown', (_, kind?: unknown, preview?: unknown) => {
+  const k = nudgeKind(kind); if (k) nudges.shown(k, preview === true); return { success: true };
+});
+ipcMain.handle('nudge-status', () => ({ ...nudges.status(), isPro: hasPro() }));
+ipcMain.handle('nudge-dropped', (_, kind?: unknown) => {
+  const k = nudgeKind(kind); if (k) nudges.dropped(k); return { success: true };
+});
+ipcMain.handle('nudge-action', (_, kind?: unknown, action?: unknown, preview?: unknown) => {
+  const k = nudgeKind(kind); if (k && typeof action === 'string') nudges.action(k, action as NudgeAction, preview === true);
+  if (k === 'pro' && action === 'upgrade') watchForUpgrade();
   return { success: true };
 });
 ipcMain.handle('community-state', () => community.state());
 ipcMain.handle('community-connect', () => community.connect());
 ipcMain.handle('community-send', (_, body) => community.send(body));
 ipcMain.handle('community-disconnect', () => { community.disconnect(); return community.state(); });
+ipcMain.handle('community-profiles', () => community.profiles());
+ipcMain.handle('community-delete', (_, id) => community.deleteMessage(id));
+ipcMain.handle('community-report', (_, id, reason) => community.reportMessage(id, reason));
+ipcMain.handle('community-block', (_, id) => community.block(id));
+ipcMain.handle('community-unblock', (_, id) => community.unblock(id));
+ipcMain.handle('community-save-profile', (_, input) => community.saveProfile(input && typeof input === 'object' ? input : {}));
+// Links in the lobby are checked again here: only the allow-listed https hosts open.
+ipcMain.handle('community-open-link', async (_, url) => {
+  const safe = safeCommunityLink(url);
+  if (!safe) return { success: false, error: 'That link is not allowed.' };
+  try { await shell.openExternal(safe); return { success: true }; }
+  catch { return { success: false, error: 'Could not open that link.' }; }
+});
 ipcMain.handle('shortscuts-set-capturing', (_, value) => {
   try { return { success: true, state: shortsCuts.setCapturing(value) }; }
   catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not pause shortcuts.' }; }
@@ -255,6 +376,57 @@ ipcMain.handle('shortscuts-apply', async (_, id) => {
   try { return await shortsCuts.applyFromPanel(typeof id === 'string' ? id : ''); }
   catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not apply that shortcut.' }; }
 });
+ipcMain.handle('shortscuts-history', async (_, action) => {
+  try {
+    if (action !== 'undo' && action !== 'redo') return { success: false, error: 'Choose undo or redo.' };
+    return await shortsCuts.historyFromPanel(action);
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Could not run undo/redo.' };
+  }
+});
+ipcMain.handle('shortscuts-pick-app', async () => {
+  const options: Electron.OpenDialogOptions = isMac
+    ? {
+        title: 'Choose an app',
+        defaultPath: '/Applications',
+        properties: ['openFile'],
+        filters: [{ name: 'Applications', extensions: ['app'] }],
+      }
+    : isWindows
+      ? {
+          title: 'Choose an app',
+          defaultPath: process.env.PROGRAMFILES || 'C:\\Program Files',
+          properties: ['openFile'],
+          filters: [
+            { name: 'Applications', extensions: ['exe', 'lnk', 'bat', 'cmd', 'appref-ms'] },
+            { name: 'All Files', extensions: ['*'] },
+          ],
+        }
+      : {
+          title: 'Choose an app',
+          properties: ['openFile'],
+        };
+  const result = mainWindow
+    ? await dialog.showOpenDialog(mainWindow, options)
+    : await dialog.showOpenDialog(options);
+  if (result.canceled || !result.filePaths.length) return { success: false, canceled: true };
+  const picked = result.filePaths[0];
+  const name = path.basename(picked.replace(/[\\/]+$/, '')).replace(/\.(app|exe|lnk|bat|cmd|appref-ms)$/i, '') || picked;
+  return { success: true, path: picked, name };
+});
+ipcMain.handle('shortscuts-pick-folder', async () => {
+  const options: Electron.OpenDialogOptions = {
+    title: 'Choose a folder',
+    properties: ['openDirectory'],
+  };
+  const result = mainWindow
+    ? await dialog.showOpenDialog(mainWindow, options)
+    : await dialog.showOpenDialog(options);
+  if (result.canceled || !result.filePaths.length) return { success: false, canceled: true };
+  const picked = result.filePaths[0];
+  const name = path.basename(picked.replace(/[\\/]+$/, '')) || picked;
+  return { success: true, path: picked, name };
+});
 ipcMain.handle('shortscuts-capture-preset', async () => {
   try { return { success: true, state: await shortsCuts.capturePreset() }; }
   catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not capture that preset.' }; }
@@ -277,6 +449,14 @@ for (const [channel, save] of [
 ] as const) ipcMain.handle(channel, (_, value) => {
   try { return { success: true, ...save(value) }; }
   catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not save writing preferences.' }; }
+});
+ipcMain.handle('set-appearance', (_, value) => {
+  try {
+    const result = appPreferences.setAppearance(value);
+    applyAppearance();
+    mainWindow?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#1F1E1C' : '#FBFAF8');
+    return { success: true, ...result };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not save this preference.' }; }
 });
 ipcMain.handle('set-studio-enabled', (_, value) => {
   try {
@@ -605,7 +785,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false
     },
-    backgroundColor: ['white', 'cream'].includes((store.get('theme') as string) || 'cream') ? '#FEFDFB' : '#1a1a2e',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1F1E1C' : '#FBFAF8',
     icon: path.join(__dirname, '../../build/icon.png')
   };
 
@@ -619,8 +799,13 @@ function createWindow() {
     isMac, isWindows, isLinux, isExpanded: mainWindow.isFullScreen() || mainWindow.isMaximized()
   });
   mainWindow.webContents.on('did-finish-load', sendPlatformInfo);
+  // Development only: SMOOTHY_NUDGE_PREVIEW=pro|social shows that reminder once, without changing its schedule.
+  const nudgePreview = process.env.SMOOTHY_NUDGE_PREVIEW;
+  if (!app.isPackaged && (nudgePreview === 'pro' || nudgePreview === 'social')) {
+    mainWindow.webContents.once('did-finish-load', () => setTimeout(() => nudges.preview(nudgePreview), 1500));
+  }
   for (const event of ['enter-full-screen', 'leave-full-screen', 'maximize', 'unmaximize'] as const) {
-    mainWindow.on(event, sendPlatformInfo);
+    (mainWindow as any).on(event, sendPlatformInfo);
   }
 
   // Load renderer
@@ -630,6 +815,7 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   }
 
+  mainWindow.on('focus', checkUpgradeOnFocus);
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -637,14 +823,24 @@ function createWindow() {
 
 // GPU crash recovery for Windows
 if (isWindows) {
-  app.on('gpu-process-crashed', (_event, killed) => {
-    console.error('[GPU] GPU process crashed, killed:', killed);
+  app.on('child-process-gone', (_event, details) => {
+    if (details.type !== 'GPU') return;
+    console.error('[GPU] GPU process crashed:', details.reason, 'exitCode:', details.exitCode);
     app.relaunch();
     app.exit(0);
   });
 }
 
 app.whenReady().then(async () => {
+  // Wikimedia Commons blocks Electron's default User-Agent on media hosts with HTTP 429;
+  // send SmoothyEdit's descriptive User-Agent for thumbnail and video previews too.
+  session.defaultSession.webRequest.onBeforeSendHeaders(
+    { urls: ['https://upload.wikimedia.org/*', 'https://thumb.wikimedia.org/*'] },
+    (details, callback) => {
+      details.requestHeaders['User-Agent'] = STOCK_USER_AGENT;
+      callback({ requestHeaders: details.requestHeaders });
+    }
+  );
   // Register the media protocol before loading the renderer. A window loaded
   // earlier keeps a URL loader without this scheme and every preview fails.
   audioLibraryHandles = await registerAudioLibrary({ store, window: () => mainWindow, connected: liveEditorConnected, editor: getActiveNLE, importToPremiere: importAudioLibraryToNLE }).catch(error => { console.error('[Audio Library]', error); return null; });
@@ -668,11 +864,16 @@ app.whenReady().then(async () => {
   startHeartbeat();
 
   // Set up auth state change callback
+  let checkoutAccount = getAuthState().user?.id ?? null;
   setAuthChangeCallback((state) => {
     mainWindow?.webContents.send('auth-state-change', state);
-    // A sign-in, upgrade or sign-out can change Pro access to ShortsCuts and the Agent.
+    // Signed out or switched account: close any checkout opened for the previous account.
+    const account = state.user?.id ?? null;
+    if (account !== checkoutAccount) proCheckout.close();
+    checkoutAccount = account;
+    // A sign-in, upgrade or sign-out can change Pro access to ShortsCuts, Agent and Silence Retakes.
     shortsCuts.refreshEntitlement();
-    mainWindow?.webContents.send('pro-access-changed', { shortscutsUnlimited: hasPro(), agent: hasPro() });
+    mainWindow?.webContents.send('pro-access-changed', { shortscutsUnlimited: hasPro(), agent: hasPro(), silenceRetakes: hasPro() });
   });
   // Re-verify the plan at launch and every 6 hours so upgrades and cancellations are picked up.
   const verifyPlan = () => { if (getAuthState().isLoggedIn) void refreshUserData().catch(() => {}); };
@@ -764,7 +965,7 @@ app.whenReady().then(async () => {
         });
       } else if (data.type === 'clearMarkers') {
         sendLog('info', 'Clearing markers from website request');
-        const result = await clearMarkersFromSequence(options.scope === 'all' ? 'all' : 'smoothy', options.sequenceId);
+        const result = await clearMarkersFromSequence(data.scope === 'all' ? 'all' : 'smoothy', data.sequenceId);
         mainWindow?.webContents.send('website-message', {
           type: 'markersCleared',
           success: result.success,
@@ -814,6 +1015,15 @@ app.whenReady().then(async () => {
     window: () => mainWindow,
     trackTool,
     allowed: hasPro,
+    importXml: file => importXMLToPremiere(file),
+    engines: {
+      whisper: whisperEngineInfo,
+      installer: createModelInstaller(),
+      sfxDir: [path.join(process.resourcesPath || '', 'sfx'), path.join(app.getAppPath(), 'resources', 'sfx')].find(dir => fs.existsSync(path.join(dir, 'library.json'))) || null,
+      visionHelper: process.platform === 'darwin'
+        ? [path.join(process.resourcesPath || '', 'vision', 'smoothy-vision'), path.join(app.getAppPath(), 'resources', 'vision', 'smoothy-vision')].find(file => fs.existsSync(file)) || null
+        : null
+    },
     edit: {
       speech: createSpeechService({ store, isBusy: () => captionsJobActive || whisperService.isTranscribing() }),
       library: audioLibraryHandles
@@ -885,7 +1095,45 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (mainWindow === null) {
     resolveHandoff.start();
+    startNLEServers();
     createWindow();
+  }
+});
+
+// Handle smoothyedit:// deep links (e.g. smoothyedit://refresh-plan from /subscription after checkout)
+function handleDeepLink(rawUrl: string) {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'smoothyedit:') return;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+    if (parsed.hostname === 'refresh-plan' || parsed.pathname === '/refresh-plan') {
+      if (getAuthState().isLoggedIn) {
+        void refreshUserData().catch(() => {});
+      }
+    }
+  } catch {
+    // Ignore malformed deep links.
+  }
+}
+
+if (app.isPackaged) {
+  try { app.setAsDefaultProtocolClient('smoothyedit'); } catch {}
+}
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
+});
+app.on('second-instance', (_event, argv) => {
+  const link = argv.find((arg) => typeof arg === 'string' && arg.startsWith('smoothyedit://'));
+  if (link) handleDeepLink(link);
+  else if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
   }
 });
 
@@ -985,11 +1233,77 @@ function cancelResolveApply(){
   if(getActiveNLE()==='resolve' && resolveReceive.isBusy())return resolveReceive.cancel();
   return cancelTimelineJob();
 }
+async function transcribeAudioForRetakes(
+  audioPath: string,
+  onProgress?: (progress: { status: string; progress?: number }) => void,
+  signal?: AbortSignal
+) {
+  if (captionsJobActive || whisperService.isTranscribing()) {
+    throw new Error('Wait for Captions transcription to finish before removing repeated takes.');
+  }
+  const selectedModel = (store.get('captionModel') as string | null) || getDefaultModelId();
+  if (!getModelById(selectedModel)) {
+    throw new Error('Selected Whisper model is missing. Choose a model in Settings → Captions.');
+  }
+  const selectedLanguage = (store.get('captionLanguage') as string | null) || DEFAULT_CAPTION_LANGUAGE;
+  if (isEnglishOnlyModel(selectedModel) && selectedLanguage !== 'auto' && selectedLanguage !== 'en') {
+    throw new Error(`The selected model can only transcribe English. Choose a multilingual model in Settings → Captions to transcribe ${getLanguageName(selectedLanguage)}.`);
+  }
+  const effectiveLanguage = isEnglishOnlyModel(selectedModel)
+    ? 'en'
+    : getWhisperLanguageCode(selectedLanguage);
+
+  whisperService.setEnginePreference((store.get('captionEngine') as 'auto' | 'cuda' | 'cpu') || 'auto');
+
+  if (!whisperService.isModelLoaded() || whisperService.getCurrentModelId() !== selectedModel) {
+    onProgress?.({ status: 'Preparing local Whisper model (first run downloads it once)…', progress: 0 });
+    await whisperService.loadModel(selectedModel, (p) => {
+      const pct = typeof p.progress === 'number' ? Math.round(p.progress) : undefined;
+      let status = `Preparing local Whisper model: ${p.status}`;
+      if (p.status === 'downloading-bin') {
+        status = `${p.file || 'Downloading transcription engine (one-time setup)'}${pct != null ? ` — ${pct}%` : '…'}`;
+      } else if (p.status === 'downloading') {
+        status = `${p.file && isMoulsotModel(selectedModel) ? p.file : 'Downloading Whisper model (one-time setup)'}${pct != null ? ` — ${pct}%` : '…'}`;
+      }
+      onProgress?.({ status, progress: pct != null ? Math.round(pct * 0.25) : 5 });
+    }, signal);
+  }
+  signal?.throwIfAborted();
+
+  onProgress?.({
+    status: selectedLanguage === 'auto'
+      ? `Transcribing locally on ${whisperService.getActiveBackend().toUpperCase()}…`
+      : `Transcribing ${getLanguageName(selectedLanguage)} locally on ${whisperService.getActiveBackend().toUpperCase()}…`,
+    progress: 25
+  });
+
+  const transcribed = await whisperService.transcribe(audioPath, (p) => {
+    const pct = typeof p.progress === 'number' ? Math.round(25 + p.progress * 0.75) : undefined;
+    onProgress?.({ status: p.status || 'Transcribing locally…', progress: pct });
+  }, selectedModel, effectiveLanguage, signal);
+
+  return transcribed.chunks;
+}
+
 ipcMain.handle('cancel-timeline-job',cancelResolveApply);
 ipcMain.handle('start-silence-removal', async (_, config) => {
+  const wantsRetakes = !!config?.options?.removeRetakes;
+  if (wantsRetakes && !hasPro()) {
+    return {
+      success: false,
+      requiresPro: true,
+      operation: 'silence',
+      error: 'Removing repeated takes is part of Smoothy Pro. See smoothyedit.com/pricing.',
+    };
+  }
   let destination:string|undefined;
-  if(getActiveNLE()==='resolve')destination=resolveAutoDestination('Silence-Removed');
-  const result=await runSilenceRemoval(config,()=>trackTool('silence'),destination);
+  if(getActiveNLE()==='resolve')destination=resolveAutoDestination(wantsRetakes ? 'Silence-Retakes-Removed' : 'Silence-Removed');
+  const result=await runSilenceRemoval(
+    config,
+    ()=>{ trackTool('silence'); if(wantsRetakes) trackTool('silence_retakes'); },
+    destination,
+    wantsRetakes ? transcribeAudioForRetakes : undefined
+  );
   if((result?.success || result?.exported) && result.nle==='resolve')trackTool('resolve_silence_export');
   return result;
 });
@@ -1064,9 +1378,13 @@ ipcMain.handle('export-subtitles', async () => {
 
     // Save SRT file to desktop if we have subtitles
     if (result.success && result.srt && result.count > 0) {
-      const desktopPath = path.join(os.homedir(), 'Desktop');
+      const desktopPath = app.getPath('desktop');
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      const fileName = `${result.sequenceName || 'subtitles'}_${timestamp}.srt`;
+      const safeName = String(result.sequenceName || 'subtitles')
+        .replace(/[<>:"/\\|?*\x00-\x1f]+/g, '_')
+        .replace(/^\.+|\.+$/g, '')
+        .slice(0, 100) || 'subtitles';
+      const fileName = `${safeName}_${timestamp}.srt`;
       const filePath = path.join(desktopPath, fileName);
 
       fs.writeFileSync(filePath, result.srt, 'utf-8');
@@ -1145,6 +1463,7 @@ ipcMain.handle('auth-logout', () => {
   chatService?.reset();
   logout();
   disconnectFromWebsite();
+  community.disconnect();
   return { success: true };
 });
 
@@ -1176,6 +1495,7 @@ ipcMain.handle('auth-delete-account', async (_, password: unknown) => {
     trackTool('account_delete');
     chatService?.reset();
     disconnectFromWebsite();
+    community.disconnect();
   }
   return result;
 });
@@ -1189,9 +1509,19 @@ ipcMain.handle('can-use-feature', (_, feature: string) => {
   return canUseFeature(feature);
 });
 
-// Open external links
-ipcMain.handle('open-external', (_, url: string) => {
-  shell.openExternal(url);
+// Open external links (restricted to safe web/email schemes)
+ipcMain.handle('open-external', (_, url: unknown) => {
+  if (typeof url !== 'string' || !url.trim()) return false;
+  try {
+    const parsed = new URL(url.trim());
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:' && parsed.protocol !== 'mailto:') {
+      return false;
+    }
+    void shell.openExternal(parsed.toString());
+    return true;
+  } catch {
+    return false;
+  }
 });
 
 // Theme sync handlers
@@ -1299,7 +1629,7 @@ ipcMain.handle('reformat-captions', async (_, input) => {
   const settings = input.settings || {};
   if (![settings.maxCharsPerLine, settings.maxLines, settings.maxDurationSeconds].every(Number.isFinite) ||
       settings.maxCharsPerLine < 1 || settings.maxCharsPerLine > 120 || ![1, 2].includes(settings.maxLines) || settings.maxDurationSeconds <= 0 || settings.maxDurationSeconds > 30) return { success: false, error: 'Invalid caption settings.' };
-  const captions = formatCaptions({ text: input.chunks.map((chunk: any) => chunk.text).join(' '), chunks: input.chunks }, settings);
+  const captions = formatCaptions({ text: input.chunks.map((chunk: any) => chunk.text).join(' '), chunks: input.chunks, language: typeof input.language === 'string' ? input.language : 'auto' }, settings);
   trackTool('captions_reformat');
   return { success: true, captions };
 });
@@ -1488,7 +1818,7 @@ ipcMain.handle('generate-captions', async (_, config: {
 
     if (captions.length === 0) {
       console.warn('[Captions] 0 captions generated. Transcription text:', JSON.stringify(transcriptionResult.text?.slice(0, 200)));
-      console.warn('[Captions] Transcription segments:', transcriptionResult.segments?.length || 0);
+      console.warn('[Captions] Transcription chunks:', transcriptionResult.chunks?.length || 0);
     }
 
     const srt = toSRT(captions);
@@ -1618,6 +1948,24 @@ ipcMain.handle('import-captions-to-premiere', async (_, captions: FormattedCapti
   } catch (error) {
     console.error('[Main] Import captions error:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Import failed' };
+  }
+});
+
+// Smoothy Pro animated captions: Premiere only, one Motion Graphics Template
+// clip per caption on a new top video track. Counts one successful placement.
+ipcMain.handle('import-pro-captions-to-premiere', async (_, captions: FormattedCaption[], style?: Partial<ProCaptionStyle>) => {
+  try {
+    if (!hasPro()) return { success: false, requiresPro: true, error: 'Animated captions are part of Smoothy Pro. See smoothyedit.com/pricing.' };
+    if (getActiveNLE() === 'resolve') return { success: false, error: 'Animated captions are available in Premiere Pro only.' };
+    if (!getPremiereConnectionStatus()) return { success: false, error: 'Connect Premiere Pro first.' };
+    const payload = buildProCaptionPayload(captions, style);
+    const sequenceId = getSequenceInfo()?.id;
+    const result = await sendProCaptionsToPremiere({ ...payload, sequenceId: sequenceId ? String(sequenceId) : undefined });
+    if (result?.success) trackTool('captions_pro_premiere');
+    return result;
+  } catch (error) {
+    console.error('[Main] Pro captions error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Could not place animated captions.' };
   }
 });
 
@@ -1933,13 +2281,14 @@ ipcMain.handle('install-update', (_event, version: unknown) => updateService?.in
 ipcMain.handle('skip-update', (_event, version: unknown) => updateService?.skip(version));
 ipcMain.handle('get-update-state', () => updateService?.snapshot());
 ipcMain.handle('check-for-updates', () => updateService?.check(true));
+ipcMain.handle('set-auto-updates', (_event, value: unknown) => updateService?.setAutoUpdates(value) ?? { success: false, error: 'Updates are unavailable.' });
 
 ipcMain.handle('get-app-version', () => app.getVersion());
 
 // Count decoded image previews / actual playback once per selection.
 ipcMain.handle('track-media-preview', (_, kind: unknown) => {
-  if (kind !== 'audio' && kind !== 'stock' && kind !== 'assets') return { success: false };
-  trackTool(kind === 'audio' ? 'audio_preview' : kind === 'assets' ? 'assets_preview' : 'stock_preview');
+  if (kind !== 'audio' && kind !== 'stock' && kind !== 'assets' && kind !== 'sfx') return { success: false };
+  trackTool(kind === 'audio' ? 'audio_preview' : kind === 'assets' ? 'assets_preview' : kind === 'sfx' ? 'sfx_preview' : 'stock_preview');
   return { success: true };
 });
 
@@ -2034,13 +2383,59 @@ function extractImageUrl(text: string): string | null {
   return null;
 }
 
+function isPrivateOrLocalHost(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (!host || host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal')) return true;
+  if (host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:')) return true;
+  if (/^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host) || /^169\.254\./.test(host) || /^0\./.test(host)) return true;
+  const m = /^172\.(\d+)\./.exec(host);
+  if (m && Number(m[1]) >= 16 && Number(m[1]) <= 31) return true;
+  return false;
+}
+
 async function fetchRemoteImage(url: string): Promise<{ name: string; mime?: string; base64?: string; svgText?: string } | null> {
+  const MAX_BYTES = 25 * 1024 * 1024;
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'SmoothyEdit' } });
+    const parsed = new URL(url);
+    if ((parsed.protocol !== 'https:' && parsed.protocol !== 'http:') || isPrivateOrLocalHost(parsed.hostname)) {
+      return null;
+    }
+    const res = await fetch(parsed.toString(), {
+      headers: { 'User-Agent': 'SmoothyEdit' },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(15_000),
+    });
     if (!res.ok) return null;
+    try {
+      const finalParsed = new URL(res.url || parsed.toString());
+      if (isPrivateOrLocalHost(finalParsed.hostname)) return null;
+    } catch { return null; }
+    const contentLength = Number(res.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > MAX_BYTES) return null;
     const mime = (res.headers.get('content-type') || 'image/png').split(';')[0].trim();
-    const buffer = Buffer.from(await res.arrayBuffer());
-    if (buffer.length === 0 || buffer.length > 25 * 1024 * 1024) return null;
+
+    let buffer: Buffer;
+    if (res.body) {
+      const reader = res.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let total = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          total += value.byteLength;
+          if (total > MAX_BYTES) {
+            await reader.cancel().catch(() => {});
+            return null;
+          }
+          chunks.push(value);
+        }
+      }
+      buffer = Buffer.concat(chunks, total);
+    } else {
+      buffer = Buffer.from(await res.arrayBuffer());
+    }
+    if (buffer.length === 0 || buffer.length > MAX_BYTES) return null;
 
     const extByMime: Record<string, string> = {
       'image/png': 'png',
@@ -2194,25 +2589,48 @@ ipcMain.handle('set-active-nle', (_, nle: 'premiere' | 'resolve' | null) => {
   catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not switch editor.' }; }
 });
 
-// Video Compression Handlers
+// Video Compressor & Media Encoder Handlers
 ipcMain.handle('compressor-check-ffmpeg', async () => {
   return await videoCompressor.checkFFmpeg();
 });
 
-ipcMain.handle('compressor-detect-hardware', async () => {
-  return await videoCompressor.detectHardware();
+ipcMain.handle('compressor-detect-hardware', async (_, target?: HardwareCodecTarget) => {
+  return await videoCompressor.detectHardware(target);
 });
 
-ipcMain.handle('compressor-scan-directory', async (_, dirPath: string) => {
-  return videoCompressor.scanDirectory(dirPath);
+ipcMain.handle('compressor-scan-directory', async (_, dirPath: string, mode?: EncoderMode) => {
+  return videoCompressor.scanDirectory(dirPath, mode);
 });
 
-ipcMain.handle('compressor-scan-source', async (_, sourcePath: string) => {
-  return videoCompressor.scanSource(sourcePath);
+ipcMain.handle('compressor-scan-source', async (_, sourcePath: string, mode?: EncoderMode) => {
+  return videoCompressor.scanSource(sourcePath, mode);
+});
+
+ipcMain.handle('compressor-scan-sources', async (_, sourcePaths: string[], mode?: EncoderMode) => {
+  return videoCompressor.scanSources(sourcePaths, mode);
+});
+
+ipcMain.handle('compressor-probe-files', async (_, filePaths: string[]) => {
+  return await videoCompressor.probeFiles(Array.isArray(filePaths) ? filePaths : []);
+});
+
+ipcMain.handle('compressor-open-output-folder', async (_, folderPath: string) => {
+  if (!folderPath || typeof folderPath !== 'string' || !fs.existsSync(folderPath)) {
+    return { success: false, error: 'Output folder does not exist.' };
+  }
+  const err = await shell.openPath(folderPath);
+  return err ? { success: false, error: err } : { success: true };
 });
 
 ipcMain.handle('compressor-start', async (_, files: VideoFile[], settings: CompressionSettings) => {
-  trackTool('compressor');
+  if (!Array.isArray(files) || files.length === 0) {
+    return { success: false, error: 'No media files selected.' };
+  }
+  if (videoCompressor.isCompressing()) {
+    return { success: false, error: 'Encoding already in progress.' };
+  }
+
+  trackTool(resolveMediaEncoderFeatureId(settings?.mode));
   bindCompressorEventForwarding();
 
   try {
@@ -2236,34 +2654,70 @@ ipcMain.handle('compressor-get-stats', () => {
   return videoCompressor.getStats();
 });
 
+const stripDot = (ext: string) => ext.replace(/^\./, '');
+
+ipcMain.handle('compressor-select-files', async (_, mode?: EncoderMode) => {
+  if (!mainWindow) return { canceled: true };
+  const allowAudio = mode === 'extract_audio';
+  const filters = allowAudio
+    ? [
+        { name: 'Video & Audio Files', extensions: MEDIA_EXTENSIONS.map(stripDot) },
+        { name: 'Videos', extensions: VIDEO_EXTENSIONS.map(stripDot) },
+        { name: 'Audio', extensions: AUDIO_EXTENSIONS.map(stripDot) },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    : [
+        { name: 'Video Files', extensions: VIDEO_EXTENSIONS.map(stripDot) },
+        { name: 'All Files', extensions: ['*'] }
+      ];
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: allowAudio ? 'Select Video or Audio Files' : 'Select Video Files',
+    properties: ['openFile', 'multiSelections'],
+    filters
+  });
+  if (result.canceled || !result.filePaths.length) {
+    return { canceled: true };
+  }
+  return { canceled: false, path: result.filePaths[0], paths: result.filePaths };
+});
+
 ipcMain.handle('compressor-select-folder', async () => {
   if (!mainWindow) return { canceled: true };
   const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Select Video or Folder',
-    properties: ['openFile', 'openDirectory'],
-    filters: [
-      { name: 'Videos', extensions: ['mp4', 'mov', 'mkv', 'avi', 'webm', 'm4v', 'mts', 'm2ts', 'mpg', 'mpeg'] }
-    ]
+    title: 'Select Media Folder',
+    properties: ['openDirectory']
   });
   if (result.canceled || !result.filePaths[0]) {
     return { canceled: true };
   }
-  return { canceled: false, path: result.filePaths[0] };
+  return { canceled: false, path: result.filePaths[0], paths: result.filePaths };
 });
 
-ipcMain.handle('compressor-select-source', async () => {
+ipcMain.handle('compressor-select-source', async (_, mode?: EncoderMode) => {
   if (!mainWindow) return { canceled: true };
+  const allowAudio = mode === 'extract_audio';
+  const filters = allowAudio
+    ? [
+        { name: 'Video & Audio Files', extensions: MEDIA_EXTENSIONS.map(stripDot) },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    : [
+        { name: 'Video Files', extensions: VIDEO_EXTENSIONS.map(stripDot) },
+        { name: 'All Files', extensions: ['*'] }
+      ];
+  const properties: Array<'openFile' | 'openDirectory' | 'multiSelections'> =
+    process.platform === 'darwin'
+      ? ['openFile', 'openDirectory', 'multiSelections']
+      : ['openFile', 'multiSelections'];
   const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Select Video or Folder',
-    properties: ['openFile', 'openDirectory'],
-    filters: [
-      { name: 'Videos', extensions: ['mp4', 'mov', 'mkv', 'avi', 'webm', 'm4v', 'mts', 'm2ts', 'mpg', 'mpeg'] }
-    ]
+    title: allowAudio ? 'Select Media Files or Folder' : 'Select Videos or Folder',
+    properties,
+    filters
   });
-  if (result.canceled || !result.filePaths[0]) {
+  if (result.canceled || !result.filePaths.length) {
     return { canceled: true };
   }
-  return { canceled: false, path: result.filePaths[0] };
+  return { canceled: false, path: result.filePaths[0], paths: result.filePaths };
 });
 
 ipcMain.handle('compressor-select-output-folder', async (_, defaultPath?: string) => {

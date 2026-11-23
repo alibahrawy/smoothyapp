@@ -8,7 +8,6 @@ const FEATURES = [
     body: 'Let Claude Code or Codex edit for you. You review and leave notes.',
   },
 ];
-const PRICING_URL = 'https://smoothyedit.com/pricing';
 
 function badge() {
   const span = document.createElement('span');
@@ -28,7 +27,7 @@ function buildCard(feature) {
       <p class="pro-lock-body"></p>
       <p class="pro-lock-note"></p>
       <div class="pro-lock-actions">
-        <button type="button" class="btn btn-primary" data-pro-action="upgrade">Upgrade to Pro</button>
+        <button type="button" class="btn btn-pro" data-pro-action="upgrade">Upgrade to Pro</button>
         <button type="button" class="btn btn-secondary hidden" data-pro-action="signin">Sign in</button>
       </div>
     </div>`;
@@ -36,7 +35,7 @@ function buildCard(feature) {
   card.querySelector('.pro-lock-body').textContent = feature.body;
   card.querySelector('[data-pro-action="upgrade"]').addEventListener('click', () => {
     void window.electronAPI.proUpgradeClick(feature.id);
-    void window.electronAPI.openExternal(PRICING_URL);
+    void window.electronAPI.openProCheckout();
   });
   card.querySelector('[data-pro-action="signin"]').addEventListener('click', () => {
     document.getElementById('settings-btn')?.click();

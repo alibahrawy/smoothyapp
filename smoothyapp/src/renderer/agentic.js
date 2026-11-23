@@ -178,13 +178,15 @@ function setText(id, value) {
 }
 
 function flash(message) {
-  const toast = byId('agentic-flash');
-  if (toast) {
+  const targets = [byId('agentic-flash'), byId('agentic-settings-flash')].filter(Boolean);
+  for (const toast of targets) {
     toast.textContent = message;
     toast.classList.remove('hidden');
   }
   window.clearTimeout(flash.timer);
-  flash.timer = window.setTimeout(() => toast?.classList.add('hidden'), 3200);
+  flash.timer = window.setTimeout(() => {
+    for (const toast of targets) toast.classList.add('hidden');
+  }, 3200);
 }
 
 function setEnabledUi(enabled) {
@@ -203,6 +205,14 @@ function renderStatus() {
   } else if (state.running) {
     setText('agentic-status-text', `Listening on ${state.url.replace(/^https?:\/\//, '').replace(/\/mcp$/, '')}`);
     setText('agentic-status-meta', `${state.clients} client${state.clients === 1 ? '' : 's'} · ${state.tools.length} tools · protocol ${state.protocol}`);
+  }
+  const setupBanner = byId('agentic-setup-banner');
+  if (setupBanner) {
+    const showBanner = Boolean(state.enabled && state.running && state.clients === 0);
+    setupBanner.classList.toggle('hidden', !showBanner);
+    if (showBanner) {
+      setText('agentic-setup-meta', `Bridge listening on ${state.url.replace(/^https?:\/\//, '').replace(/\/mcp$/, '')} · ${state.tools.length} tools ready. Copy a setup command for Claude Code, Cursor or Codex.`);
+    }
   } else {
     setText('agentic-status-text', 'Agent Bridge is starting…');
     setText('agentic-status-meta', 'The local server is not ready yet.');
@@ -339,6 +349,8 @@ async function refreshState() {
     state.clients = Number(next.clients) || 0;
     state.tools = Array.isArray(next.tools) ? next.tools : [];
     state.activity = Array.isArray(next.activity) ? next.activity : [];
+    state.grants = next.grants || { approvals: [], folders: [] };
+    renderGrants();
     if (next.editor?.sequence && !state.filePath) {
       state.fps = Number(next.editor.sequence.fps) || state.fps;
       state.duration = Number(next.editor.sequence.duration) || state.duration;
@@ -768,6 +780,17 @@ function renderMarkers() {
 
 function renderNotes() {
   if (!els.notes) return;
+  // Preserve any open reply input drafts + active focus across live review refreshes.
+  const openDrafts = new Map();
+  let focusedNoteId = null;
+  for (const card of els.notes.querySelectorAll('.agentic-note[data-note-id]')) {
+    const form = card.querySelector('.agentic-note-reply-form');
+    const input = form?.querySelector('input');
+    if (form && !form.classList.contains('hidden') && input) {
+      openDrafts.set(card.dataset.noteId, input.value);
+      if (document.activeElement === input) focusedNoteId = card.dataset.noteId;
+    }
+  }
   els.notes.innerHTML = '';
   // Oldest first, like a review thread; the number is the order they were written.
   const ordered = [...state.notes].sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
@@ -776,6 +799,7 @@ function renderNotes() {
     const card = document.createElement('article');
     card.className = 'agentic-note';
     card.dataset.status = note.status;
+    card.dataset.noteId = note.id;
 
     const head = document.createElement('div');
     head.className = 'agentic-note-head';
@@ -861,8 +885,13 @@ function renderNotes() {
     input.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); void submit(); } });
     replyToggle.addEventListener('click', () => { reply.classList.toggle('hidden'); if (!reply.classList.contains('hidden')) input.focus(); });
     reply.append(input, send);
+    if (openDrafts.has(note.id)) {
+      reply.classList.remove('hidden');
+      input.value = openDrafts.get(note.id) || '';
+    }
     card.append(footer, reply);
     els.notes.append(card);
+    if (focusedNoteId === note.id) input.focus();
   });
   renderMarkers();
 }
@@ -990,19 +1019,66 @@ async function openFile() {
   }
 }
 
+function formatApprovalSummary(args) {
+  if (!args || typeof args !== 'object') return 'No additional details.';
+  const lines = [];
+  if (args.note) lines.push(String(args.note));
+  const fieldLabels = [
+    ['action', 'Action'],
+    ['sequence', 'Sequence'],
+    ['folder', 'Folder'],
+    ['output', 'Output'],
+    ['path', 'File'],
+    ['model', 'Model'],
+    ['title', 'Title'],
+    ['source', 'Source'],
+    ['clips', 'Clips'],
+    ['count', 'Count'],
+    ['scope', 'Scope'],
+  ];
+  const handled = new Set(['note']);
+  for (const [key, title] of fieldLabels) {
+    if (args[key] !== undefined && args[key] !== null && args[key] !== '') {
+      handled.add(key);
+      lines.push(`${title}: ${args[key]}`);
+    }
+  }
+  if (Array.isArray(args.markers) && args.markers.length) {
+    handled.add('markers');
+    const preview = args.markers.slice(0, 4).map(m => `${formatTimecode(Number(m.time ?? m.startTime ?? 0), state.fps)} ${m.name || ''}`.trim()).join(', ');
+    lines.push(`Markers (${args.markers.length}): ${preview}${args.markers.length > 4 ? '…' : ''}`);
+  }
+  for (const [key, value] of Object.entries(args)) {
+    if (handled.has(key) || value === undefined || value === null || value === '') continue;
+    const text = typeof value === 'object' ? JSON.stringify(value) : String(value);
+    lines.push(`${key}: ${text.length > 160 ? text.slice(0, 157) + '…' : text}`);
+  }
+  return lines.join('\n') || 'No additional details.';
+}
+
 function renderApproval() {
   const next = state.approvals[0];
   if (!next) {
     els.approval?.classList.add('hidden');
     return;
   }
+  const labels = {
+    'smoothy_render.export': 'Export this MP4?',
+    'smoothy_library.add': 'Download this asset?',
+    'smoothy_engine.write': 'Let the agent write into this folder?',
+    'smoothy_edit.folder': 'Create this project folder?',
+    'smoothy_edit.transcribe': 'Download the speech engine?',
+    'smoothy_analyze.install': 'Download this speech model?',
+    'smoothy_nle.import': 'Import this sequence into Premiere?'
+  };
   const label = next.tool === 'smoothy_audio' && next.args?.action === 'setup'
     ? 'Install the local audio engine?'
     : next.tool === 'smoothy_timeline'
       ? 'Run this timeline action?'
-      : `Run ${next.tool.replace(/^smoothy_/, '')}?`;
+      : labels[next.tool] || `Run ${next.tool.replace(/^smoothy_/, '')}?`;
   setText('agentic-approval-title', label);
-  if (els.approvalDetail) els.approvalDetail.textContent = JSON.stringify(next.args || {}, null, 2);
+  byId('agentic-approval-session')?.classList.toggle('hidden', !next.session);
+  if (els.approvalDetail) els.approvalDetail.textContent = formatApprovalSummary(next.args);
   els.approval?.classList.remove('hidden');
 }
 
@@ -1012,13 +1088,28 @@ function showApproval(approval) {
   if (els.approval?.classList.contains('hidden')) renderApproval();
 }
 
-async function decideApproval(allow) {
+async function decideApproval(allow, session = false) {
   const current = state.approvals.shift();
   if (current) {
-    await api.agentApprove(current.id, allow);
-    flash(allow ? 'Timeline action approved.' : 'Timeline action denied.');
+    await api.agentApprove(current.id, allow, session);
+    flash(!allow ? 'Request denied.' : session ? 'Allowed for this session.' : 'Approved.');
+    if (session) void refreshState();
   }
   renderApproval();
+}
+
+function renderGrants() {
+  const box = byId('agentic-grants');
+  if (!box) return;
+  const approvals = state.grants?.approvals || [];
+  const folders = state.grants?.folders || [];
+  const names = { 'smoothy_render.export': 'exports', 'smoothy_library.add': 'downloads', 'smoothy_engine.write': 'engine writes', 'smoothy_edit.folder': 'project folders', 'smoothy_analyze.install': 'model downloads', 'smoothy_nle.import': 'Premiere imports' };
+  const parts = approvals.map(item => names[item] || item.replace(/^smoothy_/, ''));
+  if (folders.length) parts.push(`${folders.length} folder${folders.length === 1 ? '' : 's'}`);
+  box.classList.toggle('hidden', !parts.length);
+  setText('agentic-grants-text', parts.length ? `Allowed this session: ${parts.join(', ')}` : '');
+  const text = byId('agentic-grants-text');
+  if (text) text.title = folders.join('\n');
 }
 
 function handleAgentEvent(event) {
@@ -1070,19 +1161,26 @@ function copy(value) {
 }
 
 async function copyClaude() {
+  if (!state.token) {
+    flash('Agent Bridge is still starting — try again in a second.');
+    return;
+  }
   const url = state.url || 'http://127.0.0.1:3778/mcp';
-  const token = state.token || '<token>';
-  copy(`claude mcp add --transport http smoothy ${url} --header "Authorization: Bearer ${token}"`);
+  copy(`claude mcp add --transport http smoothy ${url} --header "Authorization: Bearer ${state.token}"`);
   flash('Claude Code command copied.');
 }
 
 function copyJson() {
+  if (!state.token) {
+    flash('Agent Bridge is still starting — try again in a second.');
+    return;
+  }
   const config = {
     mcpServers: {
       smoothy: {
         type: 'http',
         url: state.url || 'http://127.0.0.1:3778/mcp',
-        headers: { Authorization: `Bearer ${state.token || '<token>'}` }
+        headers: { Authorization: `Bearer ${state.token}` }
       }
     }
   };
@@ -1197,6 +1295,7 @@ function bind() {
   if (els.frame && 'ResizeObserver' in window) new ResizeObserver(layoutCanvas).observe(els.frame);
   document.addEventListener('keydown', event => {
     if (!state.active || event.code !== 'Space') return;
+    if (document.querySelector('dialog[open], .overlay:not(.hidden), .agentic-approval:not(.hidden)')) return;
     if (/^(INPUT|TEXTAREA|BUTTON|SELECT)$/.test(event.target?.tagName || '')) return;
     event.preventDefault();
     togglePlay();
@@ -1239,14 +1338,28 @@ function bind() {
 
   byId('agentic-approval-allow')?.addEventListener('click', () => void decideApproval(true));
   byId('agentic-approval-deny')?.addEventListener('click', () => void decideApproval(false));
+  byId('agentic-approval-session')?.addEventListener('click', () => void decideApproval(true, true));
+  byId('agentic-grants-revoke')?.addEventListener('click', async () => {
+    await api.agentRevokeGrants?.();
+    flash('Session approvals revoked.');
+    void refreshState();
+  });
+
+  byId('agentic-quick-claude')?.addEventListener('click', () => void copyClaude());
+  byId('agentic-quick-json')?.addEventListener('click', () => copyJson());
+  byId('agentic-quick-skill')?.addEventListener('click', () => void copySkill());
+  byId('agentic-quick-settings')?.addEventListener('click', () => openAgentSettings?.());
 
   cleanupEvents = api.onAgentEvent(handleAgentEvent);
   setTool('select');
   updateScrubUi();
 }
 
-export function initAgentic() {
+let openAgentSettings = null;
+
+export function initAgentic({ openSettings } = {}) {
   if (!byId('tab-agentic')) return { activate() {} };
+  openAgentSettings = openSettings ? () => void openSettings('agent') : null;
   bind();
   void refreshState();
   void refreshNotes();

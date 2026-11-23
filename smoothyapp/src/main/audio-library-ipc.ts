@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { AudioLibrary } from './audio-library';
 import { AudioArchive } from './audio-archive';
 import { AudioFavorites } from './audio-favorites';
+import { SfxLibrary } from './sfx-library';
 import { trackTool } from './telemetry';
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'smoothy-audio', privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true } }]);
@@ -16,6 +17,9 @@ export async function registerAudioLibrary(deps: {
   const library = new AudioLibrary(path.join(app.getPath('music'), 'SmoothyEdit Audio Library'));
   await library.load();
   const archive = deps.archive || new AudioArchive(app.getPath('userData'));
+  const bundled = path.join(process.resourcesPath || '', 'sfx');
+  const sfx = new SfxLibrary(await fs.stat(path.join(bundled, 'library.json')).then(() => bundled, () => path.join(app.getAppPath(), 'resources', 'sfx')), path.join(library.folder, 'Sound Effects'));
+  const sfxReady = sfx.load().then(() => true, error => { console.error('[SFX Library]', error); return false; });
   const community = new AudioFavorites(deps.store, () => deps.window()?.webContents.send('audio-community-changed', community.snapshot()));
   const communityTimer = setInterval(() => { void community.sync(); void community.refresh(); }, 5 * 60000);
   communityTimer.unref();
@@ -36,6 +40,9 @@ export async function registerAudioLibrary(deps: {
       if (url.hostname === 'archive' && /^\/[A-Za-z0-9_-]{20,100}$/.test(url.pathname)) {
         return await archive.preview(url.pathname.slice(1), request.signal || new AbortController().signal, new Headers(request.headers).get('range') || undefined);
       }
+      if (url.hostname === 'sfx' && /^\/[a-z0-9-]{2,80}$/.test(url.pathname) && await sfxReady) {
+        return net.fetch(pathToFileURL(await sfx.file(url.pathname.slice(1))).href, { headers: request.headers });
+      }
       if (url.hostname !== 'library' || !/^\/[0-9a-f-]{36}$/.test(url.pathname)) return new Response('', { status: 404, headers: { 'cache-control': 'no-store' } });
       const filePath = await library.file(url.pathname.slice(1));
       return net.fetch(pathToFileURL(filePath).href, { headers: request.headers });
@@ -54,6 +61,27 @@ export async function registerAudioLibrary(deps: {
     if (changed) trackTool('audio_favorite');
     return state;
   }));
+  ipcMain.handle('sfx-search', (_, input) => result(async () => {
+    if (!(await sfxReady)) throw new Error('The sound effects library could not be loaded. Reinstall SmoothyEdit to repair it.');
+    const results = sfx.search(input);
+    if (input?.background !== true) trackTool('sfx_search');
+    return results;
+  }));
+  ipcMain.handle('sfx-save', (_, input) => result(async () => {
+    if (!(await sfxReady)) throw new Error('The sound effects library could not be loaded. Reinstall SmoothyEdit to repair it.');
+    const editor = deps.editor?.();
+    if (input?.send && !deps.connected()) throw new Error('Connect the selected editor before sending sound effects.');
+    // Premiere's importer takes MP3 only; Resolve takes the lossless WAV.
+    const saved = input?.send && editor !== 'resolve' ? await sfx.saveMp3(input?.id) : await sfx.saveWav(input?.id);
+    trackTool('sfx_save');
+    if (input?.send) {
+      const imported = await deps.importToPremiere(saved.path, editor);
+      if (!imported?.success) throw new Error('Saved to your Sound Effects folder. ' + (imported?.error || 'The selected editor could not import it. You can retry.'));
+      trackTool(imported.nle === 'resolve' ? 'sfx_resolve' : 'sfx_premiere');
+    }
+    return { savedPath: saved.path, title: saved.entry.title, imported: Boolean(input?.send), nle: editor };
+  }));
+  ipcMain.handle('sfx-show-folder', () => result(async () => { await fs.mkdir(sfx.saveFolder, { recursive: true }); await shell.openPath(sfx.saveFolder); return {}; }));
   ipcMain.handle('audio-archive-search', (_, input) => result(async () => {
     const results = await archive.search(input, community.snapshot());
     if (input?.background !== true) trackTool('audio_search');

@@ -7,6 +7,11 @@ export function initChat({ getUser, signIn, refreshCredits }) {
   const $ = id => document.getElementById(id), api = window.electronAPI;
   const syncAccess = studioAccessNotice($('chat-composer-dock'), getUser, signIn);
   let thinking = catalog.defaultThinking;
+  const modelKey = 'smoothy.chat.model';
+  const modelInfo = id => catalog.models.find(item => item.id === id);
+  let model = (() => { try { const saved = localStorage.getItem(modelKey); if (modelInfo(saved)) return saved; } catch { /* Storage is optional. */ } return catalog.defaultModel; })();
+  // Models that cannot run without reasoning (Gemini) always report Thinking on.
+  const effectiveThinking = () => modelInfo(model).supportsNonThinking ? thinking : true;
   let turns = [], attachments = [], filesLoading = false, busy = false, stopping = false, active = null, account = null, generation = 0;
   let conversationId = null, historyView = false, historyLoading = false, historyError = '', historyItems = [], historyEpoch = 0;
   const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -21,9 +26,14 @@ export function initChat({ getUser, signIn, refreshCredits }) {
     $('chat-status').classList.toggle('photo-error', visible);
   };
   function availability() {
-    $('chat-thinking').setAttribute('aria-checked', String(thinking));
-    $('chat-thinking').disabled = busy || filesLoading;
-    $('chat-thinking').title = 'Turn reasoning on or off';
+    const forced = !modelInfo(model).supportsNonThinking;
+    $('chat-thinking').setAttribute('aria-checked', String(effectiveThinking()));
+    $('chat-thinking').disabled = busy || filesLoading || forced;
+    $('chat-thinking').title = forced ? `${modelInfo(model).shortLabel} always uses Thinking` : 'Turn reasoning on or off';
+    $('chat-model').disabled = busy || filesLoading;
+    $('chat-model-label').textContent = modelInfo(model).shortLabel;
+    $('chat-model').title = `Model: ${modelInfo(model).label}`;
+    document.querySelectorAll('#chat-model-list [role="option"]').forEach(option => option.setAttribute('aria-selected', String(option.dataset.model === model)));
     const signedIn = Boolean(getUser());
     syncAccess();
     $('chat-signin').classList.add('hidden');
@@ -118,7 +128,7 @@ export function initChat({ getUser, signIn, refreshCredits }) {
       if (turn.attachments?.length) { const files = document.createElement('div'); files.className = 'chat-attachments'; attachmentChips(files, turn.attachments); prompt.append(files); }
       else if (turn.attachmentsCount) { const note = document.createElement('small'); note.className = 'chat-history-attachment-note'; note.textContent = `${turn.attachmentsCount} attachment${turn.attachmentsCount === 1 ? '' : 's'} not saved`; prompt.append(note); }
       const response = document.createElement('div'); response.className = 'chat-response';
-      const label = document.createElement('small'); label.textContent = 'Chat';
+      const label = document.createElement('small'); label.textContent = modelInfo(turn.model)?.shortLabel || 'Chat';
       const reply = document.createElement('div'); reply.className = 'chat-reply';
       const loading = document.createElement('div'); loading.className = 'chat-loading'; loading.setAttribute('role', 'status'); loading.ariaLabel = turn.thinking ? 'Thinking and generating reply' : 'Generating reply';
       for (let i = 0; i < 3; i++) { const dot = document.createElement('span'); dot.setAttribute('aria-hidden', 'true'); loading.append(dot); }
@@ -215,14 +225,14 @@ export function initChat({ getUser, signIn, refreshCredits }) {
     const messages = turns.filter(turn => turn.reply).flatMap(turn => [{ role: 'user', content: turn.prompt, ...(turn.attachments?.length && { attachments: turn.attachments.map(file => file.id) }) }, { role: 'assistant', content: turn.reply }]);
     messages.push({ role: 'user', content: prompt, ...(attachments.length && { attachments: attachments.map(file => file.id) }) });
     if (messages.length > catalog.maxMessages || messages.reduce((sum, message) => sum + message.content.length, 0) > catalog.maxConversationChars) return status('This conversation is full. Start a new chat to continue.', true);
-    const stamp = generation, turn = { prompt, thinking, attachments: [...attachments], visibleText: '' };
+    const stamp = generation, turn = { prompt, model, thinking: effectiveThinking(), attachments: [...attachments], visibleText: '' };
     const request = { requestId: crypto.randomUUID(), turn, providerDone: false };
     request.reveal = createWordReveal({ reducedMotion, update(text) { if (stamp !== generation || active !== request || stopping) return; turn.visibleText = text; paintTurn(turn); } });
     active = request;
     attachments = []; attachmentChips($('chat-attachments'), attachments, true);
-    turns.push(turn); busy = true; addMenu.hidePopover(); $('chat-prompt').value = ''; render(true); status(thinking ? 'Thinking…' : 'Replying…');
+    turns.push(turn); busy = true; addMenu.hidePopover(); modelMenu.hidePopover(); $('chat-prompt').value = ''; render(true); status(turn.thinking ? 'Thinking…' : 'Replying…');
     try {
-      const result = await api.chatRun({ requestId: request.requestId, messages, thinking: turn.thinking });
+      const result = await api.chatRun({ requestId: request.requestId, messages, model: turn.model, thinking: turn.thinking });
       if (stamp !== generation) return;
       request.providerDone = true;
       if (turn.stopped) { status('Reply stopped.'); return; }
@@ -250,6 +260,19 @@ export function initChat({ getUser, signIn, refreshCredits }) {
     if (!active.providerDone) api.chatCancel().catch(() => {});
   }
   $('chat-thinking').addEventListener('click', () => { if ($('chat-thinking').disabled || busy) return; thinking = !thinking; availability(); });
+  const modelMenu = $('chat-model-menu'), modelList = $('chat-model-list');
+  catalog.models.forEach(item => {
+    const option = document.createElement('button'); option.type = 'button'; option.setAttribute('role', 'option'); option.dataset.model = item.id;
+    const text = document.createElement('span'), name = document.createElement('strong'), note = document.createElement('small');
+    name.textContent = item.label; note.textContent = item.supportsNonThinking ? item.description : `${item.description} · always Thinking`; text.append(name, note); option.append(text);
+    option.addEventListener('click', () => { if (busy || filesLoading) return; model = item.id; try { localStorage.setItem(modelKey, model); } catch { /* Selection still applies this session. */ } modelMenu.hidePopover(); availability(); $('chat-prompt').focus(); });
+    modelList.append(option);
+  });
+  function positionModelMenu() { const rect = $('chat-model').getBoundingClientRect(), width = Math.min(300, innerWidth - 24); modelMenu.style.width = `${width}px`; modelMenu.style.left = `${Math.max(12, Math.min(rect.left, innerWidth - width - 12))}px`; modelMenu.style.bottom = `${innerHeight - rect.top + 6}px`; modelMenu.style.maxHeight = `${Math.max(100, rect.top - 20)}px`; }
+  modelMenu.addEventListener('beforetoggle', event => { if (event.newState === 'open') positionModelMenu(); });
+  modelMenu.addEventListener('toggle', event => { const open = event.newState === 'open'; $('chat-model').setAttribute('aria-expanded', String(open)); if (open) modelList.querySelector('[aria-selected="true"]')?.focus(); });
+  modelMenu.addEventListener('keydown', event => { if (event.key === 'Escape') { event.preventDefault(); modelMenu.hidePopover(); $('chat-model').focus(); } });
+  window.addEventListener('resize', () => { if (modelMenu.matches(':popover-open')) positionModelMenu(); });
   $('chat-send').addEventListener('click', () => busy ? stop() : send());
   $('chat-prompt').addEventListener('input', availability);
   $('chat-prompt').addEventListener('keydown', event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); if (!$('chat-send').disabled) send(); } });
@@ -271,7 +294,7 @@ export function initChat({ getUser, signIn, refreshCredits }) {
   });
   function authChanged() {
     const next = getUser()?.id || null;
-    if (next !== account) { generation++; historyEpoch++; conversationId = null; historyView = false; historyLoading = false; historyError = ''; historyItems = []; active?.reveal.cancel(); active = null; api.chatReset().catch(() => {}); turns = []; attachments = []; attachmentChips($('chat-attachments'), attachments, true); filesLoading = false; busy = false; stopping = false; account = next; $('chat-prompt').value = ''; $('chat-credits').textContent = 'Studio credits'; addMenu.hidePopover(); status(''); render(); }
+    if (next !== account) { generation++; historyEpoch++; conversationId = null; historyView = false; historyLoading = false; historyError = ''; historyItems = []; active?.reveal.cancel(); active = null; api.chatReset().catch(() => {}); turns = []; attachments = []; attachmentChips($('chat-attachments'), attachments, true); filesLoading = false; busy = false; stopping = false; account = next; $('chat-prompt').value = ''; $('chat-credits').textContent = 'Studio credits'; addMenu.hidePopover(); modelMenu.hidePopover(); status(''); render(); }
     if (!getUser()) $('chat-credits').textContent = '100 free credits/month';
     availability();
   }

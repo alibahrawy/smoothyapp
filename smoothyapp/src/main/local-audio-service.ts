@@ -8,9 +8,21 @@ import { AUDIO_WORKER } from './local-audio-worker';
 import { AUDIO_RUNTIME_VERSION, audioPackages, type AudioBackend } from './local-audio-runtime';
 import { validateCaptionMediaPath } from './captions/media-input';
 
-export type AudioMode = 'separate' | 'enhance';
-export type AudioOutput = { id: string; label: string; kind: 'speech' | 'music' | 'original'; file: string; previewed?: boolean };
+export type AudioMode = 'denoise' | 'separate' | 'isolate' | 'enhance';
+export type NormalizedAudioMode = 'denoise' | 'separate' | 'isolate';
+export type AudioOutputKind = 'speech' | 'music' | 'noise' | 'background' | 'original';
+export type AudioOutput = {
+  id: string;
+  label: string;
+  kind: AudioOutputKind;
+  file: string;
+  previewed?: boolean;
+  residualId?: string;
+  mode?: NormalizedAudioMode;
+};
 export type AudioProgress = string | { message: string; stage: string; completed?: number; total?: number; unit?: string; backend?: string };
+export type AudioSelectRange = { from?: number; to?: number };
+export type AudioSaveOptions = { strength?: number; track?: boolean };
 type Progress = (data: AudioProgress) => void;
 const canceled = () => new Error('Canceled');
 export function runAudioCommand(command: string, args: string[], signal: AbortSignal, progress: Progress, env = process.env): Promise<string> {
@@ -123,14 +135,23 @@ export class LocalAudioService {
     try { await handle.read(head,0,12,0); } finally { await handle.close(); }
     if (!info.isFile() || info.size <= 44 || head.toString('ascii',0,4) !== 'RIFF' || head.toString('ascii',8,12) !== 'WAVE') throw new Error('Audio engine returned an empty or invalid WAV.');
   }
-  async select(file: unknown, progress: Progress = () => {}) {
+  async select(file: unknown, progress: Progress = () => {}, range?: AudioSelectRange) {
     return this.exclusive(async signal => {
       const validated = await validateCaptionMediaPath(file);
       const folder = await this.folder('source-');
       try {
         progress('Preparing your original audio…');
         const wav = path.join(folder,'original.wav');
-        await this.run(this.deps.ffmpeg, ['-nostdin','-v','error','-i',validated,'-map','0:a:0','-vn','-ac','2','-ar','44100','-c:a','pcm_s16le',wav],signal,progress);
+        const from = Number(range?.from);
+        const to = Number(range?.to);
+        const trimArgs: string[] = [];
+        if (Number.isFinite(from) && from > 0) trimArgs.push('-ss', String(from));
+        if (Number.isFinite(to) && to > 0) {
+          const duration = to - (Number.isFinite(from) && from > 0 ? from : 0);
+          if (!(duration > 0.05)) throw new Error('Audio time range is empty. Check from/to.');
+          trimArgs.push('-t', String(duration));
+        }
+        await this.run(this.deps.ffmpeg, ['-nostdin','-v','error',...trimArgs,'-i',validated,'-map','0:a:0','-vn','-ac','2','-ar','44100','-c:a','pcm_s16le',wav],signal,progress);
         signal.throwIfAborted(); await this.validateWav(wav); signal.throwIfAborted();
         const source: AudioOutput = {id:randomUUID(),label:'Original',kind:'original',file:wav};
         // Publish only after decoding succeeds. A failed/canceled replacement keeps
@@ -187,27 +208,33 @@ export class LocalAudioService {
       return { ready: true, backend:this.backend };
     });
   }
-  async process(input: { source: string; mode: AudioMode }, progress: Progress) {
+  async process(input: { source: string; mode: AudioMode; aggression?: number }, progress: Progress) {
     return this.exclusive(async signal => {
-      if (!['separate','enhance'].includes(input?.mode)) throw new Error('Choose speech separation or enhancement.');
+      if (!['denoise','separate','isolate','enhance'].includes(input?.mode)) throw new Error('Choose noise removal, voice & music separation, or isolate clean voice.');
+      const mode: NormalizedAudioMode = input.mode === 'enhance' ? 'isolate' : input.mode;
       const source = this.sources.get(input?.source); if (!source) throw new Error('Choose an audio or video file first.');
       if (!(await this.state()).ready) throw new Error('Set up the audio engine first.');
-      const voice = this.separated.get(source.id)?.find(output=>output.kind==='speech');
-      if (input.mode === 'enhance' && !voice) throw new Error('Separate the recording before enhancing speech.');
       await this.validateWav(source.file); signal.throwIfAborted();
-      if (input.mode === 'enhance') await this.validateWav(voice!.file);
+      let reusedVoice: AudioOutput | undefined;
+      if (mode === 'isolate') {
+        const cached = this.separated.get(source.id)?.find(output => output.kind === 'speech');
+        if (cached) {
+          try { await this.validateWav(cached.file); reusedVoice = cached; } catch { reusedVoice = undefined; }
+        }
+      }
+      const aggression = Number.isFinite(Number(input?.aggression)) ? Math.max(1, Math.min(20, Math.round(Number(input.aggression)))) : 5;
       const folder = await this.folder('job-');
       try {
         const wav = source.file;
         await fs.writeFile(this.worker, AUDIO_WORKER);
         progress('Starting local audio engine…');
-        await this.run(this.python,[this.worker,input.mode,wav,folder,this.models,...(input.mode === 'enhance' ? [voice!.file] : [])],signal,progress);
+        const workerOptions: Record<string, unknown> = { aggression };
+        if (reusedVoice) workerOptions.separatedSpeech = reusedVoice.file;
+        await this.run(this.python,[this.worker,mode,wav,folder,this.models,JSON.stringify(workerOptions)],signal,progress);
         signal.throwIfAborted();
         progress('Checking output tracks…');
         const results = JSON.parse(await fs.readFile(path.join(folder,'result.json'),'utf8'));
-        // Separation is always exactly two tracks: voice, and everything else
-        // (music plus room/noise). Enhancement publishes the cleaned voice only.
-        const expected = input.mode === 'separate' ? ['speech','music'] : ['speech'];
+        const expected: AudioOutputKind[] = mode === 'denoise' ? ['speech','noise'] : mode === 'separate' ? ['speech','music'] : ['speech','background'];
         if (!Array.isArray(results) || results.length !== expected.length || expected.some(kind=>results.filter(result=>result.kind===kind).length!==1)) throw new Error('Audio engine returned incomplete results.');
         const outputs: AudioOutput[] = [];
         for (const result of results) {
@@ -215,25 +242,50 @@ export class LocalAudioService {
           const file = await fs.realpath(result.path), relative = path.relative(folder,file);
           if (relative.startsWith('..') || path.isAbsolute(relative) || path.extname(file) !== '.wav') throw new Error('Invalid audio result location.');
           await this.validateWav(file);
-          outputs.push({ id: randomUUID(), label: result.label.slice(0,60), kind:result.kind, file });
+          outputs.push({ id: randomUUID(), label: result.label.slice(0,60), kind:result.kind, file, mode });
         }
+        const speechOut = outputs.find(item => item.kind === 'speech');
+        const residualOut = outputs.find(item => item.kind === 'noise' || item.kind === 'background');
+        if (speechOut && residualOut) speechOut.residualId = residualOut.id;
         signal.throwIfAborted();
         outputs.forEach(output => this.outputs.set(output.id,output));
-        if (input.mode === 'separate') this.separated.set(source.id,outputs);
+        if (mode === 'separate') this.separated.set(source.id,outputs);
         this.comparison = source;
-        if (input.mode === 'enhance') this.track('audio_noise_remove');
-        else this.track('audio_music_separate');
+        if (mode === 'denoise') {
+          this.track('audio_noise_remove');
+        } else if (mode === 'separate') {
+          this.track('audio_music_separate');
+        } else {
+          if (!reusedVoice) this.track('audio_music_separate');
+          this.track('audio_noise_remove');
+        }
         return outputs.map(output=>this.publicOutput(output));
       } catch (error) { await fs.rm(folder,{recursive:true,force:true}).catch(()=>{}); throw error; }
     });
   }
-  private publicOutput({id,label,kind}:AudioOutput) {return {id,label,kind,url:`smoothy-local-audio://result/${id}`};}
+  private publicOutput({id,label,kind,mode}:AudioOutput) {return {id,label,kind,...(mode ? {mode} : {}),url:`smoothy-local-audio://result/${id}`};}
   original() {if(!this.comparison)throw new Error('Process audio first.');return this.publicOutput(this.comparison);}
   output(id: string) { const output = this.outputs.get(id); if (!output) throw new Error('Run the audio tool again to create this result.'); return output; }
   preview(id: string) { const output = this.output(id); if (!output.previewed) { output.previewed = true; this.track('audio_tools_preview'); } }
-  async save(id: string, destination: string) {
-    const output = this.output(id); const temporary = path.join(path.dirname(destination),`.smoothy-audio-${randomUUID()}.tmp`);
-    try { await fs.copyFile(output.file,temporary); await fs.rename(temporary,destination); this.track('audio_tools_save'); }
+  async save(id: string, destination: string, options?: AudioSaveOptions) {
+    const output = this.output(id);
+    const trackSave = options?.track !== false;
+    const rawStrength = options?.strength;
+    const strength = rawStrength !== undefined && Number.isFinite(Number(rawStrength)) ? Math.max(0, Math.min(100, Number(rawStrength))) : 100;
+    const residual = strength < 100 && output.residualId ? this.outputs.get(output.residualId) : undefined;
+    const temporary = path.join(path.dirname(destination),`.smoothy-audio-${randomUUID()}.tmp.wav`);
+    try {
+      if (residual && strength < 100) {
+        const keepResidual = (100 - strength) / 100;
+        const graph = `[1:a]volume=${keepResidual.toFixed(4)}[n];[0:a][n]amix=inputs=2:duration=first:dropout_transition=0:normalize=0`;
+        await this.run(this.deps.ffmpeg, ['-nostdin','-v','error','-y','-i',output.file,'-i',residual.file,'-filter_complex',graph,'-c:a','pcm_s16le',temporary], new AbortController().signal, () => {});
+        await this.validateWav(temporary);
+      } else {
+        await fs.copyFile(output.file,temporary);
+      }
+      await fs.rename(temporary,destination);
+      if (trackSave) this.track('audio_tools_save');
+    }
     finally { await fs.rm(temporary,{force:true}).catch(()=>{}); }
   }
   async dispose() { this.cancel(); if (this.session) await fs.rm(this.session,{recursive:true,force:true}).catch(()=>{}); }

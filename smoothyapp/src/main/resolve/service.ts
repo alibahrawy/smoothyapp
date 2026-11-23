@@ -1,5 +1,6 @@
 import { renderResolveSource } from './source-audio';
 import { analyzeSilence, cleanupTempFile } from '../autocut/silence-detector';
+import { detectRepeatedTakes, normalizeRetakeSensitivity, type RetakeTranscriber, type RemovedRetake } from '../autocut/retake-detector';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -42,10 +43,11 @@ export function createResolveService(deps: {
       loaded = parsed; sourcePath = fs.realpathSync(filePath); outputPath = null;
       return resolveTimelineInfo(parsed);
     },
-    async removeSilence(config:any,destination:string,onStart?:()=>void) {
+    async removeSilence(config:any,destination:string,onStart?:()=>void,transcribeForRetakes?:RetakeTranscriber) {
       if(controller)return {success:false,error:'A Resolve timeline job is already running.'};
       const timeline=loaded;controller=new AbortController();const signal=controller.signal;let audio:string|undefined,temp:string|undefined;
       try {
+        const removeRetakes=!!config.options?.removeRetakes;
         if(!timeline || config.options?.sequenceId!==timeline.id)throw new Error('Load the Resolve timeline again.');
         if(canonicalOutputPath(destination).toLowerCase()===sourcePath?.toLowerCase())throw new Error('Save a new XML file; keep your source export.');
         for(const track of [...timeline.videoTracks,...timeline.audioTracks])if(track.issues.length)throw new Error(track.issues.join('\n'));
@@ -54,11 +56,38 @@ export function createResolveService(deps: {
         try{onStart?.();}catch{}
         deps.progress(10,'Preparing source audio from the loaded Resolve timeline…');
         audio=(await renderResolveSource(timeline,config.sources.map((source:any)=>source.trackIndex),signal)).path;
-        deps.progress(50,'Detecting silence locally…');
+        deps.progress(removeRetakes?30:50,'Detecting silence locally…');
         const analysis=await analyzeSilence(audio,config.options.thresholdDb??-40,config.options.minSilenceDuration??0.5,config.options.padding??0.1,signal);
-        signal.throwIfAborted();const xml=renderResolveSilence(timeline,analysis.speechSegments);signal.throwIfAborted();
+        signal.throwIfAborted();
+        let finalSpeech=analysis.speechSegments;
+        let finalDuration=analysis.newDuration;
+        let finalCuts=analysis.cutsCount;
+        let retakesRemoved=0,retakesCount=0;
+        let removedRetakes:RemovedRetake[]=[];
+        if(removeRetakes){
+          if(!transcribeForRetakes)throw new Error('Local transcription is unavailable for repeated takes.');
+          deps.progress(35,'Transcribing locally for repeated takes…');
+          const chunks=await transcribeForRetakes(audio,(p)=>{
+            if(signal.aborted)return;
+            const pct=typeof p.progress==='number'?Math.round(35+(Math.max(0,Math.min(100,p.progress))*0.4)):45;
+            deps.progress(pct,p.status||'Transcribing locally…');
+          },signal);
+          signal.throwIfAborted();
+          deps.progress(78,'Finding repeated sentences and false starts…');
+          const retakes=detectRepeatedTakes(analysis,chunks,{
+            sensitivity:normalizeRetakeSensitivity(config.options.retakeSensitivity),
+            padding:config.options.padding??0.1,
+          });
+          finalSpeech=retakes.speechSegments;
+          finalDuration=retakes.newDuration;
+          finalCuts=retakes.cutsCount;
+          retakesRemoved=retakes.retakesRemoved;
+          retakesCount=retakes.retakesCount;
+          removedRetakes=retakes.removedRetakes;
+        }
+        const xml=renderResolveSilence(timeline,finalSpeech);signal.throwIfAborted();
         temp=path.join(path.dirname(destination),'.smoothy-'+randomUUID()+'.xml');fs.writeFileSync(temp,xml,{flag:'wx'});signal.throwIfAborted();fs.renameSync(temp,destination);temp=undefined;outputPath=destination;
-        const result={success:true,operation:'silence',nle:'resolve',handoff:true,path:destination,warnings:timeline.warnings,stats:{originalDuration:analysis.originalDuration,silenceRemoved:analysis.silenceRemoved,newDuration:analysis.newDuration,cuts:analysis.cutsCount}};
+        const result={success:true,operation:'silence',nle:'resolve',handoff:true,path:destination,warnings:timeline.warnings,stats:{originalDuration:analysis.originalDuration,silenceRemoved:analysis.silenceRemoved,newDuration:finalDuration,cuts:finalCuts,...(removeRetakes?{retakesEnabled:true,retakesRemoved,retakesCount,removedRetakes}:{})}};
         deps.result(result);return result;
       }catch(error){const result={success:false,operation:'silence',nle:'resolve',canceled:signal.aborted,error:signal.aborted?'Canceled. No timeline was exported.':error instanceof Error?error.message:'Resolve silence removal failed.'};deps.result(result);return result;}
       finally{if(audio)cleanupTempFile(audio);if(temp)fs.rmSync(temp,{force:true});controller=null;}

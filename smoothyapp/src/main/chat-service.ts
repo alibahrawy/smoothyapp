@@ -16,8 +16,8 @@ export function createChatService(deps: {
     const owner = deps.owner(); if (!owner) throw new Error('Sign in to use Chat.');
     if (controller) throw new Error('Wait for the current reply to finish.');
     const resolved = deps.attachment && Array.isArray(input?.messages) ? { ...input, messages: input.messages.map((message: any) => ({ ...message, ...(message?.attachments !== undefined && { attachments: Array.isArray(message.attachments) ? message.attachments.map((id: unknown) => { if (typeof id !== 'string') throw new Error('Reattach this file.'); return deps.attachment!(id); }) : message.attachments }) })) } : input;
-    // Model selection belongs to the web Admin; style comes from persisted native preferences.
-    const body = validateChatInput({ ...resolved, model: undefined, writingStyle: deps.writingStyle?.() || undefined }), stamp = epoch;
+    // The user picks from the budget catalog (validated, premium ids rejected); style comes from persisted native preferences.
+    const body = validateChatInput({ ...resolved, writingStyle: deps.writingStyle?.() || undefined }), stamp = epoch;
     const signal = (controller = new AbortController()).signal;
     let finished = false, streamedChars = 0;
     const assertCurrent = () => { if (finished || signal.aborted || stamp !== epoch || deps.owner() !== owner || !deps.enabled()) throw new Error('Chat canceled.'); };

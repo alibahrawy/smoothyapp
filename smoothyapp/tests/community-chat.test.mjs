@@ -105,7 +105,7 @@ chatTest('image payloads are refused, plain text is not', () => {
   for (const sample of ['data:image/png;base64,AAAA', '<img src="https://x.test/a.png">', '![alt](https://x.test/a.png)']) {
     const result = sanitizeCommunityBody(sample);
     assert.equal(result.ok, false, sample);
-    assert.match(result.error, /text only/i);
+    assert.match(result.error, /link to a picture/i);
   }
   assert.equal(sanitizeCommunityBody('a picture of my timeline').ok, true);
 });
@@ -140,5 +140,5 @@ chatTest('guests get a tighter posting budget and slower pace than members', () 
   assert.equal(minGapFor(true), 2000);
   assert.equal(minGapFor(false), 600);
   assert.equal(COMMUNITY_LIMITS.sessionsPerMinutePerIp, 6);
-  assert.equal(COMMUNITY_LIMITS.maxFrameBytes, 8192);
+  assert.equal(COMMUNITY_LIMITS.maxFrameBytes, 32768);
 });

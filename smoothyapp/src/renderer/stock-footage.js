@@ -4,12 +4,13 @@ export function initStockFootage({ isConnected }) {
   const el = id => document.getElementById('stock-' + id);
   const sources = {
     all: { name: 'All sources', note: 'Search Commons, Internet Archive, and NASA together. Check each clip’s usage terms. Quality and orientation filters require known dimensions.' },
+    coverr: { name: 'Coverr', url: 'https://coverr.co', note: 'Free cinematic stock video under the Coverr License. Credit Coverr when you publish. Check each clip’s source and usage terms.' },
     pixabay: { name: 'Pixabay', url: 'https://pixabay.com', note: 'Videos under the Pixabay Content License. Check each clip’s source and usage terms.' },
     commons: { name: 'Wikimedia Commons', url: 'https://commons.wikimedia.org', note: 'CC0 and public-domain videos. No API key needed. Check each source page for rights that depend on your use.' },
     archive: { name: 'Internet Archive', url: 'https://archive.org/details/stock_footage', note: 'Stock footage and Prelinger historical films with publisher-declared CC0 or public-domain terms. No API key needed. Check the source credits.' },
     nasa: { name: 'NASA', url: 'https://images.nasa.gov', note: 'Earth, space, and science videos. No API key needed. Acknowledge NASA and follow its media guidelines. MP4 variants may have unspecified dimensions.' }
   };
-  const data = { searching: false, downloading: false, importing: false, pixabayEnabled: false, videos: [], selected: null, page: 0, cursor: 0, sourceCursors: undefined, more: false, search: null };
+  const data = { searching: false, downloading: false, importing: false, pixabayEnabled: false, coverrEnabled: false, videos: [], selected: null, page: 0, cursor: 0, sourceCursors: undefined, more: false, search: null };
   function message(id, text, error = false) { el(id).textContent = text; el(id).classList.toggle('stock-error', error); }
   function update() {
     el('search-btn').disabled = data.searching;
@@ -29,7 +30,7 @@ export function initStockFootage({ isConnected }) {
     message('premiere-note', isConnected() ? editorText('Send to Premiere imports the MP4 into your Project panel. Drag it onto your timeline.') : editorText('Connect Premiere to import the video into your Project panel.'));
   }
   function refreshSource() {
-    sources.all.note = `Search ${data.pixabayEnabled ? 'Pixabay, ' : ''}Commons, Internet Archive, and NASA together. Check each clip’s usage terms. Quality and orientation filters require known dimensions.`;
+    sources.all.note = `Search ${data.pixabayEnabled ? 'Pixabay, ' : ''}${data.coverrEnabled ? 'Coverr, ' : ''}Commons, Internet Archive, and NASA together. Check each clip’s usage terms. Quality and orientation filters require known dimensions.`;
     const source = sources[el('provider').value];
     el('powered').classList.toggle('hidden', !source.url);
     if (source.url) el('powered').href = source.url;
@@ -84,6 +85,41 @@ export function initStockFootage({ isConnected }) {
       const play = document.createElement('span'); play.className = 'stock-play'; play.textContent = '▶'; play.setAttribute('aria-hidden', 'true');
       const time = document.createElement('span'); time.className = 'stock-duration'; time.textContent = duration(video.duration);
       button.append(img, play, time); button.addEventListener('click', () => preview(video));
+      // Muted hover-scrub preview using the smallest available MP4 variant.
+      let hoverVideo = null;
+      let hoverTimer = null;
+      const previewSource = (video.provider === 'nasa' && video.files.find(file => file.label === 'Small MP4'))
+        || video.files.find(file => file.width && file.width * file.height <= 640 * 480)
+        || video.files.find(file => file.width && file.width * file.height <= 1280 * 720)
+        || video.files.at(-1);
+      button.addEventListener('mouseenter', () => {
+        if (!previewSource?.link || data.downloading) return;
+        hoverTimer = setTimeout(() => {
+          if (hoverVideo) return;
+          const v = document.createElement('video');
+          v.className = 'stock-thumb-video';
+          v.src = previewSource.link;
+          v.muted = true;
+          v.loop = true;
+          v.playsInline = true;
+          v.preload = 'metadata';
+          v.addEventListener('error', () => { v.remove(); if (hoverVideo === v) hoverVideo = null; });
+          hoverVideo = v;
+          button.append(v);
+          void v.play().catch(() => {});
+        }, 260);
+      });
+      button.addEventListener('mouseleave', () => {
+        clearTimeout(hoverTimer);
+        hoverTimer = null;
+        if (hoverVideo) {
+          hoverVideo.pause();
+          hoverVideo.removeAttribute('src');
+          hoverVideo.load();
+          hoverVideo.remove();
+          hoverVideo = null;
+        }
+      });
       const info = document.createElement('div'); info.className = 'stock-result-info';
       const credit = document.createElement('a'); credit.className = 'link'; credit.href = video.url; credit.dataset.stockExternal = '';
       credit.textContent = `${video.title} ↗`;
@@ -91,11 +127,19 @@ export function initStockFootage({ isConnected }) {
       info.append(credit, size); card.append(button, info); return card;
     }));
   }
-  async function search(append = false) {
+  // Coverr and Pixabay can list their most popular clips without a search term.
+  const canBrowse = provider => provider === 'all' ? data.coverrEnabled || data.pixabayEnabled : provider === 'coverr' ? data.coverrEnabled : provider === 'pixabay' ? data.pixabayEnabled : false;
+  const popularName = provider => provider === 'all' ? [data.coverrEnabled && 'Coverr', data.pixabayEnabled && 'Pixabay'].filter(Boolean).join(' and ') : sources[provider].name;
+  // Sources without a popular listing open on a featured subject instead of an empty page.
+  const featuredQuery = provider => ({ nasa: 'earth', archive: 'city' })[provider] || 'nature';
+  async function search(append = false, browse = false, featured = false) {
     if (data.searching) return;
-    const input = append ? { ...data.search, page: data.page + 1, cursor: data.cursor, sourceCursors: data.sourceCursors } : { query: el('query').value.trim(), provider: el('provider').value, orientation: el('orientation').value, size: el('size').value, page: 1 };
-    if (!input.query) return;
-    data.searching = true; update(); message('search-status', `Searching ${sources[input.provider].name} for “${input.query}”…`);
+    const provider = el('provider').value;
+    const input = append ? { ...data.search, page: data.page + 1, cursor: data.cursor, sourceCursors: data.sourceCursors }
+      : featured ? { query: featuredQuery(provider), featured: true, provider, orientation: el('orientation').value, size: el('size').value, page: 1 }
+      : { query: browse ? '' : el('query').value.trim(), browse, provider, orientation: el('orientation').value, size: el('size').value, page: 1 };
+    if (!input.query && !input.browse) return;
+    data.searching = true; update(); message('search-status', input.browse ? `Loading popular videos from ${popularName(input.provider)}…` : input.featured ? `Loading featured videos from ${sources[input.provider].name}…` : `Searching ${sources[input.provider].name} for “${input.query}”…`);
     try {
       const result = await api.stockSearch(input);
       if (result.canceled) return;
@@ -104,7 +148,7 @@ export function initStockFootage({ isConnected }) {
       data.videos = append ? [...data.videos, ...result.videos.filter(video => !data.videos.some(old => old.id === video.id))] : result.videos;
       data.search = input; data.page = result.page; data.cursor = result.nextOffset; data.sourceCursors = result.sourceCursors; data.more = result.hasMore;
       renderResults();
-      const status = data.videos.length ? `${data.videos.length} videos from ${sources[input.provider].name} for “${input.query}” · Select a shot to preview` : `No ${['all', 'pixabay'].includes(input.provider) ? 'matching' : input.provider === 'nasa' ? 'NASA' : 'CC0 or public-domain'} videos found in this batch for “${input.query}”. Try another search or fewer filters.`;
+      const status = input.featured ? (data.videos.length ? `Featured on ${sources[input.provider].name} · ${data.videos.length} videos · Search above to find something specific` : 'No featured videos could be listed right now. Try a search.') : input.browse ? (data.videos.length ? `Popular on ${popularName(input.provider)} · ${data.videos.length} videos · Search above to find something specific` : `No popular videos could be listed right now. Try a search.`) : data.videos.length ? `${data.videos.length} videos from ${sources[input.provider].name} for “${input.query}” · Select a shot to preview` : `No ${['all', 'pixabay', 'coverr'].includes(input.provider) ? 'matching' : input.provider === 'nasa' ? 'NASA' : 'CC0 or public-domain'} videos found in this batch for “${input.query}”. Try another search or fewer filters.`;
       message('search-status', status + (result.warning ? ' ' + result.warning : ''));
     } catch (error) { message('search-status', error.message || 'Search failed. Please retry.', true); }
     finally { data.searching = false; update(); }
@@ -122,14 +166,21 @@ export function initStockFootage({ isConnected }) {
     } catch (error) { message('action-status', error.message || 'Download failed. Please retry.', true); }
     finally { data.downloading = false; data.importing = false; update(); }
   }
-  el('search-form').addEventListener('submit', event => { event.preventDefault(); search(); });
+  const runQueryOrPopular = () => {
+    if (el('query').value.trim()) search(false, false);
+    else if (canBrowse(el('provider').value)) search(false, true);
+    else search(false, false, true);
+  };
+  el('search-form').addEventListener('submit', event => { event.preventDefault(); runQueryOrPopular(); });
+  el('orientation').addEventListener('change', () => { if (el('query').value.trim() || data.videos.length) runQueryOrPopular(); });
+  el('size').addEventListener('change', () => { if (el('query').value.trim() || data.videos.length) runQueryOrPopular(); });
   el('provider').addEventListener('change', () => {
     refreshSource();
     const source = sources[el('provider').value];
     if (el('provider').value === 'nasa') el('size').value = '';
     closePreview(); data.videos = []; data.more = false; data.search = null; data.sourceCursors = undefined; renderResults(); update();
     message('search-status', 'Search ' + source.name + ' for a subject or place.');
-    if (el('query').value.trim()) search();
+    runQueryOrPopular();
   });
   el('load-more').addEventListener('click', () => search(true));
   el('download-btn').addEventListener('click', () => download(false));
@@ -147,7 +198,11 @@ export function initStockFootage({ isConnected }) {
     const link = event.target.closest('a[data-stock-external]');
     if (link) { event.preventDefault(); api.openExternal(link.href); }
   });
-  document.querySelectorAll('.nav-item').forEach(nav => nav.addEventListener('click', () => { if (nav.dataset.tab !== 'stock') el('preview-video').pause(); }));
+  // The first visit shows popular clips instead of an empty page. Later visits keep whatever is on screen.
+  let popularShown = false;
+  let settingsLoaded = false;
+  const showPopular = () => { if (settingsLoaded && !popularShown && !data.videos.length && !el('query').value.trim()) { popularShown = true; runQueryOrPopular(); } };
+  document.querySelectorAll('.nav-item').forEach(nav => nav.addEventListener('click', () => { if (nav.dataset.tab !== 'stock') el('preview-video').pause(); else showPopular(); }));
   let previewTracked = false;
   el('preview-video').addEventListener('loadedmetadata', () => {
     const player = el('preview-video');
@@ -165,10 +220,14 @@ export function initStockFootage({ isConnected }) {
   });
   api.stockGetSettings().then(settings => {
     data.pixabayEnabled = Boolean(settings.pixabayEnabled);
+    data.coverrEnabled = Boolean(settings.coverrEnabled);
+    el('provider').querySelector('[value="coverr"]').hidden = !data.coverrEnabled;
     el('provider').querySelector('[value="pixabay"]').hidden = !data.pixabayEnabled;
     refreshSource();
     el('folder-path').textContent = settings.folder; el('folder-path').title = settings.folder;
     message('search-status', 'Search for footage.'); update();
+    settingsLoaded = true;
+    if (document.getElementById('tab-stock')?.classList.contains('active')) showPopular();
   }).catch(() => message('action-status', 'Could not load download settings. Restart the app and retry.', true));
   update();
   return { isBusy: () => data.downloading || data.importing };

@@ -11,6 +11,7 @@ import { extractAudioTrack, stitchTimelineAudio, cleanupTempFile, resetAudioExtr
 import type { TimelineAudioClip } from './autocut/audio-extractor';
 import { combineAudioTracks, analyzeSilence, cleanupTempFile as cleanupSilenceTemp, alignSegmentsToFrames } from './autocut/silence-detector';
 import { generateSilenceRemovalXML } from './autocut/silence-xml-generator';
+import { detectRepeatedTakes, normalizeRetakeSensitivity, type RetakeTranscriber, type RemovedRetake } from './autocut/retake-detector';
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
@@ -162,6 +163,10 @@ export function createShortsAssembly(_markers: any[], _options: any = {}): Promi
 }
 export function sendCaptionsToPremiere(srtPath: string): Promise<any> {
   return bridgeRequests.request('importCaptions', 'captionsImported', { srtPath }, 60000);
+}
+/** Smoothy Pro animated captions: one Motion Graphics Template clip per caption. */
+export function sendProCaptionsToPremiere(payload: { sequenceId?: string; template?: string; captions: unknown[]; style: unknown }): Promise<any> {
+  return bridgeRequests.request('importProCaptions', 'proCaptionsImported', payload, 10 * 60 * 1000);
 }
 
 export function getShortsCutsCatalog(): Promise<any> {
@@ -355,7 +360,7 @@ export async function runAutoCut(config: any, onStart?: () => void) {
   } finally { multicamRunning = false; timelineController = null; timelineCommitting = false; }
 }
 
-export async function runSilenceRemoval(config: any, onStart?: () => void) {
+export async function runSilenceRemoval(config: any, onStart?: () => void, transcribeForRetakes?: RetakeTranscriber) {
   if (timelineController) return { success: false, error: 'Wait for the current timeline job to finish.' };
   const controller = timelineController = new AbortController();
   const signal = controller.signal;
@@ -365,6 +370,7 @@ export async function runSilenceRemoval(config: any, onStart?: () => void) {
   try {
     const { sources, options } = config;
     const sequenceId = options.sequenceId;
+    const removeRetakes = !!options.removeRetakes;
     if (!sequenceId || String(currentSequenceInfo?.id) !== String(sequenceId)) throw new Error('The active sequence changed. Refresh and analyze it again.');
     validateTimelineTracks([...(options.videoTracks || []), ...sources], options.fps || 23.976);
     try { onStart?.(); } catch {}
@@ -389,15 +395,47 @@ export async function runSilenceRemoval(config: any, onStart?: () => void) {
       temporaryFiles.push(combinedPath);
     }
     signal.throwIfAborted();
-    callbacks.onProgress(50, 'Detecting silence...', true);
+    callbacks.onProgress(removeRetakes ? 30 : 50, 'Detecting silence...', true);
     const analysis = await analyzeSilence(combinedPath, options.thresholdDb ?? -40, options.minSilenceDuration ?? 0.5, options.padding ?? 0.1, signal);
     signal.throwIfAborted();
     if (!analysis.speechSegments.length) throw new Error('No speech detected - entire audio is silence');
+
+    let finalSpeech = analysis.speechSegments;
+    let finalSilences = analysis.silenceSegments;
+    let finalDuration = analysis.newDuration;
+    let finalCuts = analysis.cutsCount;
+    let retakesRemoved = 0;
+    let retakesCount = 0;
+    let removedRetakes: RemovedRetake[] = [];
+
+    if (removeRetakes) {
+      if (!transcribeForRetakes) throw new Error('Local transcription is unavailable for repeated takes.');
+      callbacks.onProgress(35, 'Transcribing locally for repeated takes...', true);
+      const chunks = await transcribeForRetakes(combinedPath, (p) => {
+        if (signal.aborted) return;
+        const pct = typeof p.progress === 'number' ? Math.round(35 + (Math.max(0, Math.min(100, p.progress)) * 0.4)) : 45;
+        callbacks.onProgress(pct, p.status || 'Transcribing locally...', true);
+      }, signal);
+      signal.throwIfAborted();
+      callbacks.onProgress(77, 'Finding repeated sentences and false starts...', true);
+      const retakes = detectRepeatedTakes(analysis, chunks, {
+        sensitivity: normalizeRetakeSensitivity(options.retakeSensitivity),
+        padding: options.padding ?? 0.1,
+      });
+      finalSpeech = retakes.speechSegments;
+      finalSilences = retakes.silenceSegments;
+      finalDuration = retakes.newDuration;
+      finalCuts = retakes.cutsCount;
+      retakesRemoved = retakes.retakesRemoved;
+      retakesCount = retakes.retakesCount;
+      removedRetakes = retakes.removedRetakes;
+    }
+
     let xmlPath: string | undefined;
     if (!options.editInPlace) {
-      callbacks.onProgress(75, 'Generating XML...', true);
-      const xml = generateSilenceRemovalXML(options.videoTracks || [], analysis.speechSegments, {
-        sequenceName: options.sequenceName || 'Silence Removed', audioTracks: sources,
+      callbacks.onProgress(82, 'Generating XML...', true);
+      const xml = generateSilenceRemovalXML(options.videoTracks || [], finalSpeech, {
+        sequenceName: options.sequenceName || (removeRetakes ? 'Silence & Retakes Removed' : 'Silence Removed'), audioTracks: sources,
         fps: options.fps || 23.976, width: options.width || 1920, height: options.height || 1080
       });
       xmlPath = path.join(os.tmpdir(), `SmoothyEdit_SilenceRemoved_${Date.now()}.xml`);
@@ -409,11 +447,12 @@ export async function runSilenceRemoval(config: any, onStart?: () => void) {
     catch (error) { if (xmlPath) cleanupTempFile(xmlPath); throw error; }
     timelineCommitting = true;
     callbacks.onProgress(90, options.editInPlace ? 'Premiere is applying cuts. Finishing this edit safely...' : 'Premiere is importing the timeline. Finishing safely...', false);
-    const edited = options.editInPlace ? await removeSilenceInPremiere(analysis.silenceSegments, sequenceId) : await importXMLToPremiere(xmlPath!);
+    const edited = options.editInPlace ? await removeSilenceInPremiere(finalSilences, sequenceId) : await importXMLToPremiere(xmlPath!);
     if (!edited.success) throw new Error(edited.error || 'Premiere could not complete the edit');
     callbacks.onProgress(100, 'Done!', false);
     return result({ success: true, stats: { originalDuration: analysis.originalDuration, silenceRemoved: analysis.silenceRemoved,
-      newDuration: analysis.newDuration, cuts: options.editInPlace ? analysis.silenceSegments.length : analysis.cutsCount },
+      newDuration: finalDuration, cuts: options.editInPlace ? finalSilences.length : finalCuts,
+      ...(removeRetakes ? { retakesEnabled: true, retakesRemoved, retakesCount, removedRetakes } : {}) },
       ...(options.editInPlace ? { editedInPlace: true } : { xmlPath }) });
   } catch (error) {
     return result({ success: false, canceled: signal.aborted, error: signal.aborted ? 'Canceled. No timeline edit was submitted.' : error instanceof Error ? error.message : 'Silence removal failed' });

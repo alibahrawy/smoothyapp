@@ -3,9 +3,66 @@
  *
  * Renders the shared message feed, guest identity banner and composer. The
  * connection lives in the main process; this module only reacts to state.
+ *
+ * 3.1: avatars, Pro (Smoothy cup) and Dev badges, allow-listed links with
+ * previews, delete / report / block on each message, a timeout notice, and an
+ * unread count that ignores blocked and removed messages.
  */
 
-export function initCommunity({ signIn } = {}) {
+import cupIcon from './logo.svg?raw';
+import { avatarSvg, cleanAvatar, defaultAvatar } from '../shared/community-avatar';
+import {
+  communitySiteName,
+  isCommunityImage,
+  splitCommunityMessage,
+  youtubeThumbnail,
+} from '../shared/community-links';
+
+const READ_KEY = 'smoothyedit:community:read-at';
+const JOINED_KEY = 'smoothyedit:community:joined';
+const REPORTED_KEY = 'smoothyedit:community:reported';
+export const PREVIEWS_KEY = 'smoothyedit:community:previews';
+
+const store = {
+  get(key) { try { return localStorage.getItem(key); } catch { return null; } },
+  set(key, value) { try { localStorage.setItem(key, value); } catch { /* the preference just resets */ } },
+};
+
+export const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+})[character]);
+
+/** Everything the lobby has told us about people: avatar and a guest's chosen name. Shared with Settings. */
+const profiles = new Map();
+export function profileFor(id) { return profiles.get(id) || null; }
+
+/** Avatar markup for any identity; people without a profile get a stable default. */
+export function avatarHtml(id, size = 32, name = '') {
+  const avatar = profiles.get(id)?.avatar || defaultAvatar(id);
+  if (avatar.kind === 'img') {
+    return `<img class="community-avatar-img" src="${escapeHtml(avatar.data)}" width="${size}" height="${size}" alt="" draggable="false">`;
+  }
+  return avatarSvg(avatar, id, size, name || profiles.get(id)?.name || '');
+}
+
+const DEV_ICON = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" focusable="false"><path d="m5.5 4.5-3.5 3.5 3.5 3.5M10.5 4.5l3.5 3.5-3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const FLAG_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><path d="M3.5 14V2.5m0 .5h8l-1.8 3 1.8 3h-8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const BLOCK_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m4.2 11.8 7.6-7.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+const TRASH_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8h5.8l.6-8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+export function badgesHtml(entry) {
+  let html = '';
+  if (entry.dev) {
+    html += `<span class="community-badge is-dev" title="Smoothy developer" role="img" aria-label="Smoothy developer">${DEV_ICON}<span>Dev</span></span>`;
+  }
+  if (entry.tier === 'pro') {
+    html += `<span class="community-badge is-pro" title="Smoothy Pro" role="img" aria-label="Smoothy Pro">${cupIcon}</span>`;
+  }
+  if (entry.guest) html += '<span class="community-chip is-guest">Guest</span>';
+  return html;
+}
+
+export function initCommunity({ signIn, openSettings } = {}) {
   const $ = (id) => document.getElementById(id);
   const feed = $('community-feed');
   const input = $('community-input');
@@ -16,6 +73,9 @@ export function initCommunity({ signIn } = {}) {
   const guestBanner = $('community-guest-banner');
   const guestText = $('community-guest-text');
   const signInButton = $('community-signin');
+  const profileButton = $('community-edit-profile');
+  const timeoutBanner = $('community-timeout');
+  const timeoutText = $('community-timeout-text');
   const hint = $('community-hint');
   const count = $('community-count');
   const errorEl = $('community-error');
@@ -25,21 +85,16 @@ export function initCommunity({ signIn } = {}) {
   let state = null;
   let unread = 0;
   let sending = false;
-
-  const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  })[character]);
+  let armed = '';
+  let armedTimer = null;
+  let timeoutTimer = null;
+  const reported = new Set((() => { try { return JSON.parse(store.get(REPORTED_KEY) || '[]'); } catch { return []; } })());
 
   function active() {
     return Boolean(tab?.classList.contains('active'));
   }
 
-  const READ_KEY = 'smoothyedit:community:read-at';
-  const JOINED_KEY = 'smoothyedit:community:joined';
-  const store = {
-    get(key) { try { return localStorage.getItem(key); } catch { return null; } },
-    set(key, value) { try { localStorage.setItem(key, value); } catch { /* unread count just resets */ } },
-  };
+  function previewsOn() { return store.get(PREVIEWS_KEY) !== '0'; }
 
   function setUnread(value) {
     unread = Math.max(0, value);
@@ -52,7 +107,8 @@ export function initCommunity({ signIn } = {}) {
   }
 
   // Everything the person has seen is remembered by time, so the badge counts
-  // messages from other people that arrived since they last looked.
+  // messages from other people that arrived since they last looked. Blocked and
+  // removed messages never reach `state.messages`, so they never count.
   function markRead() {
     const last = (state?.messages || []).reduce((latest, message) => Math.max(latest, message.at || 0), 0);
     const seen = Math.max(last, Number(store.get(READ_KEY)) || 0);
@@ -83,12 +139,46 @@ export function initCommunity({ signIn } = {}) {
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   }
 
-  function initials(name) {
-    const parts = String(name || '?')
-      .replace(/^Guest\s+/i, '')
-      .split(/\s+/)
-      .filter((part) => part && !/^\d+$/.test(part));
-    return ((parts[0]?.[0] || '?') + (parts[1]?.[0] || '')).toUpperCase().slice(0, 2);
+  function displayName(message) {
+    // A guest's chosen name applies to everything they said, not just new messages.
+    return (message.guest && profiles.get(message.authorId)?.name) || message.authorName;
+  }
+
+  /** Text with clickable allow-listed links, then a preview for each link. */
+  function bodyHtml(message) {
+    const parts = splitCommunityMessage(message.body);
+    const links = [];
+    const text = parts.map((part) => {
+      if (part.type === 'text') return escapeHtml(part.text);
+      links.push(part.url);
+      return `<a class="community-link" href="${escapeHtml(part.url)}" data-community-link="${escapeHtml(part.url)}" rel="noopener noreferrer" title="${escapeHtml(part.url)}">${escapeHtml(part.url.replace(/^https:\/\/(www\.)?/, '').slice(0, 56))}</a>`;
+    }).join('');
+    const previews = links.map((url) => {
+      if (previewsOn() && isCommunityImage(url)) {
+        return `<button type="button" class="community-preview is-image" data-community-link="${escapeHtml(url)}" aria-label="Open picture on ${escapeHtml(communitySiteName(url))}"><img src="${escapeHtml(url)}" alt="" loading="lazy" referrerpolicy="no-referrer" draggable="false"></button>`;
+      }
+      const thumb = previewsOn() ? youtubeThumbnail(url) : null;
+      return `<button type="button" class="community-preview is-card" data-community-link="${escapeHtml(url)}">${thumb ? `<img src="${escapeHtml(thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer" draggable="false">` : ''}<span>${escapeHtml(communitySiteName(url))}<small>Open in browser</small></span></button>`;
+    }).join('');
+    return `<p class="community-msg-text">${text}</p>${previews ? `<div class="community-previews">${previews}</div>` : ''}`;
+  }
+
+  function actionHtml(action, id, icon, label, armedLabel, disabled = false) {
+    const key = `${action}:${id}`;
+    return `<button type="button" class="community-action ${armed === key ? 'is-armed' : ''}" data-action="${action}" data-id="${escapeHtml(id)}" ${disabled ? 'disabled' : ''} aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${icon}<span class="community-action-label">${escapeHtml(armed === key ? armedLabel : label)}</span></button>`;
+  }
+
+  function actionsHtml(message, own) {
+    const me = state?.identity;
+    const canDelete = own || me?.dev === true;
+    const buttons = [];
+    if (!own && !message.dev) {
+      const done = reported.has(message.id);
+      buttons.push(actionHtml('report', message.id, FLAG_ICON, done ? 'Reported' : 'Report', 'Confirm report', done));
+    }
+    if (!own) buttons.push(actionHtml('block', message.authorId, BLOCK_ICON, 'Block', 'Confirm block'));
+    if (canDelete) buttons.push(actionHtml('delete', message.id, TRASH_ICON, own ? 'Delete' : 'Delete (staff)', 'Confirm delete'));
+    return buttons.length ? `<div class="community-actions" role="group" aria-label="Message actions">${buttons.join('')}</div>` : '';
   }
 
   function messageHtml(message, previous) {
@@ -96,17 +186,19 @@ export function initCommunity({ signIn } = {}) {
     const grouped = previous
       && previous.authorId === message.authorId
       && message.at - previous.at < 5 * 60 * 1000;
-    const own = message.authorId && state?.identity?.id === message.authorId;
-    return `<article class="community-msg ${grouped ? 'is-grouped' : ''} ${own ? 'is-own' : ''}" data-guest="${guest ? 'true' : 'false'}">
-      ${grouped ? '<span class="community-avatar is-spacer" aria-hidden="true"></span>' : `<span class="community-avatar" aria-hidden="true">${escapeHtml(initials(message.authorName))}</span>`}
+    const own = Boolean(message.authorId && state?.identity?.id === message.authorId);
+    const label = displayName(message);
+    return `<article class="community-msg ${grouped ? 'is-grouped' : ''} ${own ? 'is-own' : ''}" data-guest="${guest ? 'true' : 'false'}" data-message="${escapeHtml(message.id)}">
+      ${grouped ? '<span class="community-avatar is-spacer" aria-hidden="true"></span>' : `<span class="community-avatar" aria-hidden="true">${avatarHtml(message.authorId, 32, label)}</span>`}
       <div class="community-msg-body">
         ${grouped ? '' : `<header class="community-msg-head">
-          <strong>${escapeHtml(message.authorName)}</strong>
-          ${guest ? '<span class="community-chip is-guest">Guest</span>' : message.tier === 'pro' ? '<span class="community-chip is-pro">Pro</span>' : ''}
+          <strong>${escapeHtml(label)}</strong>
+          ${badgesHtml(message)}
           <time class="community-msg-time" datetime="${new Date(message.at).toISOString()}">${escapeHtml(timeLabel(message.at))}</time>
         </header>`}
-        <p class="community-msg-text">${escapeHtml(message.body)}</p>
+        ${bodyHtml(message)}
       </div>
+      ${actionsHtml(message, own)}
     </article>`;
   }
 
@@ -133,6 +225,15 @@ export function initCommunity({ signIn } = {}) {
     return html;
   }
 
+  function timeoutLabel(until) {
+    const minutes = Math.max(1, Math.round((until - Date.now()) / 60_000));
+    if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'}`;
+    const days = Math.round(hours / 24);
+    return `${days} day${days === 1 ? '' : 's'}`;
+  }
+
   function render() {
     if (!state) return;
     const messages = state.messages || [];
@@ -152,19 +253,30 @@ export function initCommunity({ signIn } = {}) {
     }
 
     const connected = state.status === 'online';
+    const timedOut = Boolean(state.sanction);
     reconnectButton?.classList.toggle('hidden', connected);
     if (input) {
-      input.disabled = !connected;
-      input.placeholder = connected
-        ? 'Ask a question or share what worked…'
-        : state.status === 'connecting' ? 'Connecting to the lobby…' : 'Reconnecting to the lobby…';
+      input.disabled = !connected || timedOut;
+      input.placeholder = timedOut
+        ? 'You’re on a timeout — you can still read the lobby.'
+        : connected
+          ? 'Ask a question or share what worked…'
+          : state.status === 'connecting' ? 'Connecting to the lobby…' : 'Reconnecting to the lobby…';
     }
-    if (sendButton) sendButton.disabled = !connected || sending || !input?.value.trim();
+    if (sendButton) sendButton.disabled = !connected || timedOut || sending || !input?.value.trim();
+
+    timeoutBanner?.classList.toggle('hidden', !timedOut);
+    if (timedOut && timeoutText) {
+      timeoutText.textContent = `You can’t post for ${timeoutLabel(state.sanction.until)} because a message of yours was reported by other members. You can still read and block people.`;
+    }
+    clearTimeout(timeoutTimer);
+    if (timedOut) timeoutTimer = setTimeout(() => void refresh(), Math.min(state.sanction.until - Date.now() + 500, 60_000));
 
     const guest = state.identity?.guest === true;
     guestBanner?.classList.toggle('hidden', !guest);
     if (guest && guestText && state.identity) {
-      guestText.textContent = `You’re chatting as ${state.identity.name} — guests can join in, but your name is temporary.`;
+      const name = profiles.get(state.identity.id)?.name || state.identity.name;
+      guestText.textContent = `You’re chatting as ${name} — guests can join in, pick an avatar and rename themselves. Sign in to keep your name and upload a picture.`;
     }
 
     if (errorEl) {
@@ -178,18 +290,42 @@ export function initCommunity({ signIn } = {}) {
     setUnread(unread);
   }
 
+  async function refresh() {
+    try {
+      const next = await window.electronAPI.communityState();
+      if (next) applyState(next);
+    } catch { /* the next state push repairs the view */ }
+  }
+
   function updateCount() {
     if (!count || !input) return;
     const length = input.value.length;
     count.textContent = `${length}/500`;
     count.dataset.over = String(length > 500);
-    if (sendButton) sendButton.disabled = !input.value.trim() || state?.status !== 'online' || sending;
+    if (sendButton) sendButton.disabled = !input.value.trim() || state?.status !== 'online' || sending || Boolean(state?.sanction);
   }
 
   function applyState(next) {
     state = next;
     render();
     recount();
+  }
+
+  function applyProfiles(list) {
+    let changed = false;
+    for (const entry of Array.isArray(list) ? list : []) {
+      if (!entry?.id) continue;
+      profiles.set(entry.id, {
+        id: entry.id,
+        name: typeof entry.name === 'string' ? entry.name : null,
+        avatar: cleanAvatar(entry.avatar),
+      });
+      changed = true;
+    }
+    if (changed) {
+      render();
+      window.dispatchEvent(new CustomEvent('smoothy-community-profiles'));
+    }
   }
 
   function identityStale(current) {
@@ -227,6 +363,47 @@ export function initCommunity({ signIn } = {}) {
     }
   }
 
+  function say(message) {
+    if (hint) hint.textContent = message;
+  }
+
+  /** First click arms a button ("Confirm delete"), the second does it. Re-renders keep the armed state. */
+  async function onAction(button) {
+    const { action, id } = button.dataset;
+    const key = `${action}:${id}`;
+    if (armed !== key) {
+      armed = key;
+      clearTimeout(armedTimer);
+      armedTimer = setTimeout(() => { armed = ''; render(); }, 3500);
+      render();
+      // Restore keyboard focus to the newly rendered Confirm button so Enter twice works.
+      const nextBtn = feed?.querySelector(`.community-action[data-action="${CSS.escape(action)}"][data-id="${CSS.escape(id)}"]`);
+      nextBtn?.focus();
+      return;
+    }
+    armed = '';
+    clearTimeout(armedTimer);
+    let result;
+    try {
+      if (action === 'delete') result = await window.electronAPI.communityDelete(id);
+      else if (action === 'block') result = await window.electronAPI.communityBlock(id);
+      else if (action === 'report') {
+        if (state?.identity?.guest) { render(); say('Sign in to report a message.'); signIn?.(); return; }
+        result = await window.electronAPI.communityReport(id);
+        if (result?.success) {
+          reported.add(id);
+          store.set(REPORTED_KEY, JSON.stringify([...reported].slice(-300)));
+        }
+      }
+    } catch {
+      result = { success: false, error: 'The lobby did not answer. Try again.' };
+    }
+    render();
+    if (!result?.success) say(result?.error || 'That did not work. Try again.');
+    else if (action === 'report') say(result.removed ? 'Thanks — that message was removed.' : 'Thanks — your report was sent.');
+    else if (action === 'block') say('Blocked. You can unblock people in Settings → Community.');
+  }
+
   function bind() {
     input?.addEventListener('input', updateCount);
     input?.addEventListener('keydown', (event) => {
@@ -236,7 +413,25 @@ export function initCommunity({ signIn } = {}) {
     });
     sendButton?.addEventListener('click', () => void send());
     signInButton?.addEventListener('click', () => signIn?.());
+    profileButton?.addEventListener('click', () => openSettings?.('profile'));
     reconnectButton?.addEventListener('click', () => void connect(true));
+
+    // Links never navigate the app: every click goes through the main process,
+    // which only opens the allow-listed hosts.
+    feed?.addEventListener('click', (event) => {
+      const link = event.target.closest?.('[data-community-link]');
+      if (link) {
+        event.preventDefault();
+        void window.electronAPI.communityOpenLink(link.dataset.communityLink);
+        return;
+      }
+      const action = event.target.closest?.('[data-action]');
+      if (action && !action.disabled) void onAction(action);
+    });
+    // A picture that fails to load (removed, blocked, offline) just disappears.
+    feed?.addEventListener('error', (event) => {
+      if (event.target?.tagName === 'IMG') event.target.closest('.community-preview')?.remove();
+    }, true);
 
     document.querySelector('.nav-item[data-tab="community"]')?.addEventListener('click', () => {
       store.set(JOINED_KEY, '1');
@@ -244,14 +439,10 @@ export function initCommunity({ signIn } = {}) {
       void connect();
     });
 
-    feed?.addEventListener('scroll', () => {
-      // Kept for future "jump to latest" affordance; rendering sticks to the
-      // bottom only while the reader is already close to it.
-    });
-
     window.addEventListener('smoothy-auth-changed', () => {
       void connect(true);
     });
+    window.addEventListener('smoothy-community-previews', () => render());
 
     if (tab) {
       const observer = new MutationObserver(() => {
@@ -270,6 +461,7 @@ export function initCommunity({ signIn } = {}) {
   async function init() {
     bind();
     try {
+      applyProfiles(await window.electronAPI.communityProfiles());
       state = await window.electronAPI.communityState();
       render();
       updateCount();
@@ -280,6 +472,7 @@ export function initCommunity({ signIn } = {}) {
       if (hint) hint.textContent = 'Community chat could not start.';
     }
     window.electronAPI.onCommunityState((next) => applyState(next));
+    window.electronAPI.onCommunityProfiles((list) => applyProfiles(list));
   }
 
   void init();

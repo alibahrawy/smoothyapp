@@ -41,7 +41,7 @@ export function mimeForMedia(file: string): string {
   }
 }
 
-function allowedRoots(home: string, userData: string): string[] {
+export function allowedRoots(home: string, userData: string): string[] {
   const roots = [home, userData, os.tmpdir(), '/tmp', '/private/tmp', '/private/var/folders', '/Volumes'];
   return roots.filter(Boolean).map(root => path.resolve(root));
 }
@@ -111,7 +111,7 @@ export type ProbeResult = {
   duration: number;
   size: number;
   format: string;
-  video: null | { codec: string; width: number; height: number; fps: number; duration: number };
+  video: null | { codec: string; width: number; height: number; fps: number; duration: number; pixFmt?: string; alpha?: boolean };
   audio: null | { codec: string; channels: number; sampleRate: number; duration: number };
 };
 
@@ -124,7 +124,7 @@ function ratio(value: unknown): number {
 }
 
 export async function probeMedia(ffprobe: string, file: string): Promise<ProbeResult> {
-  const { stdout } = await run(ffprobe, ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', file], { maxBuffer: 8 * 1024 * 1024 });
+  const { stdout } = await run(ffprobe, ['-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', file], { maxBuffer: 8 * 1024 * 1024, timeout: 30_000, windowsHide: true });
   const parsed = JSON.parse(stdout);
   const streams = Array.isArray(parsed.streams) ? parsed.streams : [];
   const videoStream = streams.find((stream: any) => stream.codec_type === 'video');
@@ -139,7 +139,10 @@ export async function probeMedia(ffprobe: string, file: string): Promise<ProbeRe
       width: Number(videoStream.width) || 0,
       height: Number(videoStream.height) || 0,
       fps: ratio(videoStream.r_frame_rate || videoStream.avg_frame_rate),
-      duration: Number(videoStream.duration) || 0
+      duration: Number(videoStream.duration) || 0,
+      pixFmt: String(videoStream.pix_fmt || ''),
+      // yuva*, rgba, argb, bgra, gbrap, ya8 …: ProRes 4444 and PNG overlays carry transparency.
+      alpha: /^(yuva|rgba|argb|bgra|abgr|gbrap|ya\d|pal8)/.test(String(videoStream.pix_fmt || '')) || undefined
     } : null,
     audio: audioStream ? {
       codec: String(audioStream.codec_name || ''),
@@ -200,7 +203,7 @@ export async function extractFrame(options: {
         '-vf', `scale=${width}:-2:force_original_aspect_ratio=decrease`,
         '-q:v', '3',
         '-y', target
-      ], { maxBuffer: 8 * 1024 * 1024 });
+      ], { maxBuffer: 8 * 1024 * 1024, timeout: 60_000, windowsHide: true });
     }
   }
   const metadata = await sharp(target).metadata();

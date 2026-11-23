@@ -66,7 +66,7 @@ export class PixabayStockSource {
     const valid = (value: any) => Array.isArray(value?.hits) && value.hits.length <= 12 && Number.isSafeInteger(value.totalHits) && value.totalHits >= 0;
     if (!valid(data)) {
       const combined = signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000);
-      const params = new URLSearchParams({ q: input.query, page: String(page), ...(input.size ? { size: input.size } : {}) });
+      const params = new URLSearchParams({ ...(input.query ? { q: input.query } : { browse: '1' }), page: String(page), ...(input.size ? { size: input.size } : {}) });
       try {
         const response = await this.request(this.endpoint + '?' + params, {
           headers: { Accept: 'application/json', 'User-Agent': 'SmoothyEdit/1.5.1 (stock footage search)' }, redirect: 'error', signal: combined

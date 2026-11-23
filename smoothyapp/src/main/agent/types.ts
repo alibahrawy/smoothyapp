@@ -89,6 +89,10 @@ export type AgentJob = {
   finishedAt: string | null;
   result: unknown;
   error: string | null;
+  /** Seconds since the job started (or until it finished). */
+  elapsedSeconds?: number;
+  /** Estimated seconds left while running, from the progress rate. */
+  etaSeconds?: number | null;
 };
 
 export type AgentToolDefinition = {

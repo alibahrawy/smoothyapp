@@ -408,3 +408,195 @@ test('ShortsCuts gives free accounts six working keys and Pro unlimited keys', a
   assert.match((await service.applyFromPanel('extra-8')).error, /free plan includes 6/);
   service.dispose();
 });
+
+test('ShortsCuts validates new action kinds (unnest, motion-to-transform, adjustment-layer, open-app, open-folder)', () => {
+  const store = createShortsCutsStore(memoryStore());
+  const longPath = '/Users/editor/' + 'nested/'.repeat(40) + 'After Effects.app';
+  const saved = store.saveDeck([
+    { id: 'u1', label: 'Unnest sequence', kind: 'unnest' },
+    { id: 'm1', label: 'Motion to Transform', kind: 'motion-to-transform' },
+    { id: 'a1', label: 'Add adjustment layer', kind: 'adjustment-layer', duration: 12.5 },
+    { id: 'app1', label: 'After Effects', kind: 'open-app', target: longPath },
+    { id: 'dir1', label: 'Exports', kind: 'open-folder', target: '/Users/editor/Exports' },
+  ]);
+  assert.equal(saved.deck.length, 5);
+  assert.equal(saved.deck[0].target, '');
+  assert.equal(saved.deck[1].target, '');
+  assert.equal(saved.deck[2].duration, 12.5);
+  assert.equal(saved.deck[3].target, longPath);
+  assert.equal(saved.deck[4].target, '/Users/editor/Exports');
+
+  // open-app and open-folder require a non-empty target path.
+  assert.throws(
+    () => store.saveDeck([{ id: 'bad-app', label: 'No app', kind: 'open-app', target: '' }]),
+    /invalid/
+  );
+  assert.throws(
+    () => store.saveDeck([{ id: 'bad-dir', label: 'No folder', kind: 'open-folder', target: '' }]),
+    /invalid/
+  );
+  // Adjustment layer duration clamps safely.
+  const clamped = store.saveDeck([{ id: 'a2', label: 'Adj', kind: 'adjustment-layer', duration: 9999 }]);
+  assert.equal(clamped.deck[0].duration, 600);
+});
+
+test('phone remote exposes Undo/Redo buttons, history API and offline-capable system keys', async (t) => {
+  const serverModule = loadCjs(await bundle('src/main/shortscuts/server.ts'));
+  const historyCalls = [];
+  const server = new serverModule.ShortsCutsServer({
+    getState: () => ({
+      connected: true,
+      editor: 'premiere',
+      deck: [
+        { id: 'crop', label: 'Crop', kind: 'video-effect', system: false },
+        { id: 'app1', label: 'After Effects', kind: 'open-app', system: true },
+      ],
+      folders: [],
+      layout: { phoneColumns: 3, tabletColumns: 5 },
+      lastAction: null,
+    }),
+    apply: async (id) => ({ success: true, message: `Ran ${id}` }),
+    history: async (action) => {
+      historyCalls.push(action);
+      return { success: true, message: `${action} done` };
+    },
+  });
+  t.after(() => server.stop());
+  const started = await server.start(0);
+  const base = `http://127.0.0.1:${started.port}`;
+  const token = started.token;
+
+  const page = await fetch(`${base}/m/${token}`, { headers: { connection: 'close' } });
+  const html = await page.text();
+  const markup = html.split('<script>')[0];
+  assert.match(markup, /data-history="undo"/, 'phone/tablet page renders Undo button');
+  assert.match(markup, /data-history="redo"/, 'phone/tablet page renders Redo button');
+  assert.match(markup, /data-cut-id="app1" data-system="true"/, 'system key is marked offline-capable');
+
+  const undoRes = await fetch(`${base}/api/${token}/history`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', connection: 'close' },
+    body: JSON.stringify({ action: 'undo' }),
+  });
+  assert.equal(undoRes.status, 200);
+  assert.equal((await undoRes.json()).success, true);
+
+  const redoRes = await fetch(`${base}/api/${token}/history`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', connection: 'close' },
+    body: JSON.stringify({ action: 'redo' }),
+  });
+  assert.equal(redoRes.status, 200);
+  assert.deepEqual(historyCalls, ['undo', 'redo']);
+
+  const badRes = await fetch(`${base}/api/${token}/history`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', connection: 'close' },
+    body: JSON.stringify({ action: 'delete' }),
+  });
+  assert.equal(badRes.status, 400);
+  assert.deepEqual(historyCalls, ['undo', 'redo']);
+});
+
+test('ShortsCuts enforces Pro for Unnest & Motion-to-Transform, allows system keys offline, and tracks usage', async () => {
+  globalThis.__shortcutFixture = {
+    map: new Map(),
+    register(accelerator, callback) { if (this.map.has(accelerator)) return false; this.map.set(accelerator, callback); return true; },
+    unregister(accelerator) { this.map.delete(accelerator); },
+  };
+  const serviceModule = loadCjs(await bundle('src/main/shortscuts/service.ts', {
+    electron: 'export const globalShortcut = globalThis.__shortcutFixture;',
+  }));
+  let pro = false;
+  let connected = false;
+  const tracked = [];
+  const calls = [];
+  const service = serviceModule.createShortsCutsService({
+    store: memoryStore(),
+    applyToPremiere: async (item) => {
+      calls.push(`premiere:${item.kind}`);
+      return { success: true, message: `Ran ${item.label}` };
+    },
+    openApp: async (target) => {
+      calls.push(`app:${target}`);
+      return { success: true, message: `Opened ${target}` };
+    },
+    openFolder: async (target) => {
+      calls.push(`folder:${target}`);
+      return { success: true, message: `Opened ${target}` };
+    },
+    sendHistory: async (action) => {
+      calls.push(`history:${action}`);
+      return { success: true, message: `${action} done` };
+    },
+    readCatalog: async () => ({ videoEffects: [], audioEffects: [], videoTransitions: [], audioTransitions: [] }),
+    capturePreset: async () => ({ success: false, error: 'none' }),
+    connected: () => connected,
+    editor: () => 'premiere',
+    allowed: () => pro,
+    track: (id) => tracked.push(id),
+    onState: () => {},
+  });
+  service.init();
+
+  // Free user cannot add Pro-only Unnest or Motion-to-Transform even with free slots open.
+  await assert.rejects(
+    () => service.saveDeck([{ id: 'u1', label: 'Unnest sequence', kind: 'unnest' }]),
+    /Smoothy Pro/
+  );
+  await assert.rejects(
+    () => service.saveDeck([{ id: 'm1', label: 'Motion to Transform', kind: 'motion-to-transform' }]),
+    /Smoothy Pro/
+  );
+  assert.equal(tracked.length, 0);
+
+  // Free user CAN add adjustment-layer, open-app, and open-folder.
+  await service.saveDeck([
+    { id: 'adj1', label: 'Add adjustment layer', kind: 'adjustment-layer', duration: 5 },
+    { id: 'app1', label: 'After Effects', kind: 'open-app', target: '/Applications/After Effects.app' },
+    { id: 'dir1', label: 'Exports', kind: 'open-folder', target: '/Users/editor/Exports' },
+  ]);
+  assert.deepEqual(tracked, ['shortscuts_key_add', 'shortscuts_key_add', 'shortscuts_key_add']);
+  tracked.length = 0;
+
+  // System actions work even when Premiere is disconnected.
+  assert.equal((await service.applyFromPanel('app1')).success, true);
+  assert.equal((await service.applyFromPanel('dir1')).success, true);
+  assert.equal((await service.applyFromPanel('adj1')).success, false, 'Premiere action fails while disconnected');
+  assert.equal((await service.historyFromPanel('undo')).success, false, 'Undo fails while disconnected');
+  assert.deepEqual(tracked, ['shortscuts_open_app', 'shortscuts_open_folder']);
+  tracked.length = 0;
+
+  // Connect Premiere: adjustment layer and Undo/Redo work on the free plan.
+  connected = true;
+  assert.equal((await service.applyFromPanel('adj1')).success, true);
+  assert.equal((await service.historyFromPanel('undo')).success, true);
+  assert.equal((await service.historyFromPanel('redo')).success, true);
+  assert.deepEqual(tracked, ['shortscuts_adjustment_layer', 'shortscuts_undo', 'shortscuts_redo']);
+  tracked.length = 0;
+
+  // Upgrade to Pro: Unnest and Motion-to-Transform can be added and run.
+  pro = true;
+  service.refreshEntitlement();
+  await service.saveDeck([
+    ...service.state().config.deck,
+    { id: 'u1', label: 'Unnest sequence', kind: 'unnest', shortcut: 'CommandOrControl+Alt+U' },
+    { id: 'm1', label: 'Motion to Transform', kind: 'motion-to-transform', shortcut: 'CommandOrControl+Alt+T' },
+  ]);
+  tracked.length = 0;
+  assert.equal((await service.applyFromPanel('u1')).success, true);
+  assert.equal((await service.applyFromPanel('m1')).success, true);
+  assert.deepEqual(tracked, ['shortscuts_unnest', 'shortscuts_motion_to_transform']);
+  tracked.length = 0;
+
+  // Downgrade back to Free: Pro actions stay saved in deck, but are unregistered and blocked.
+  pro = false;
+  service.refreshEntitlement();
+  assert.equal(service.state().config.deck.length, 5);
+  assert.equal(globalThis.__shortcutFixture.map.has('CommandOrControl+Alt+U'), false);
+  assert.equal(globalThis.__shortcutFixture.map.has('CommandOrControl+Alt+T'), false);
+  assert.match((await service.applyFromPanel('u1')).error, /Smoothy Pro/);
+  assert.match((await service.applyFromPanel('m1')).error, /Smoothy Pro/);
+  assert.equal(tracked.length, 0);
+  service.dispose();
+});

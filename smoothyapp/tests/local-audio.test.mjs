@@ -13,7 +13,7 @@ async function fixture(action){
  const root=await mkdtemp(path.join(os.tmpdir(),'smoothy-audio-test-')),usage=[],commands=[];let behavior='ok';
  await writeFile(path.join(root,'ready-v2'),JSON.stringify({version:2,backend:'cpu'}));const source=path.join(root,'source.wav');await writeFile(source,wav());
  const run=async(command,args,signal,progress)=>{
-  commands.push(command);
+  commands.push({command,args});
   if(args.includes('prepare'))return '';
   if(command==='ffmpeg'){
    if(behavior==='missing-decoder')throw Object.assign(Error('spawn decoder ENOENT'),{code:'ENOENT'});
@@ -24,11 +24,13 @@ async function fixture(action){
   if(behavior==='fail')throw Error('Model failed');
   if(behavior==='cancel'){progress('running');await new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(Error('Canceled')),{once:true}));}
   const output=args[3],mode=args[1];
-  const items=mode==='separate'
-   ?[{label:'Speech',kind:'speech',path:path.join(output,'speech.wav')},{label:'Music',kind:'music',path:path.join(output,'music.wav')}]
-   :[{label:'Enhanced speech',kind:'speech',path:path.join(output,'speech.wav')}];
+  const items=mode==='denoise'
+   ?[{label:'Clean audio',kind:'speech',path:path.join(output,'clean.wav')},{label:'Removed noise',kind:'noise',path:path.join(output,'noise.wav')}]
+   :mode==='separate'
+   ?[{label:'Voice',kind:'speech',path:path.join(output,'speech.wav')},{label:'Music',kind:'music',path:path.join(output,'music.wav')}]
+   :[{label:'Clean voice',kind:'speech',path:path.join(output,'speech.wav')},{label:'Music & noise',kind:'background',path:path.join(output,'background.wav')}];
   if(behavior==='incomplete')items.pop();
-  if(behavior==='duplicate'&&mode==='separate')items[1].kind=items[0].kind;
+  if(behavior==='duplicate')items[1].kind=items[0].kind;
   for(const item of items)await writeFile(item.path,behavior==='invalid'?Buffer.alloc(10):wav());
   if(behavior==='escape')items[0].path=source;
   await writeFile(path.join(output,'result.json'),JSON.stringify(items));return '';
@@ -36,63 +38,120 @@ async function fixture(action){
  const service=new LocalAudioService({root,ffmpeg:'ffmpeg',track:id=>usage.push(id),run});
  try{await action({service,root,source,usage,commands,behavior:value=>behavior=value});}finally{await service.dispose();await rm(root,{recursive:true,force:true});}
 }
-test('exact separation and enhanced speech count once each and preview once per output',async()=>fixture(async({service,source,usage,root})=>{
+
+test('standalone denoise works directly without separation, supports aggression and strength-blended save',async()=>fixture(async({service,source,usage,commands,root})=>{
  const selected=await service.select(source);assert.deepEqual(usage,[]);
+ const denoised=await service.process({source:selected.id,mode:'denoise',aggression:9},()=>{});
+ assert.equal(denoised.length,2);
+ assert.deepEqual(denoised.map(item=>item.kind),['speech','noise']);
+ assert.equal('file' in denoised[0],false);
+ assert.deepEqual(usage,['audio_noise_remove']);
+ const workerCall=commands.find(c=>c.command!=='ffmpeg');
+ assert.equal(workerCall.args[1],'denoise');
+ assert.deepEqual(JSON.parse(workerCall.args[5]),{aggression:9});
+
+ // Full-strength save copies directly without invoking ffmpeg
+ const fullDest=path.join(root,'full.wav');
+ await service.save(denoised[0].id,fullDest,{strength:100});
+ assert.deepEqual(await readFile(fullDest),wav());
+ assert.equal(commands.filter(c=>c.command==='ffmpeg').length,1);
+ assert.deepEqual(usage,['audio_noise_remove','audio_tools_save']);
+
+ // Partial-strength save blends clean + residual via ffmpeg
+ const blendDest=path.join(root,'blend.wav');
+ await service.save(denoised[0].id,blendDest,{strength:75});
+ assert.deepEqual(await readFile(blendDest),wav());
+ const blendCall=commands.filter(c=>c.command==='ffmpeg').at(-1);
+ assert.ok(blendCall.args.includes('-filter_complex'));
+ assert.match(blendCall.args[blendCall.args.indexOf('-filter_complex')+1],/volume=0\.2500/);
+ assert.deepEqual(usage,['audio_noise_remove','audio_tools_save','audio_tools_save']);
+
+ // Internal agent materialization (track:false) adds no UI save event
+ const internalDest=path.join(root,'internal.wav');
+ await service.save(denoised[0].id,internalDest,{strength:80,track:false});
+ assert.equal(usage.filter(id=>id==='audio_tools_save').length,2);
+}));
+
+test('separate and isolate count accurately and isolate reuses cached separation',async()=>fixture(async({service,source,usage,commands,root})=>{
+ const selected=await service.select(source);assert.deepEqual(usage,[]);
+ // Standalone isolate without prior separate runs both passes and counts both IDs
+ const standalone=await service.process({source:selected.id,mode:'isolate'},()=>{});
+ assert.deepEqual(standalone.map(item=>item.kind),['speech','background']);
+ assert.deepEqual(usage,['audio_music_separate','audio_noise_remove']);
+ const firstWorker=commands.filter(c=>c.command!=='ffmpeg').at(-1);
+ assert.equal(JSON.parse(firstWorker.args[5]).separatedSpeech,undefined);
+
+ // Now run separate, then isolate (and legacy enhance alias): reuses cached speech and counts only noise removal
  const separated=await service.process({source:selected.id,mode:'separate'},()=>{});
- assert.equal(separated.length,2);assert.deepEqual(separated.map(item=>item.kind),['speech','music']);
- assert.equal('file' in separated[0],false);assert.deepEqual(usage,['audio_music_separate']);
- assert.equal(service.original().id,selected.id);
+ assert.deepEqual(separated.map(item=>item.kind),['speech','music']);
  service.preview(separated[0].id);service.preview(separated[0].id);service.preview(separated[1].id);
- assert.deepEqual(usage.slice(1),['audio_tools_preview','audio_tools_preview']);
- const enhanced=await service.process({source:selected.id,mode:'enhance'},()=>{});
- assert.equal(enhanced.length,1);assert.equal(enhanced[0].kind,'speech');
- assert.deepEqual(usage.slice(3),['audio_noise_remove']);
+ assert.deepEqual(usage.slice(2),['audio_music_separate','audio_tools_preview','audio_tools_preview']);
+
+ const isolated=await service.process({source:selected.id,mode:'enhance'},()=>{});
+ assert.deepEqual(isolated.map(item=>item.kind),['speech','background']);
+ const reusedWorker=commands.filter(c=>c.command!=='ffmpeg').at(-1);
+ assert.equal(reusedWorker.args[1],'isolate');
+ assert.ok(JSON.parse(reusedWorker.args[5]).separatedSpeech);
+ assert.deepEqual(usage.slice(5),['audio_noise_remove']);
+
  const destination=path.join(root,'saved.wav');await service.save(separated[0].id,destination);assert.deepEqual(await readFile(destination),wav());
  assert.equal(usage.at(-1),'audio_tools_save');
  await assert.rejects(service.save(separated[0].id,path.join(root,'missing','saved.wav')));assert.equal(usage.filter(id=>id==='audio_tools_save').length,1);
  assert.throws(()=>service.preview('../../source'),/Run/);
 }));
+
+test('select supports time ranges and rejects empty ranges',async()=>fixture(async({service,source,commands})=>{
+ await assert.rejects(service.select(source,()=>{},{from:10,to:10}),/empty/);
+ await service.select(source,()=>{},{from:2,to:7});
+ const ffmpegArgs=commands.at(-1).args;
+ assert.equal(ffmpegArgs[ffmpegArgs.indexOf('-ss')+1],'2');
+ assert.equal(ffmpegArgs[ffmpegArgs.indexOf('-t')+1],'5');
+}));
+
 test('mode-specific results, missing inputs, invalid WAV and escaping output paths',async()=>fixture(async({service,source,usage,behavior})=>{
  const selected=await service.select(source);
  await assert.rejects(service.process({source:selected.id,mode:'invalid'},()=>{}),/Choose/);
- await assert.rejects(service.process({source:'bad',mode:'separate'},()=>{}),/Choose/);
- await assert.rejects(service.process({source:selected.id,mode:'enhance'},()=>{}),/Separate/);
- for(const value of ['fail','invalid','escape','incomplete','duplicate']){behavior(value);await assert.rejects(service.process({source:selected.id,mode:'separate'},()=>{}));assert.deepEqual(usage,[]);assert.throws(()=>service.original(),/Process audio/);}
+ await assert.rejects(service.process({source:'bad',mode:'denoise'},()=>{}),/Choose/);
+ for(const value of ['fail','invalid','escape','incomplete','duplicate']){behavior(value);await assert.rejects(service.process({source:selected.id,mode:'denoise'},()=>{}));assert.deepEqual(usage,[]);assert.throws(()=>service.original(),/Process audio/);}
  behavior('ok');await service.process({source:selected.id,mode:'separate'},()=>{});
- for(const value of ['fail','invalid','escape','incomplete']){behavior(value);await assert.rejects(service.process({source:selected.id,mode:'enhance'},()=>{}));assert.deepEqual(usage,['audio_music_separate']);}
- behavior('ok');const enhanced=await service.process({source:selected.id,mode:'enhance'},()=>{});
- assert.equal(enhanced.length,1);assert.deepEqual(usage,['audio_music_separate','audio_noise_remove']);
+ for(const value of ['fail','invalid','escape','incomplete','duplicate']){behavior(value);await assert.rejects(service.process({source:selected.id,mode:'isolate'},()=>{}));assert.deepEqual(usage,['audio_music_separate']);}
+ behavior('ok');const isolated=await service.process({source:selected.id,mode:'isolate'},()=>{});
+ assert.equal(isolated.length,2);assert.deepEqual(usage,['audio_music_separate','audio_noise_remove']);
 }));
+
 test('cancel settles before retry, rejects overlap and counts no completed run',async()=>fixture(async({service,source,usage,behavior})=>{
  const selected=await service.select(source);behavior('cancel');let started;const ready=new Promise(resolve=>started=resolve);
- const pending=service.process({source:selected.id,mode:'separate'},message=>{if(message==='running')started();});await ready;
- await assert.rejects(service.process({source:selected.id,mode:'separate'},()=>{}),/Wait/);
+ const pending=service.process({source:selected.id,mode:'denoise'},message=>{if(message==='running')started();});await ready;
+ await assert.rejects(service.process({source:selected.id,mode:'denoise'},()=>{}),/Wait/);
  service.cancel();await assert.rejects(pending,/Canceled/);assert.deepEqual(usage,[]);
- behavior('ok');assert.equal((await service.process({source:selected.id,mode:'separate'},()=>{})).length,2);
- assert.deepEqual(usage,['audio_music_separate']);
+ behavior('ok');assert.equal((await service.process({source:selected.id,mode:'denoise'},()=>{})).length,2);
+ assert.deepEqual(usage,['audio_noise_remove']);
 }));
+
 test('unready engine does not process or count',async()=>fixture(async({service,root,source,usage})=>{
  await rm(path.join(root,'ready-v2'));const selected=await service.select(source);
- await assert.rejects(service.process({source:selected.id,mode:'separate'},()=>{}),/Set up/);assert.deepEqual(usage,[]);
+ await assert.rejects(service.process({source:selected.id,mode:'denoise'},()=>{}),/Set up/);assert.deepEqual(usage,[]);
 }));
+
 test('missing decoder prevents original preparation, gives repair guidance and permits retry without counts',async()=>fixture(async({service,source,usage,behavior})=>{
  behavior('missing-decoder');
  await assert.rejects(service.select(source),/audio decoder.*FFmpeg.*missing/);
  assert.deepEqual(usage,[]);assert.equal((await service.state()).busy,false);
- behavior('ok');const selected=await service.select(source);assert.equal((await service.process({source:selected.id,mode:'separate'},()=>{})).length,2);
- assert.deepEqual(usage,['audio_music_separate']);
+ behavior('ok');const selected=await service.select(source);assert.equal((await service.process({source:selected.id,mode:'denoise'},()=>{})).length,2);
+ assert.deepEqual(usage,['audio_noise_remove']);
 }));
-test('Original is playable before separation, decoded once, and preview stays deduplicated after enhancement',async()=>fixture(async({service,source,usage,commands})=>{
+
+test('Original is playable before processing, decoded once, and preview stays deduplicated',async()=>fixture(async({service,source,usage,commands})=>{
  const selected=await service.select(source);assert.equal(selected.kind,'original');assert.match(selected.url,/smoothy-local-audio:\/\/result\/[0-9a-f-]{36}/);assert.equal('file' in selected,false);
  assert.deepEqual(usage,[]);assert.deepEqual(await readFile(service.output(selected.id).file),wav());
  service.preview(selected.id);service.preview(selected.id);assert.deepEqual(usage,['audio_tools_preview']);
- await service.process({source:selected.id,mode:'separate'},()=>{});
- await service.process({source:selected.id,mode:'enhance'},()=>{});
+ await service.process({source:selected.id,mode:'denoise'},()=>{});
  assert.equal(service.original().id,selected.id);
  service.preview(service.original().id);assert.equal(usage.filter(id=>id==='audio_tools_preview').length,1);
- assert.equal(commands.filter(command=>command==='ffmpeg').length,1);
- assert.deepEqual(usage,['audio_tools_preview','audio_music_separate','audio_noise_remove']);
+ assert.equal(commands.filter(c=>c.command==='ffmpeg').length,1);
+ assert.deepEqual(usage,['audio_tools_preview','audio_noise_remove']);
 }));
+
 test('failed or canceled source preparation preserves the old selected file/results with zero extra success events',async()=>fixture(async({service,source,usage,behavior})=>{
  const selected=await service.select(source);await service.process({source:selected.id,mode:'separate'},()=>{});const original=service.original(),before=[...usage];
  for(const failure of ['decoder-fail','decoder-invalid']){behavior(failure);await assert.rejects(service.select(source));assert.deepEqual(service.original(),original);assert.deepEqual(usage,before);}
@@ -102,44 +161,48 @@ test('failed or canceled source preparation preserves the old selected file/resu
  assert.deepEqual(usage,before);assert.ok(service.output(original.id));assert.equal((await service.state()).busy,false);
  behavior('ok');await service.process({source:selected.id,mode:'separate'},()=>{});assert.equal(service.original().id,selected.id);
 }));
+
 test('a telemetry exception never blocks audio processing',async()=>{
- await fixture(async({service,source})=>{service.deps.track=()=>{throw Error('offline');};const selected=await service.select(source);assert.equal((await service.process({source:selected.id,mode:'separate'},()=>{})).length,2);});
+ await fixture(async({service,source})=>{service.deps.track=()=>{throw Error('offline');};const selected=await service.select(source);assert.equal((await service.process({source:selected.id,mode:'denoise'},()=>{})).length,2);});
 });
+
 test('failed reprocessing keeps the previous original comparison and output capabilities',async()=>fixture(async({service,source,usage,behavior})=>{
  const selected=await service.select(source),outputs=await service.process({source:selected.id,mode:'separate'},()=>{}),original=service.original();
- behavior('incomplete');await assert.rejects(service.process({source:selected.id,mode:'enhance'},()=>{}));
+ behavior('incomplete');await assert.rejects(service.process({source:selected.id,mode:'isolate'},()=>{}));
  assert.deepEqual(service.original(),original);assert.ok(service.output(outputs[0].id));assert.ok(service.output(original.id));
  assert.deepEqual(usage,['audio_music_separate']);
 }));
+
 test('real subprocess cancellation terminates and rejects',async()=>{
- const controller=new AbortController();let started;
+ const controller=new AbortController();
  const pending=runAudioCommand(process.execPath,['-e',"console.log('SMOOTHY_PROGRESS:running');setInterval(()=>{},1000)"],controller.signal,()=>{controller.abort();});
  await assert.rejects(pending,/Canceled/);
 });
+
 test('progress survives interleaved partial logs and split UTF-8 markers',async()=>{
  const messages=[];
  const script=`
   process.stderr.write('partial engine log');
   setTimeout(()=>process.stdout.write('SMOOTHY_PRO'),20);
-  setTimeout(()=>process.stdout.write('GRESS:Loading music separation model…\\n'),40);
-  setTimeout(()=>process.stderr.write('\\rSMOOTHY_PROGRESS:Separating voice and music…\\r'),60);
+  setTimeout(()=>process.stdout.write('GRESS:Loading noise removal model…\\n'),40);
+  setTimeout(()=>process.stderr.write('\\rSMOOTHY_PROGRESS:Removing background noise…\\r'),60);
   setTimeout(()=>{const bytes=Buffer.from('SMOOTHY_PROGRESS:Checking output tracks…\\n');process.stdout.write(bytes.subarray(0,bytes.length-3));setTimeout(()=>process.stdout.write(bytes.subarray(bytes.length-3)),10)},80);
  `;
  await runAudioCommand(process.execPath,['-e',script],new AbortController().signal,message=>messages.push(message));
- assert.deepEqual(messages,['Loading music separation model…','Separating voice and music…','Checking output tracks…']);
+ assert.deepEqual(messages,['Loading noise removal model…','Removing background noise…','Checking output tracks…']);
 });
 
 test('structured completed-work progress validates counters and ignores malformed engine lines',async()=>{
  const messages=[];
  const lines=[
   'SMOOTHY_AUDIO_EVENT:{invalid',
-  'SMOOTHY_AUDIO_EVENT:'+JSON.stringify({message:'Separating',stage:'separate',completed:3,total:12,unit:'chunks'}),
-  'SMOOTHY_AUDIO_EVENT:'+JSON.stringify({message:'Invalid counters',stage:'separate',completed:-1,total:0}),
+  'SMOOTHY_AUDIO_EVENT:'+JSON.stringify({message:'Denoising',stage:'denoise',completed:3,total:12,unit:'windows'}),
+  'SMOOTHY_AUDIO_EVENT:'+JSON.stringify({message:'Invalid counters',stage:'denoise',completed:-1,total:0}),
   'SMOOTHY_AUDIO_EVENT:'+JSON.stringify({message:'Using CUDA',stage:'device',backend:'cuda'}),
   'SMOOTHY_AUDIO_EVENT:'+JSON.stringify({total:12}),
  ];
  await runAudioCommand(process.execPath,['-e',`for(const line of ${JSON.stringify(lines)})console.log(line)`],new AbortController().signal,data=>messages.push(data));
- assert.deepEqual(messages,[{message:'Separating',stage:'separate',completed:3,total:12,unit:'chunks'},{message:'Invalid counters',stage:'separate'},{message:'Using CUDA',stage:'device',backend:'cuda'}]);
+ assert.deepEqual(messages,[{message:'Denoising',stage:'denoise',completed:3,total:12,unit:'windows'},{message:'Invalid counters',stage:'denoise'},{message:'Using CUDA',stage:'device',backend:'cuda'}]);
 });
 
 test('a cached CPU engine requests one GPU migration, not historical feature activity',async()=>fixture(async({service,root,usage})=>{

@@ -13,8 +13,42 @@ import type { StockFootageService, StockVideo } from '../stock-footage';
 import * as whisper from '../captions/whisper-service';
 import { formatCaptions } from '../captions/caption-formatter';
 import { DEFAULT_CAPTION_LANGUAGE, getWhisperLanguageCode } from '../captions/languages';
-import { getDefaultModelId, getModelById, isEnglishOnlyModel } from '../captions/model-manager';
+import { ensureModelDownloaded, getAvailableModels, getDefaultModelId, getModelById, getModelsDir, isEnglishOnlyModel } from '../captions/model-manager';
+import { ensureBinary, findInstalledBinary, getVariantOrder } from '../captions/whisper-bin-manager';
+import { scanWhisperModels, type WhisperInfo } from './engine';
+import type { ModelInstaller } from './analysis';
 import type { FetchedAsset, LibraryService, MusicHit, SpeechService, StockHit } from './edit-features';
+
+/** The installed whisper-cli and its downloaded ggml models, for smoothy_status and smoothy_engine. */
+export function whisperEngineInfo(): WhisperInfo {
+  const binary = findInstalledBinary();
+  const modelsDir = getModelsDir();
+  return { path: binary?.path || null, variant: binary?.variant, modelsDir, models: scanWhisperModels(modelsDir) };
+}
+
+/** Downloads whisper-cli and catalog models for smoothy_analyze (after the editor approves). */
+export function createModelInstaller(): ModelInstaller {
+  const percent = (progress: { progress?: number; loaded?: number; total?: number }) =>
+    typeof progress.progress === 'number' ? progress.progress : progress.total ? ((progress.loaded || 0) / progress.total) * 100 : 0;
+  return {
+    catalog: () => getAvailableModels()
+      .filter(model => model.engine !== 'moulsot' && !model.custom && /^ggml-/.test(model.id))
+      .map(model => ({ id: model.id, name: model.name, size: model.size, downloaded: Boolean(model.downloaded) })),
+    async ensureBinary(signal, progress) {
+      let last: unknown = null;
+      for (const variant of getVariantOrder()) {
+        try {
+          return await ensureBinary(variant, item => progress(percent(item), item.status || 'Downloading whisper.cpp'), signal);
+        } catch (error) {
+          if (signal.aborted) throw error;
+          last = error;
+        }
+      }
+      throw last instanceof Error ? last : new Error('Could not install whisper.cpp.');
+    },
+    ensureModel: (id, signal, progress) => ensureModelDownloaded(id, item => progress(percent(item), item.status || 'Downloading model'), signal)
+  };
+}
 
 export function createSpeechService(deps: {
   store: { get(key: string): unknown };

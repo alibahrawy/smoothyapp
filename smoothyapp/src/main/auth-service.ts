@@ -50,7 +50,7 @@ interface FeatureAccess {
 // Cloud (Smoothy Pro): bestshorts, export-audio
 const CLOUD_AI_FEATURES = ['bestshorts', 'export-audio'];
 // Desktop features that need an active Pro subscription (checked in the main process).
-export const PRO_FEATURES = ['agent'] as const;
+export const PRO_FEATURES = ['agent', 'pro_captions', 'silence_retakes'] as const;
 export type ProFeature = (typeof PRO_FEATURES)[number];
 // A signed-in Pro user keeps access for this long without re-verifying the plan,
 // so a paying user is never locked out by a short offline spell.
@@ -478,6 +478,11 @@ export function getStoredJWT(): string | null {
  * The signed session token returned by `/api/auth/login`. Preferred over the
  * legacy `jwt` (which is just the user id) for authenticating API calls.
  */
+/** The Smoothy website this build talks to (production, local dev or SMOOTHY_API_URL). */
+export function getApiBase(): string {
+  return API_BASE;
+}
+
 export function getSessionToken(): string | null {
   return store.get('sessionToken') as string | null;
 }

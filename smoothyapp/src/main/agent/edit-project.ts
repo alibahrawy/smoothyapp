@@ -21,7 +21,18 @@ export type EditAsset = {
   hasAudio: boolean;
   /** Where the file came from, so licences and credits travel with it. */
   source?: { provider?: string; license?: string; credit?: string; url?: string };
+  /** A virtual source: this region (source pixels) of the file. Same file, same timecode, no re-encode. width/height stay the full file size. */
+  crop?: Region;
+  /** The asset this region was defined from. */
+  parent?: string;
+  /** The picture has an alpha channel (ProRes 4444, PNG overlays). */
+  alpha?: boolean;
+  /** Set when an oversized photo was imported as a resized copy: the original size and file. */
+  resizedFrom?: string;
+  original?: string;
 };
+
+export type Region = { x: number; y: number; w: number; h: number };
 
 export type TextStyle = {
   size?: number;
@@ -54,6 +65,14 @@ export type EditClip = {
   fit: 'cover' | 'contain';
   /** Clips created together (video + its audio) move and trim together. */
   link?: string;
+  /** Clip name shown in the NLE (exported XML uses it to map the editor's changes back). */
+  name?: string;
+  /** Punch-in: 1 = the source (or region) fills the frame. */
+  zoom?: number;
+  /** Point that stays put while zooming, normalized in the visible region (eye midpoint). Default 0.5, 0.5. */
+  anchor?: { x: number; y: number };
+  /** Cut-list data carried through exports and live diffs (cut id, chapter, words, text). */
+  meta?: Record<string, unknown>;
 };
 
 export type EditProject = {
@@ -68,7 +87,12 @@ export type EditProject = {
   revision: number;
   assets: Record<string, EditAsset>;
   clips: EditClip[];
+  /** Optional project folder on disk with Edit/, Media/, Graphics/ and Work/. */
+  folder?: string;
 };
+
+/** Standard folders created inside a project folder. */
+export const PROJECT_LAYOUT = ['Edit', 'Media', 'Graphics', 'Work'] as const;
 
 export type EditError = { code: 'E_BAD_REQUEST' | 'E_NOT_FOUND'; message: string };
 
@@ -99,7 +123,7 @@ function num(value: unknown, label: string, fallback?: number): number {
   return n;
 }
 
-export function createProject(input: { name?: string; width?: number; height?: number; fps?: number } = {}): EditProject {
+export function createProject(input: { name?: string; width?: number; height?: number; fps?: number; folder?: string } = {}): EditProject {
   const width = Math.round(Math.max(160, Math.min(7680, Number(input.width) || 1920)));
   const height = Math.round(Math.max(160, Math.min(4320, Number(input.height) || 1080)));
   const fps = Math.max(1, Math.min(120, Number(input.fps) || DEFAULT_FPS));
@@ -115,7 +139,8 @@ export function createProject(input: { name?: string; width?: number; height?: n
     updatedAt: now,
     revision: 0,
     assets: {},
-    clips: []
+    clips: [],
+    ...(input.folder ? { folder: input.folder } : {})
   };
 }
 
@@ -176,6 +201,36 @@ export type OpResult = { op: string; clips?: string[]; note?: string };
 
 type RawOp = Record<string, any>;
 
+function parseAnchor(value: any): { x: number; y: number } {
+  const x = Array.isArray(value) ? value[0] : value?.x;
+  const y = Array.isArray(value) ? value[1] : value?.y;
+  if (!Number.isFinite(Number(x)) || !Number.isFinite(Number(y))) throw new EditOpError('anchor must be [x, y] or {x, y}, normalized 0–1 (for example the eye midpoint).');
+  return { x: Math.max(0, Math.min(1, Number(x))), y: Math.max(0, Math.min(1, Number(y))) };
+}
+
+/**
+ * A virtual source: a region of an existing asset (a speaker tile, a share area).
+ * It points at the same file, so source timecode is kept and nothing is re-encoded.
+ */
+export function defineRegion(project: EditProject, input: { asset?: unknown; name?: unknown; crop?: unknown }): EditAsset {
+  const base = project.assets[String(input.asset || '')];
+  if (!base) throw new EditOpError(`Asset "${input.asset}" is not in this project.`, 'E_NOT_FOUND');
+  if (base.kind === 'audio' || !base.width || !base.height) throw new EditOpError('Regions need a video or image asset with a known size.');
+  const raw: any = input.crop;
+  const [x, y, w, h] = (Array.isArray(raw) ? raw : [raw?.x, raw?.y, raw?.w, raw?.h]).map(Number);
+  const root = base.crop ? base.crop : { x: 0, y: 0, w: base.width, h: base.height };
+  if (![x, y, w, h].every(Number.isFinite) || w < 8 || h < 8) throw new EditOpError('crop must be [x, y, w, h] in source pixels.');
+  if (x < 0 || y < 0 || x + w > root.w + 0.5 || y + h > root.h + 0.5) throw new EditOpError(`crop must fit inside ${root.w}x${root.h}.`);
+  let id = '';
+  for (let n = Object.keys(project.assets).length + 1; ; n += 1) { id = `a${n}`; if (!project.assets[id]) break; }
+  const crop = { x: Math.round(root.x + x), y: Math.round(root.y + y), w: Math.round(w), h: Math.round(h) };
+  const name = String(input.name || `${base.name} region`).slice(0, 60);
+  // width/height stay the file's full size; crop is the visible region.
+  const asset: EditAsset = { ...base, id, name, crop, parent: base.parent || base.id };
+  project.assets[id] = asset;
+  return asset;
+}
+
 function rangeFor(project: EditProject, asset: EditAsset, raw: RawOp, speed: number): { in: number; out: number } {
   const sourceLength = asset.kind === 'image' ? 3600 : asset.duration;
   const from = Math.max(0, num(raw.in, 'in', 0));
@@ -211,7 +266,9 @@ function addClips(project: EditProject, raw: RawOp): OpResult {
     mute: Boolean(raw.mute),
     opacity: Math.max(0, Math.min(1, num(raw.opacity, 'opacity', 1))),
     fit: raw.fit === 'contain' ? 'contain' as const : 'cover' as const,
-    link
+    link,
+    ...(raw.name !== undefined ? { name: String(raw.name).slice(0, 80) } : {}),
+    ...(raw.meta && typeof raw.meta === 'object' ? { meta: JSON.parse(JSON.stringify(raw.meta)) } : {})
   };
   if (asset.kind === 'audio' || audioOnly) {
     const track = raw.track ? normalizeTrack(raw.track, 'A1') : freeTrack(project, 'A', start, start + length);
@@ -223,6 +280,8 @@ function addClips(project: EditProject, raw: RawOp): OpResult {
     const track = raw.track ? normalizeTrack(raw.track, 'V1') : freeTrack(project, 'V', start, start + length);
     if (trackKind(track) === 'A') throw new EditOpError('Video and image assets go on a V track.');
     const video: EditClip = { id: shortId(project), track, kind: asset.kind === 'image' ? 'image' : 'video', ...base };
+    if (raw.zoom !== undefined) video.zoom = Math.max(0.1, Math.min(20, num(raw.zoom, 'zoom')));
+    if (raw.anchor !== undefined) video.anchor = parseAnchor(raw.anchor);
     project.clips.push(video);
     created.push(video.id);
     if (link) {
@@ -332,6 +391,11 @@ function applyOp(project: EditProject, raw: RawOp): OpResult {
         if (raw.speed !== undefined) {
           const speed = Math.max(0.1, Math.min(8, num(raw.speed, 'speed')));
           item.speed = speed;
+        }
+        if (raw.name !== undefined) item.name = String(raw.name).slice(0, 80);
+        if (item.kind === 'video' || item.kind === 'image') {
+          if (raw.zoom !== undefined) item.zoom = Math.max(0.1, Math.min(20, num(raw.zoom, 'zoom')));
+          if (raw.anchor !== undefined) item.anchor = parseAnchor(raw.anchor);
         }
       }
       if (raw.text !== undefined && clip.kind === 'text') clip.text = String(raw.text).slice(0, 400);
@@ -477,7 +541,9 @@ export function describeProject(project: EditProject, options: { clips?: boolean
       clip.volume ? `${clip.volume > 0 ? '+' : ''}${clip.volume}dB` : '',
       clip.mute ? 'mute' : '',
       clip.fadeIn ? `fi${clip.fadeIn}` : '',
-      clip.fadeOut ? `fo${clip.fadeOut}` : ''
+      clip.fadeOut ? `fo${clip.fadeOut}` : '',
+      clip.zoom && clip.zoom !== 1 ? `zoom${Number(clip.zoom.toFixed(3))}${clip.anchor ? `@${clip.anchor.x.toFixed(2)},${clip.anchor.y.toFixed(2)}` : ''}` : '',
+      clip.name ? `"${clip.name}"` : ''
     ].filter(Boolean).join(' ');
     (tracks[clip.track] ||= []).push(
       `${clip.id} ${clip.start.toFixed(2)}-${clipEnd(clip).toFixed(2)} ${label} src ${clip.in.toFixed(2)}-${clip.out.toFixed(2)}${flags ? ` ${flags}` : ''}`
@@ -498,7 +564,8 @@ export function describeProject(project: EditProject, options: { clips?: boolean
       duration: Number(asset.duration.toFixed(2)),
       size: asset.kind === 'audio' ? undefined : `${asset.width}x${asset.height}`,
       audio: asset.hasAudio || undefined,
-      source: asset.source?.provider
+      source: asset.source?.provider,
+      region: asset.crop ? `${asset.crop.w}x${asset.crop.h}+${asset.crop.x}+${asset.crop.y} of ${asset.parent}` : undefined
     })),
     clipCounts: counts,
     tracks: options.clips === false ? undefined : tracks

@@ -30,6 +30,9 @@ export function registerLocalAudio(window: () => BrowserWindow | null) {
     if(choice.canceled || !choice.filePaths[0])return {canceled:true};
     return {source:await service.select(choice.filePaths[0],progress)};
   }));
+  ipcMain.handle('local-audio-select',(event,filePath)=>operation(event,async()=>{
+    return {source:await service.select(filePath,progress)};
+  }));
   ipcMain.handle('local-audio-setup',(event)=>operation(event,()=>service.setup(progress)));
   ipcMain.handle('local-audio-run',(event,input)=>operation(event,async()=>{
     const outputs=await service.process(input,progress);
@@ -37,11 +40,15 @@ export function registerLocalAudio(window: () => BrowserWindow | null) {
   }));
   ipcMain.handle('local-audio-cancel',()=>{service.cancel();return {success:true};});
   ipcMain.handle('local-audio-preview',(_,id)=>result(async()=>{service.preview(id);return {};}));
-  ipcMain.handle('local-audio-save',(_,id)=>result(async()=>{
+  ipcMain.handle('local-audio-save',(_,input)=>result(async()=>{
+    const id = typeof input === 'string' ? input : String(input?.id || '');
+    const strength = typeof input === 'object' && input && Number.isFinite(Number(input.strength)) ? Math.max(0, Math.min(100, Math.round(Number(input.strength)))) : undefined;
     const output=service.output(id), target=window(); if(!target)return {canceled:true};
-    const choice=await dialog.showSaveDialog(target,{defaultPath:path.join(app.getPath('downloads'),`${output.label.replace(/[^a-z0-9 -]/gi,'') || 'Audio'}.wav`),filters:[{name:'WAV audio',extensions:['wav']}]});
+    const baseName = output.label.replace(/[^a-z0-9 -]/gi,'').trim() || 'Audio';
+    const suffix = strength !== undefined && strength < 100 && output.residualId ? ` (${strength}%)` : '';
+    const choice=await dialog.showSaveDialog(target,{defaultPath:path.join(app.getPath('downloads'),`${baseName}${suffix}.wav`),filters:[{name:'WAV audio',extensions:['wav']}]});
     if(choice.canceled || !choice.filePath)return {canceled:true};
-    await service.save(id,choice.filePath); return {};
+    await service.save(id,choice.filePath,strength !== undefined ? {strength} : undefined); return {};
   }));
   protocol.handle('smoothy-local-audio',async request=>{
     try { const url=new URL(request.url); if(url.hostname!=='result' || !/^\/[0-9a-f-]{36}$/.test(url.pathname))throw Error();

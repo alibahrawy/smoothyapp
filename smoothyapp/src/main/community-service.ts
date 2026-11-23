@@ -8,11 +8,16 @@
  *
  * Transport: the app asks the website for a single-use ticket, then opens a
  * WebSocket to the lobby Durable Object. History is replayed on connect.
+ *
+ * 3.1: profiles (avatars, guest names), delete, report, block and timeouts.
+ * Blocking and timeouts are enforced by the lobby; this service only mirrors
+ * what it is told, and re-validates avatars before the renderer draws them.
  */
 
 import Store from 'electron-store';
 import WebSocket from 'ws';
 import { randomUUID } from 'crypto';
+import { cleanAvatar, type CommunityAvatar } from '../shared/community-avatar';
 import { getAuthHeaders, getSessionToken } from './auth-service';
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -40,6 +45,8 @@ export interface CommunityIdentity {
   name: string;
   guest: boolean;
   tier: 'free' | 'pro' | 'guest';
+  /** SmoothyEdit staff, set by the server. */
+  dev?: boolean;
 }
 
 export interface CommunityMessage {
@@ -48,8 +55,26 @@ export interface CommunityMessage {
   authorName: string;
   guest: boolean;
   tier: string;
+  dev?: boolean;
   body: string;
   at: number;
+}
+
+export interface CommunityProfile {
+  id: string;
+  /** A guest's chosen name; null for members (their account name is on each message). */
+  name: string | null;
+  avatar: CommunityAvatar | null;
+}
+
+export interface BlockedPerson {
+  id: string;
+  name: string;
+}
+
+export interface CommunitySanction {
+  until: number;
+  strikes: number;
 }
 
 export type CommunityStatus = 'idle' | 'connecting' | 'online' | 'offline';
@@ -61,17 +86,52 @@ export interface CommunityState {
   presence: number;
   signedIn: boolean;
   error: string | null;
+  blocks: BlockedPerson[];
+  /** Set while the person is on a timeout. */
+  sanction: CommunitySanction | null;
 }
 
 interface ServiceOptions {
   store: Store;
   track: (id: string) => void;
   onState: (state: CommunityState) => void;
+  /** Profiles that arrived or changed. Sent separately so pictures never ride along with every message. */
+  onProfiles?: (profiles: CommunityProfile[]) => void;
+}
+
+export interface ActionResult {
+  success: boolean;
+  error?: string;
+  /** Report only: the third report removed the message. */
+  removed?: boolean;
 }
 
 interface PendingSend {
-  resolve: (result: { success: boolean; error?: string }) => void;
+  resolve: (result: ActionResult) => void;
   timer: NodeJS.Timeout;
+}
+
+/** Acknowledged lobby actions and the usage counter each one earns (one per accepted action). */
+const ACK_TRACKING: Record<string, string> = {
+  delete: 'community_message_delete',
+  report: 'community_report',
+  block: 'community_block',
+  unblock: 'community_unblock',
+  profile: 'community_profile_save',
+};
+
+function cleanBlocks(value: unknown): BlockedPerson[] {
+  if (!Array.isArray(value)) return [];
+  return (value as Array<Record<string, unknown>>)
+    .filter((entry) => typeof entry?.id === 'string' && typeof entry?.name === 'string')
+    .slice(0, 200)
+    .map((entry) => ({ id: String(entry.id).slice(0, 80), name: String(entry.name).slice(0, 40) }));
+}
+
+function cleanSanction(value: unknown): CommunitySanction | null {
+  const input = value as Partial<CommunitySanction> | null;
+  if (!input || typeof input.until !== 'number' || typeof input.strikes !== 'number') return null;
+  return input.until > Date.now() ? { until: input.until, strikes: input.strikes } : null;
 }
 
 export function createCommunityService(options: ServiceOptions) {
@@ -82,6 +142,7 @@ export function createCommunityService(options: ServiceOptions) {
   let socket: WebSocket | null = null;
   let status: CommunityStatus = 'idle';
   let identity: CommunityIdentity | null = null;
+  let connectedToken: string | null = null;
   let presence = 0;
   let error: string | null = null;
   let retryIndex = 0;
@@ -91,6 +152,12 @@ export function createCommunityService(options: ServiceOptions) {
   let closedByUser = false;
   let lastSentAt = 0;
   let guestJoinTracked = false;
+  let blocks: BlockedPerson[] = [];
+  let sanction: CommunitySanction | null = null;
+  const profiles = new Map<string, CommunityProfile>();
+  const requestedProfiles = new Set<string>();
+  let profileTimer: NodeJS.Timeout | null = null;
+  const wantedProfiles = new Set<string>();
 
   function signedIn(): boolean {
     return Boolean(getSessionToken());
@@ -112,7 +179,56 @@ export function createCommunityService(options: ServiceOptions) {
       presence,
       signedIn: signedIn(),
       error,
+      blocks,
+      sanction: sanction && sanction.until > Date.now() ? sanction : null,
     };
+  }
+
+  function profileList(): CommunityProfile[] {
+    return [...profiles.values()];
+  }
+
+  function emitProfiles(list: CommunityProfile[]) {
+    if (!list.length) return;
+    try {
+      options.onProfiles?.(list);
+    } catch {
+      // The window may be closing; the service keeps running.
+    }
+  }
+
+  /** Remember profiles from the lobby, validating every avatar first. */
+  function mergeProfiles(raw: unknown) {
+    if (!Array.isArray(raw)) return;
+    const changed: CommunityProfile[] = [];
+    for (const entry of raw as Array<Record<string, unknown>>) {
+      const id = typeof entry?.id === 'string' ? entry.id : '';
+      if (!id || id.length > 80) continue;
+      const name = typeof entry.name === 'string' && entry.name.trim() ? entry.name.trim().slice(0, 40) : null;
+      const profile: CommunityProfile = { id, name, avatar: cleanAvatar(entry.avatar) };
+      profiles.set(id, profile);
+      requestedProfiles.add(id);
+      changed.push(profile);
+      if (identity && id === identity.id && name && identity.guest) identity = { ...identity, name };
+    }
+    emitProfiles(changed);
+    if (changed.length) notify();
+  }
+
+  function flushProfiles() {
+    profileTimer = null;
+    const ids = [...wantedProfiles].slice(0, 20);
+    ids.forEach((entry) => wantedProfiles.delete(entry));
+    if (ids.length) sendRaw({ type: 'profiles', ids });
+    if (wantedProfiles.size) profileTimer = setTimeout(flushProfiles, 400);
+  }
+
+  /** Ask the lobby for avatars we have not seen. People without a profile are asked about once. */
+  function wantProfile(id: string) {
+    if (!id || requestedProfiles.has(id) || profiles.has(id)) return;
+    requestedProfiles.add(id);
+    wantedProfiles.add(id);
+    if (!profileTimer) profileTimer = setTimeout(flushProfiles, 150);
   }
 
   function notify() {
@@ -183,6 +299,9 @@ export function createCommunityService(options: ServiceOptions) {
         }
       }
       presence = Number(data.count) || 0;
+      blocks = cleanBlocks(data.blocks);
+      sanction = cleanSanction(data.sanction);
+      requestedProfiles.clear();
       retryIndex = 0;
       setStatus('online');
       if (identity?.guest && !guestJoinTracked) {
@@ -191,6 +310,62 @@ export function createCommunityService(options: ServiceOptions) {
           options.track('community_guest_join');
         } catch {
           // Analytics never blocks chat.
+        }
+      }
+      return;
+    }
+
+    if (data.type === 'profiles') {
+      mergeProfiles(data.profiles);
+      return;
+    }
+
+    if (data.type === 'profile') {
+      mergeProfiles(data.profile ? [data.profile] : []);
+      return;
+    }
+
+    // A block or unblock changes who we may see: the lobby sends the filtered history.
+    if (data.type === 'history') {
+      messages.length = 0;
+      for (const entry of Array.isArray(data.history) ? (data.history as CommunityMessage[]) : []) {
+        if (entry?.id && typeof entry.body === 'string') messages.push(entry);
+      }
+      blocks = cleanBlocks(data.blocks);
+      notify();
+      return;
+    }
+
+    if (data.type === 'deleted') {
+      const id = typeof data.id === 'string' ? data.id : '';
+      const index = messages.findIndex((entry) => entry.id === id);
+      if (index >= 0) {
+        messages.splice(index, 1);
+        notify();
+      }
+      return;
+    }
+
+    if (data.type === 'sanction') {
+      sanction = cleanSanction(data.sanction);
+      notify();
+      return;
+    }
+
+    if (data.type === 'ack') {
+      const clientId = typeof data.clientId === 'string' ? data.clientId : '';
+      const entry = clientId ? pending.get(clientId) : undefined;
+      if (entry) {
+        clearTimeout(entry.timer);
+        pending.delete(clientId);
+        entry.resolve({ success: true, removed: data.removed === true });
+        const counter = typeof data.action === 'string' ? ACK_TRACKING[data.action] : undefined;
+        if (counter) {
+          try {
+            options.track(counter);
+          } catch {
+            // Analytics never blocks chat.
+          }
         }
       }
       return;
@@ -207,6 +382,7 @@ export function createCommunityService(options: ServiceOptions) {
       if (!message?.id || typeof message.body !== 'string') return;
       if (messages.some((entry) => entry.id === message.id)) return;
       messages.push(message);
+      wantProfile(message.authorId);
       if (messages.length > MAX_MESSAGES) messages.splice(0, messages.length - MAX_MESSAGES);
       notify();
       return;
@@ -237,6 +413,7 @@ export function createCommunityService(options: ServiceOptions) {
         pending.delete(clientId);
         entry.resolve({ success: false, error: message });
       }
+      if (data.sanction) sanction = cleanSanction(data.sanction);
       // Rate-limit/validation messages are transient; keep the connection.
       error = message;
       notify();
@@ -299,11 +476,16 @@ export function createCommunityService(options: ServiceOptions) {
 
   async function connect(): Promise<CommunityState> {
     closedByUser = false;
-    const identityMatches = identity ? identity.guest === !signedIn() : false;
+    const currentToken = getSessionToken() || null;
+    const identityMatches = identity
+      ? currentToken
+        ? !identity.guest && connectedToken === currentToken
+        : identity.guest
+      : false;
     if (status === 'online' && identityMatches) return snapshot();
     if (status === 'connecting' && connecting) {
       await connecting.catch(() => {});
-      if (status === 'online') return snapshot();
+      if ((status as CommunityStatus) === 'online') return snapshot();
     }
 
     clearTimers();
@@ -319,6 +501,7 @@ export function createCommunityService(options: ServiceOptions) {
       socket = null;
     }
 
+    connectedToken = currentToken;
     setStatus('connecting');
     const task = (async () => {
       const response = await fetch(`${API_BASE}/api/community/session`, {
@@ -367,7 +550,12 @@ export function createCommunityService(options: ServiceOptions) {
       socket = null;
     }
     status = 'idle';
+    identity = null;
+    connectedToken = null;
     presence = 0;
+    wantedProfiles.clear();
+    if (profileTimer) clearTimeout(profileTimer);
+    profileTimer = null;
     notify();
   }
 
@@ -398,8 +586,51 @@ export function createCommunityService(options: ServiceOptions) {
     });
   }
 
+  /** One request/acknowledge exchange with the lobby (delete, report, block, unblock, profile). */
+  function request(payload: Record<string, unknown>): Promise<ActionResult> {
+    if (status !== 'online') return Promise.resolve({ success: false, error: 'Connect to the lobby first.' });
+    const clientId = randomUUID();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        pending.delete(clientId);
+        resolve({ success: false, error: 'The lobby did not answer. Try again.' });
+      }, 10_000);
+      pending.set(clientId, { resolve, timer });
+      if (!sendRaw({ ...payload, clientId })) {
+        clearTimeout(timer);
+        pending.delete(clientId);
+        resolve({ success: false, error: 'The lobby connection is not ready.' });
+      }
+    });
+  }
+
+  const idOf = (value: unknown) => (typeof value === 'string' && /^[A-Za-z0-9:_-]{1,80}$/.test(value) ? value : '');
+
+  function saveProfile(input: { name?: unknown; avatar?: unknown }): Promise<ActionResult> {
+    const payload: Record<string, unknown> = { type: 'profile' };
+    if (input && input.avatar !== undefined) {
+      const avatar = cleanAvatar(input.avatar);
+      if (!avatar) return Promise.resolve({ success: false, error: 'That picture could not be used.' });
+      payload.avatar = avatar;
+    }
+    if (input && input.name !== undefined) {
+      if (typeof input.name !== 'string' || !input.name.trim()) return Promise.resolve({ success: false, error: 'Type a name first.' });
+      payload.name = input.name.trim().slice(0, 40);
+    }
+    if (payload.avatar === undefined && payload.name === undefined) return Promise.resolve({ success: false, error: 'Nothing to change.' });
+    return request(payload);
+  }
+
   return {
     state: snapshot,
+    profiles: profileList,
+    deleteMessage: (id: unknown) => (idOf(id) ? request({ type: 'delete', id }) : Promise.resolve({ success: false, error: 'That message could not be found.' })),
+    reportMessage: (id: unknown, reason?: unknown) => (idOf(id)
+      ? request({ type: 'report', id, reason: typeof reason === 'string' ? reason.slice(0, 120) : undefined })
+      : Promise.resolve({ success: false, error: 'That message could not be found.' })),
+    block: (id: unknown) => (idOf(id) ? request({ type: 'block', id }) : Promise.resolve({ success: false, error: 'That person could not be found.' })),
+    unblock: (id: unknown) => (idOf(id) ? request({ type: 'unblock', id }) : Promise.resolve({ success: false, error: 'That person could not be found.' })),
+    saveProfile,
     connect,
     send,
     disconnect,

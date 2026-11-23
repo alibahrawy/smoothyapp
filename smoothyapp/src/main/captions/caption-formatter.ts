@@ -12,11 +12,19 @@ export interface CaptionSettings {
   gapBetweenCaptions: number; // Default: 0.08 (2 frames at 24fps)
 }
 
+export interface CaptionWord {
+  text: string;
+  start: number;
+  end: number;
+}
+
 export interface FormattedCaption {
   index: number;
   startTime: number;
   endTime: number;
   text: string;
+  /** Per-word timings (absolute seconds) for Pro animated captions. */
+  words?: CaptionWord[];
 }
 
 const DEFAULT_SETTINGS: CaptionSettings = {
@@ -36,6 +44,9 @@ export function formatCaptions(
 ): FormattedCaption[] {
   const opts = { ...DEFAULT_SETTINGS, ...settings };
   const maxCharsTotal = opts.maxCharsPerLine * opts.maxLines;
+  // Never slice ordinary words into letters when maxCharsPerLine is small (e.g. 1 for 1-word captions).
+  // Only hard-split genuinely massive unbroken tokens (such as unspaced CJK sentences or long URLs).
+  const hardSplitLimit = Math.max(maxCharsTotal, 20);
 
   if (!result.chunks || result.chunks.length === 0) {
     // If no word-level timestamps, create single caption
@@ -52,10 +63,11 @@ export function formatCaptions(
   // Split oversized tokens without losing characters; distribute their timing.
   const chunks = result.chunks.flatMap(chunk => {
     const characters = Array.from(chunk.text.trim());
-    if (characters.length <= maxCharsTotal) return [chunk];
+    if (characters.length <= hardSplitLimit) return [chunk];
     const parts: TranscriptionChunk[] = [];
-    for (let offset = 0; offset < characters.length; offset += maxCharsTotal) {
-      const end = Math.min(characters.length, offset + maxCharsTotal);
+    const chunkStep = Math.max(maxCharsTotal, 1);
+    for (let offset = 0; offset < characters.length; offset += chunkStep) {
+      const end = Math.min(characters.length, offset + chunkStep);
       const duration = chunk.timestamp[1] - chunk.timestamp[0];
       parts.push({ text: characters.slice(offset, end).join(''), timestamp: [
         chunk.timestamp[0] + duration * offset / characters.length,
@@ -72,19 +84,18 @@ export function formatCaptions(
 
     // Check if adding this word would exceed limits
     const newText = currentCaption.text ? currentCaption.text + ' ' + wordText : wordText;
-    const newLength = newText.length;
 
     const firstWordTime = currentCaption.words[0]?.timestamp[0] ?? chunk.timestamp[0];
     const newDuration = chunk.timestamp[1] - firstWordTime;
 
     // Conditions to start a new caption
-    const exceedsLength = newLength > maxCharsTotal || wrapText(newText, opts.maxCharsPerLine).length > opts.maxLines;
+    const exceedsLength = wrapText(newText, opts.maxCharsPerLine).length > opts.maxLines;
     const exceedsDuration = newDuration > opts.maxDurationSeconds;
     const isEndOfSentence = /[.!?]$/.test(currentCaption.text) && currentCaption.words.length > 0;
 
     if ((exceedsLength || exceedsDuration || isEndOfSentence) && currentCaption.words.length > 0) {
-      // Finalize current caption
-      const caption = finalizeCaption(currentCaption, captionIndex, opts, captions[captions.length - 1]);
+      // Finalize current caption without stretching past the next spoken word
+      const caption = finalizeCaption(currentCaption, captionIndex, opts, captions[captions.length - 1], chunk.timestamp[0]);
       if (caption) {
         captions.push(caption);
         captionIndex++;
@@ -122,7 +133,8 @@ function finalizeCaption(
   caption: { words: TranscriptionChunk[]; text: string },
   index: number,
   settings: CaptionSettings,
-  previous?: FormattedCaption
+  previous?: FormattedCaption,
+  nextStart?: number
 ): FormattedCaption | null {
   if (caption.words.length === 0) return null;
 
@@ -134,15 +146,23 @@ function finalizeCaption(
   }
 
   let endTime = caption.words[caption.words.length - 1].timestamp[1];
+  const minDuration = Math.min(settings.minDurationSeconds, settings.maxDurationSeconds);
 
-  // Ensure minimum duration (measured from the clamped start).
-  if (endTime - startTime < settings.minDurationSeconds) {
-    endTime = startTime + settings.minDurationSeconds;
+  // Ensure minimum duration (measured from the clamped start), without pushing
+  // into the next spoken word so fast 1-word captions stay locked to audio.
+  if (endTime - startTime < minDuration) {
+    const desiredEnd = startTime + minDuration;
+    if (nextStart !== undefined && Number.isFinite(nextStart)) {
+      const ceiling = Math.max(endTime, nextStart - settings.gapBetweenCaptions);
+      endTime = Math.min(desiredEnd, ceiling);
+    } else {
+      endTime = desiredEnd;
+    }
   }
 
   // Never emit a backwards or zero-length cue.
   if (!(endTime > startTime)) {
-    endTime = startTime + settings.minDurationSeconds;
+    endTime = startTime + Math.min(0.1, minDuration);
   }
 
   // Format text with line breaks if needed
@@ -152,20 +172,34 @@ function finalizeCaption(
     index,
     startTime,
     endTime,
-    text: formattedText
+    text: formattedText,
+    words: caption.words.map(word => ({ text: word.text.trim(), start: word.timestamp[0], end: word.timestamp[1] }))
   };
 }
 
 /**
- * Format text with line breaks based on settings
+ * Format text with line breaks based on settings.
+ * Keeps individual normal words (<= 20 chars) intact even when `limit` is small
+ * (e.g. `1` for 1-word-per-line captions), while still wrapping massive unbroken
+ * tokens such as unspaced CJK sentences.
  */
 function wrapText(text: string, limit: number): string[] {
+  const safeLimit = Math.max(1, limit);
+  const hardWordLimit = Math.max(safeLimit, 20);
   const lines: string[] = [];
   let remaining = Array.from(text.trim());
-  while (remaining.length > limit) {
-    let split = limit;
-    for (let index = limit; index > 0; index--) {
+  while (remaining.length > safeLimit) {
+    let split = -1;
+    for (let index = safeLimit; index > 0; index--) {
       if (/\s/.test(remaining[index])) { split = index; break; }
+    }
+    if (split === -1) {
+      // First word is longer than `safeLimit`: keep it whole unless it's an oversized unbroken token.
+      let nextSpace = remaining.length;
+      for (let index = safeLimit; index < remaining.length; index++) {
+        if (/\s/.test(remaining[index])) { nextSpace = index; break; }
+      }
+      split = nextSpace <= hardWordLimit ? nextSpace : safeLimit;
     }
     lines.push(remaining.slice(0, split).join(''));
     remaining = Array.from(remaining.slice(split).join('').trimStart());
@@ -198,13 +232,19 @@ function applyGaps(captions: FormattedCaption[], gap: number): FormattedCaption[
       continue;
     }
 
-    const minStart = gap > 0 ? prev.endTime + gap : prev.endTime;
+    const rawDuration = caption.endTime - caption.startTime;
+    const effectiveGap = gap > 0 && caption.startTime >= prev.endTime && rawDuration > 0
+      ? Math.min(gap, rawDuration * 0.25)
+      : gap;
+    const minStart = effectiveGap > 0 ? prev.endTime + effectiveGap : prev.endTime;
     const startTime = Math.max(caption.startTime, minStart);
     let endTime = caption.endTime;
 
     // If clamping would collapse or invert the cue, merge it into the previous one.
     if (!(endTime > startTime)) {
       prev.text = prev.text ? `${prev.text}\n${caption.text}` : caption.text;
+      if (prev.words && caption.words) prev.words = [...prev.words, ...caption.words];
+      else delete prev.words;
       if (endTime > prev.endTime) prev.endTime = endTime;
       continue;
     }
@@ -256,17 +296,18 @@ function splitTextIntoCaptions(
   for (const word of words) {
     const newText = currentText ? currentText + ' ' + word : word;
 
-    if (newText.length > maxCharsTotal && currentText) {
+    if (wrapText(newText, settings.maxCharsPerLine).length > settings.maxLines && currentText) {
       // Calculate timing based on character position
       const charStart = text.indexOf(currentText);
       const charEnd = charStart + currentText.length;
       const captionStart = startTime + (charStart / text.length) * totalDuration;
       const captionEnd = startTime + (charEnd / text.length) * totalDuration;
+      const minDur = Math.min(settings.minDurationSeconds, settings.maxDurationSeconds);
 
       captions.push({
         index: captionIndex++,
         startTime: captionStart,
-        endTime: Math.max(captionEnd, captionStart + settings.minDurationSeconds),
+        endTime: Math.max(captionEnd, captionStart + Math.min(minDur, 0.2)),
         text: formatTextWithLineBreaks(currentText, settings)
       });
 

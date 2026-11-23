@@ -37,7 +37,7 @@ export function validateChatInput(input: any, requireModel = false) {
   if (input.thinking !== undefined && typeof input.thinking !== 'boolean') throw new Error('Choose Thinking or Non-thinking.');
   const model = catalog.models.find(model => model.id === (input.model || catalog.defaultModel))!;
   const thinking = input.thinking ?? (model.supportsNonThinking ? catalog.defaultThinking : true);
-  if (!thinking && !model.supportsNonThinking) throw new Error('This model requires Thinking. Choose Luna or DeepSeek for Non-thinking.');
+  if (!thinking && !model.supportsNonThinking) throw new Error('This model requires Thinking. Choose Luna, Haiku or DeepSeek for Non-thinking.');
   if (input.writingStyle !== undefined && (typeof input.writingStyle !== 'string' || !input.writingStyle.trim() || input.writingStyle.length > writing.maxPromptChars)) throw new Error('Writing instructions must contain 1 to 4,000 characters.');
   return { messages, ...(input.model !== undefined && { model: input.model as string }), thinking, ...(input.writingStyle !== undefined && { writingStyle: input.writingStyle.trim() as string }) };
 }

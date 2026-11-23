@@ -90,6 +90,22 @@ test('wrapping preserves unbroken words, Japanese and Arabic without empty lines
     assert.ok(captions.every(caption => !caption.text.startsWith('\n') && !caption.text.includes('...') && caption.text.split('\n').length <= 2));
   }
 });
+test('low maxCharsPerLine (down to 1) emits whole 1-word captions without splitting letters or drifting audio', () => {
+  const chunks = [
+    { text: 'Hello', timestamp: [0.0, 0.3] },
+    { text: 'everyone', timestamp: [0.3, 0.6] },
+    { text: 'welcome', timestamp: [0.6, 0.9] },
+    { text: 'back', timestamp: [0.9, 1.2] },
+  ];
+  const singleLine = formatCaptions({ text: 'Hello everyone welcome back', chunks }, { maxCharsPerLine: 1, maxLines: 1, maxDurationSeconds: 1.0 });
+  assert.deepEqual(singleLine.map(c => c.text), ['Hello', 'everyone', 'welcome', 'back']);
+  // Timing must stay locked to actual speech, not drift by +1s per word.
+  assert.ok(singleLine[0].startTime === 0 && singleLine[0].endTime <= 0.31);
+  assert.ok(singleLine[3].startTime >= 0.9 && singleLine[3].startTime < 1.1);
+
+  const twoLines = formatCaptions({ text: 'Hello everyone welcome back', chunks }, { maxCharsPerLine: 1, maxLines: 2, maxDurationSeconds: 3.0 });
+  assert.deepEqual(twoLines.map(c => c.text), ['Hello\neveryone', 'welcome\nback']);
+});
 test('an old bridge timer and late response cannot strand the next request', async () => {
   const sent = []; const bridge = new BridgeRequests(message => { sent.push(message); return true; });
   const first = bridge.request('importXML', 'xmlImported', {}, 15);

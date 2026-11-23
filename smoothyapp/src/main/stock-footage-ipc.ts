@@ -22,7 +22,7 @@ export function registerStockFootage(deps: {
       : error instanceof TypeError ? 'Could not reach the footage source. Check your internet connection and retry.' : error.message
     : 'The stock footage action failed. Please try again.' });
 
-  ipcMain.handle('stock-get-settings', () => ({ folder: getFolder(), pixabayEnabled: service.pixabayEnabled }));
+  ipcMain.handle('stock-get-settings', () => ({ folder: getFolder(), pixabayEnabled: service.pixabayEnabled, coverrEnabled: service.coverrEnabled }));
   ipcMain.handle('stock-select-folder', async () => {
     const window = deps.window();
     if (!window) return { canceled: true };
@@ -36,7 +36,8 @@ export function registerStockFootage(deps: {
     const controller = new AbortController(); searchController = controller;
     try {
       const results = await service.search(input, controller.signal);
-      if (!controller.signal.aborted) trackTool('stock_search');
+      // Automatic popular and featured listings are not a user-run search.
+      if (!controller.signal.aborted && !(input?.browse === true && !input.query?.trim()) && input?.featured !== true) trackTool('stock_search');
       return { success: true, ...results };
     } catch (error) { return controller.signal.aborted ? { canceled: true } : failure(error); }
     finally { if (searchController === controller) searchController = null; }

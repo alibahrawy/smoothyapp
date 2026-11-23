@@ -13,7 +13,7 @@ const screens = {
   blog: { result: 'Your blog draft', run: 'Draft blog post', help: 'Edit the article, check the facts and add your links before publishing.' },
   sfx: { result: 'Your sound-effect cues', run: 'Suggest sound cues', help: 'Choose licensed audio and place each effect on your timeline.' },
 };
-const colors = ['#ffc99a', '#ffe08c', '#9edbf8', '#abc8ff', '#d3b5ff', '#a5e4c9', '#ffc0df', '#9de2df', '#bfb8ff'];
+// Every Studio mode uses Studio's flavor (Lime); see docs/brand Design Bible §09.
 
 // Provider output is rendered as text only; Markdown/HTML is never executed.
 export function readableDraft(raw) {
@@ -113,8 +113,7 @@ export function initStudioText({ getUser, enabled, signIn, refreshCredits, getIn
     if (changed) remember();
     closeMenus();
     mode = next;
-    const tool = catalog.find(tool => tool.id === mode), description = tool.description.replaceAll('transcript', 'subtitles'), color = colors[catalog.indexOf(tool)], screen = screens[mode];
-    $('tab-studio-text').style.setProperty('--tab-accent', color);
+    const tool = catalog.find(tool => tool.id === mode), description = tool.description.replaceAll('transcript', 'subtitles'), screen = screens[mode];
     $('tab-studio-text').dataset.tool = mode;
     $('studio-text-heading').textContent = tool.label; $('studio-text-description').textContent = description;
     $('studio-workspace-description').textContent = description;
@@ -142,7 +141,7 @@ export function initStudioText({ getUser, enabled, signIn, refreshCredits, getIn
   }
   function setSource(text, name) { if (!enabled()) return; $('studio-text-input').value = text; sourceName = name; $('studio-text-source-name').textContent = name; closeMenus(); onSource(text, name); availability(); status('Subtitles ready. Choose a tool to get ideas.'); }
   $('studio-text-signin-btn').addEventListener('click', signIn);
-  $('studio-text-upgrade').addEventListener('click', () => api.openExternal('https://smoothyedit.com/pricing'));
+  $('studio-text-upgrade').addEventListener('click', () => api.openProCheckout());
   $('studio-text-composer').addEventListener('keydown', event => {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !event.isComposing && !(getWorkspace().mode === 'shorts' ? $('analyze-shorts-btn') : $('studio-text-run')).disabled) { event.preventDefault(); if (getWorkspace().mode === 'shorts') runShorts(); else run(); }
   });

@@ -4,14 +4,17 @@ import { randomUUID, createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { getFFmpegPath } from './ffmpeg-path';
 import { searchOtherStockSources } from './stock-footage-sources';
-import { PixabayStockSource } from './stock-footage-pixabay';
+import { PixabayStockSource, stockServiceURL } from './stock-footage-pixabay';
+import { CoverrStockSource } from './stock-footage-coverr';
 
-export type StockProvider = 'commons' | 'archive' | 'nasa' | 'pixabay';
+export const STOCK_USER_AGENT = 'SmoothyEdit/3.1 (https://smoothyedit.com; stock footage)';
+
+export type StockProvider = 'commons' | 'archive' | 'nasa' | 'pixabay' | 'coverr';
 export interface StockSourceCursor { page: number; cursor: number; done: boolean }
 export type StockSourceCursors = Partial<Record<StockProvider, StockSourceCursor>>;
 export interface StockFile { id: number; width: number; height: number; fps: number; link: string; format: string; label?: string }
 export interface StockVideo { id: number | string; provider?: StockProvider; title: string; license: string; licenseUrl: string; usage?: string; width: number; height: number; duration: number; url: string; image: string; creator: string; creatorUrl: string; files: StockFile[] }
-export interface StockSearch { query: string; provider?: StockProvider | 'all'; orientation?: string; size?: string; page?: number; cursor?: number; sourceCursors?: StockSourceCursors }
+export interface StockSearch { query: string; /** Empty query: list popular clips from sources that support it (Coverr, Pixabay). */ browse?: boolean; /** Automatic featured listing opened with the tab; not counted as a user search. */ featured?: boolean; provider?: StockProvider | 'all'; orientation?: string; size?: string; page?: number; cursor?: number; sourceCursors?: StockSourceCursors }
 export interface StockResults { videos: StockVideo[]; page: number; hasMore: boolean; nextOffset: number; sourceCursors?: StockSourceCursors; warning?: string }
 
 export function httpsUrl(value: unknown, hosts: string[]): string {
@@ -79,15 +82,22 @@ export class StockFootageService {
   private cache = new Map<string, { expires: number; results: StockResults }>();
   private videos = new Map<number | string, StockVideo>();
   private pixabay: PixabayStockSource;
-  constructor(private request: typeof fetch = fetch, private convert = convertStockVideo) { this.pixabay = new PixabayStockSource(request); }
-  configurePixabayService(endpoint: string, cacheFolder?: string) { this.pixabay.configure(endpoint, cacheFolder); this.clear(); }
+  private coverr: CoverrStockSource;
+  constructor(private request: typeof fetch = fetch, private convert = convertStockVideo) {
+    this.pixabay = new PixabayStockSource(request);
+    this.coverr = new CoverrStockSource(request); this.coverr.configure(stockServiceURL());
+  }
+  /** One server stock service backs both key-based sources; Coverr's endpoints sit beside Pixabay's. */
+  configurePixabayService(endpoint: string, cacheFolder?: string) { this.pixabay.configure(endpoint, cacheFolder); this.coverr.configure(endpoint, cacheFolder); this.clear(); }
   get pixabayEnabled() { return this.pixabay.configured; }
+  get coverrEnabled() { return this.coverr.configured; }
   clear() { this.cache.clear(); this.videos.clear(); }
 
   async search(input: StockSearch, signal?: AbortSignal): Promise<StockResults> {
     signal?.throwIfAborted();
     const query = typeof input?.query === 'string' ? input.query.trim() : '';
-    if (!query || query.length > 200) throw new Error('Enter a search of 1–200 characters.');
+    const browse = !query && input?.browse === true;
+    if ((!query && !browse) || query.length > 200) throw new Error('Enter a search of 1–200 characters.');
     const page = input.page ?? 1;
     let offset = input.cursor ?? 0;
     if (!Number.isSafeInteger(page) || page < 1 || page > 10000 || !Number.isSafeInteger(offset) || offset < 0 || offset > 100000) throw new Error('Invalid search page.');
@@ -95,12 +105,14 @@ export class StockFootageService {
       if (input[name] && !allowed.includes(input[name] as never)) throw new Error('Invalid search filter.');
     }
     const provider = input.provider || 'commons';
-    if (!['all', 'commons', 'archive', 'nasa', 'pixabay'].includes(provider)) throw new Error('Invalid footage source.');
+    if (!['all', 'commons', 'archive', 'nasa', 'pixabay', 'coverr'].includes(provider)) throw new Error('Invalid footage source.');
+    if (browse && !['all', 'coverr', 'pixabay'].includes(provider)) throw new Error('Enter a search of 1–200 characters.');
     if (provider === 'all') return this.searchAll({ ...input, query, page }, signal);
-    const cacheId = JSON.stringify([provider, query, input.orientation || '', input.size || '', page, offset]);
+    const cacheId = JSON.stringify([provider, query, browse, input.orientation || '', input.size || '', page, offset]);
     const cached = this.cache.get(cacheId);
     if (cached && cached.expires > Date.now()) { this.registerVideos(cached.results.videos); return cached.results; }
     if (provider === 'pixabay') return this.remember(cacheId, await this.pixabay.search({ ...input, query, page }, signal), 24 * 3600000);
+    if (provider === 'coverr') return this.remember(cacheId, await this.coverr.search({ ...input, query, page }, signal), 24 * 3600000);
     if (provider !== 'commons') return this.remember(cacheId, await searchOtherStockSources({ ...input, query, provider, page, cursor: offset }, this.request, signal));
     const videos: StockVideo[] = [];
     let hasMore = false;
@@ -108,7 +120,7 @@ export class StockFootageService {
       const params = new URLSearchParams({ action: 'query', format: 'json', formatversion: '2', generator: 'search', gsrsearch: query + ' filetype:video',
         gsrnamespace: '6', gsrlimit: '40', gsroffset: String(offset), prop: 'videoinfo', viprop: 'url|size|extmetadata|derivatives', viurlwidth: '320' });
       const response = await this.request('https://commons.wikimedia.org/w/api.php?' + params, {
-        headers: { Accept: 'application/json', 'User-Agent': 'SmoothyEdit/1.5.1 (https://smoothyedit.com; stock footage search)' }, redirect: 'error',
+        headers: { Accept: 'application/json', 'User-Agent': STOCK_USER_AGENT }, redirect: 'error',
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000)
       });
       if (response.status === 429) throw new Error('Wikimedia search limit reached. Please try again later.');
@@ -134,9 +146,12 @@ export class StockFootageService {
   }
 
   private async searchAll(input: StockSearch, signal?: AbortSignal): Promise<StockResults> {
-    const available: StockProvider[] = ['commons', 'archive', 'nasa', 'pixabay'];
-    const providers = available.filter(provider => provider !== 'pixabay' || this.pixabay.configured);
-    const labels = { commons: 'Wikimedia Commons', archive: 'Internet Archive', nasa: 'NASA', pixabay: 'Pixabay' };
+    const available: StockProvider[] = ['commons', 'archive', 'nasa', 'pixabay', 'coverr'];
+    const providers = available.filter(provider => (provider !== 'pixabay' || this.pixabay.configured) && (provider !== 'coverr' || this.coverr.configured))
+      // Without a search term only the sources that can list popular clips take part.
+      .filter(provider => input.query || ['pixabay', 'coverr'].includes(provider));
+    if (!providers.length) throw new Error('Enter a search of 1–200 characters.');
+    const labels = { commons: 'Wikimedia Commons', archive: 'Internet Archive', nasa: 'NASA', pixabay: 'Pixabay', coverr: 'Coverr' };
     const supplied = input.sourceCursors;
     if (supplied !== undefined && (!supplied || typeof supplied !== 'object' || Array.isArray(supplied)
       || Object.keys(supplied).some(key => !available.includes(key as StockProvider)))) throw new Error('Invalid source pagination.');
@@ -203,16 +218,21 @@ export class StockFootageService {
     let link = file.link;
     const provider = video.provider || 'commons';
     const mediaUrlAllowed = (value: string) => provider === 'archive' ? archiveMediaUrl(value)
-      : httpsUrl(value, provider === 'pixabay' ? ['cdn.pixabay.com'] : provider === 'nasa' ? ['images-assets.nasa.gov'] : ['upload.wikimedia.org']);
+      : httpsUrl(value, provider === 'pixabay' ? ['cdn.pixabay.com'] : provider === 'coverr' ? ['cdn.coverr.co'] : provider === 'nasa' ? ['images-assets.nasa.gov'] : ['upload.wikimedia.org']);
     let response: Response | undefined;
     for (let redirects = 0; redirects <= 5; redirects++) {
       if (!mediaUrlAllowed(link)) throw new Error('The source returned an unsupported video URL.');
-      response = await this.request(link, { redirect: 'manual', signal: timeoutSignal });
+      // Wikimedia Commons rejects default Electron/Node User-Agents with HTTP 429; always identify cleanly without auth headers.
+      response = await this.request(link, { headers: { 'User-Agent': STOCK_USER_AGENT }, redirect: 'manual', signal: timeoutSignal });
       if (![301, 302, 303, 307, 308].includes(response.status)) break;
       const location = response.headers.get('location');
       await response.body?.cancel();
       if (!location || redirects === 5) throw new Error('The video download redirected too many times.');
       link = new URL(location, link).href;
+    }
+    if (response?.status === 429) {
+      await response.body?.cancel().catch(() => {});
+      throw new Error('The footage source is rate-limiting downloads right now. Please wait a moment and retry.');
     }
     if (!response?.ok || !response.body) throw new Error('The video could not be downloaded. Search again and retry.');
     const total = Number(response.headers.get('content-length')) || 0;
@@ -252,6 +272,8 @@ export class StockFootageService {
       timeoutSignal.throwIfAborted();
       await fs.writeFile(destination + '.source.json', JSON.stringify({ provider, title: video.title, creator: video.creator, source: video.url, license: video.license, licenseUrl: video.licenseUrl, usage: video.usage }, null, 2), { flag: 'wx' });
       try { await fs.rename(converted, destination); } catch (error) { await fs.rm(destination + '.source.json', { force: true }); throw error; }
+      // Coverr's API terms require each saved download to be reported.
+      if (provider === 'coverr') void this.coverr.reportDownload(String(video.id));
       return destination;
     } finally {
       await handle?.close();

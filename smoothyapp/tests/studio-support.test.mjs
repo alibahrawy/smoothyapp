@@ -10,7 +10,7 @@ async function load(relative) {
 }
 const pref = await load('../src/main/app-preferences.ts');
 const writing = JSON.parse(await fs.readFile(new URL('../src/shared/chat-writing.json', import.meta.url), 'utf8'));
-const expectedPreferences = (studioEnabled = true) => ({ studioEnabled, chatPromptVersion: 2, chatWritingPrompt: writing.defaultPrompt });
+const expectedPreferences = (studioEnabled = true, appearance = 'system') => ({ studioEnabled, appearance, chatPromptVersion: 2, chatWritingPrompt: writing.defaultPrompt });
 const studio = await load('../src/main/studio-service.ts');
 const draft = await load('../src/renderer/studio-text.js');
 function memoryStore(saved) { const values = { appPreferences: saved }; return { values, get: key => values[key], set: (key, value) => { values[key] = value; } }; }
@@ -144,4 +144,19 @@ test('desktop labels/descriptions stay identical to the web Pick a Tool catalog 
   vm.runInNewContext((await transform(text, { loader: 'ts', format: 'cjs' })).code, ctx);
   const canonical = JSON.parse(JSON.stringify(ctx.module.exports.ALL_TOOLS.filter(tool => tool.id !== 'shorts').map(({id,label,description}) => ({id,label,description}))));
   const actual = JSON.parse(await fs.readFile(new URL('../src/shared/studio-catalog.json', import.meta.url), 'utf8')); assert.deepEqual(actual, canonical);
+});
+
+test('appearance persists, rejects unknown values and counts only real changes', () => {
+  const store = memoryStore(), events = []; let changes = 0;
+  const service = pref.createAppPreferences(store, () => changes++, id => events.push(id));
+  assert.equal(service.snapshot().appearance, 'system');
+  assert.equal(service.setAppearance('dark').appearance, 'dark');
+  assert.deepEqual(events, ['appearance_dark']); assert.equal(changes, 1);
+  service.setAppearance('dark'); assert.deepEqual(events, ['appearance_dark']); assert.equal(changes, 1);
+  for (const invalid of [null, 'auto', 'Dark', 1]) assert.throws(() => service.setAppearance(invalid));
+  assert.equal(pref.createAppPreferences(store).snapshot().appearance, 'dark');
+  service.setAppearance('system'); assert.deepEqual(events, ['appearance_dark', 'appearance_system']);
+  assert.equal(pref.createAppPreferences(memoryStore({ appearance: 'purple' })).snapshot().appearance, 'system');
+  const resilient = pref.createAppPreferences(memoryStore(), () => { throw Error('Window closed'); }, () => { throw Error('Offline'); });
+  assert.equal(resilient.setAppearance('light').appearance, 'light');
 });

@@ -15,11 +15,17 @@ import { initAccount } from './account.js';
 import { initAppPreferences } from './app-preferences.js';
 import { initShortsCuts } from './shortscuts.js';
 import { initCommunity } from './community.js';
+import { initCommunitySettings } from './community-settings.js';
 import { initAgentic } from './agentic.js';
+import { initWhatsNew } from './whats-new.js';
+import { initProCaptions } from './pro-captions.js';
+import { initSilenceRetakes } from './silence-retakes.js';
 let photosTools = null;
 let chatTools = null;
 let studioTextTools = null;
 let accountTools = null;
+let proCaptions = null;
+let silenceRetakes = null;
 let agenticTools = null;
 let studioEnabled = true;
 let stockTools = null, audioTools = null;
@@ -38,7 +44,7 @@ const state = {
   platform: 'unknown',
   captionResult: null,
   captionRaw: null,
-  captionTransforms: { capitalize: false, removePunctuation: false },
+  captionTransforms: { capitalize: false, removePunctuation: true, closeGaps: true },
   activeNLE: null,
   pendingUpdateNotes: null,
   updateModalOpen: false,
@@ -119,6 +125,7 @@ const isMacApp = /Mac/i.test(navigator.userAgent);
 const GPU_ENGINE_LABEL = isMacApp ? 'GPU (Metal)' : 'GPU (CUDA)';
 const captionsCapitalizeBtn = document.getElementById('captions-capitalize-btn');
 const captionsRemovePunctBtn = document.getElementById('captions-remove-punct-btn');
+const captionsCloseGapsBtn = document.getElementById('captions-close-gaps-btn');
 
 // Best Shorts DOM Elements
 const bestshortsStatusBar = document.getElementById('bestshorts-status-bar');
@@ -168,14 +175,11 @@ const settingsUpdateStatus = document.getElementById('settings-update-status');
 const settingsInstallUpdateBtn = document.getElementById('settings-install-update-btn');
 const settingsUpdateNotes = document.getElementById('settings-update-notes');
 const settingsCurrentVersion = document.getElementById('settings-current-version');
+const settingsUpdatesVersion = document.getElementById('settings-updates-version');
+const autoUpdatesToggle = document.getElementById('auto-updates-toggle');
 const sidebarVersion = document.getElementById('sidebar-version');
 const discordBtn = document.getElementById('discord-btn');
 const instagramBtn = document.getElementById('instagram-btn');
-const settingsDiscordBtn = document.getElementById('settings-discord-btn');
-const settingsTwitterBtn = document.getElementById('settings-twitter-btn');
-const settingsInstagramBtn = document.getElementById('settings-instagram-btn');
-const settingsLinkedinBtn = document.getElementById('settings-linkedin-btn');
-const settingsWebsiteBtn = document.getElementById('settings-website-btn');
 
 // Logs DOM Elements
 const logsContainer = document.getElementById('logs-container');
@@ -272,10 +276,13 @@ async function init() {
     const version = await window.electronAPI.getAppVersion();
     if (version) {
       const label = `v${version}`;
-      if (settingsCurrentVersion) settingsCurrentVersion.textContent = label;
+      if (settingsCurrentVersion) settingsCurrentVersion.textContent = version;
+      if (settingsUpdatesVersion) settingsUpdatesVersion.textContent = `Version ${version}`;
+      const aboutVersion = document.getElementById('settings-about-version');
+      if (aboutVersion) aboutVersion.textContent = `Version ${version}`;
       if (sidebarVersion) {
         sidebarVersion.textContent = label;
-        sidebarVersion.title = `SmoothyEdit ${label}`;
+        sidebarVersion.title = `SmoothyApp ${version}`;
       }
       state.appVersion = version;
     }
@@ -293,8 +300,23 @@ async function init() {
   audioTools = initAudioLibrary({ isConnected: () => state.activeNLE==='resolve' || state.isConnected });
   initLocalAudio();
   initShortsCuts();
-  initCommunity({ signIn: openLoginModal });
-  agenticTools = initAgentic();
+  initCommunity({ signIn: openLoginModal, openSettings });
+  initCommunitySettings({ signIn: openLoginModal });
+  agenticTools = initAgentic({ openSettings });
+  initWhatsNew({ getVersion: () => state.appVersion });
+  proCaptions = initProCaptions({
+    getCaptions: () => state.captionResult?.captions,
+    canSend: () => state.activeNLE !== 'resolve' && state.isConnected && !!state.sequenceInfo?.hasSequence && !state.isProcessing,
+    onStatus: (text, type) => setCaptionsStatus(text, type),
+  });
+  silenceRetakes = initSilenceRetakes({
+    openSettings,
+    signIn: openLoginModal,
+    onToggleChange: (enabled) => {
+      const label = document.getElementById('silence-remove-btn-label');
+      if (label) label.textContent = enabled ? 'Remove Silence & Retakes' : 'Remove Silence';
+    },
+  });
   chatTools = initChat({ getUser: () => studioEnabled ? state.authState?.user : null, signIn: openLoginModal, refreshCredits: refreshStudioCredits });
   photosTools = initPhotos({ getUser: () => studioEnabled ? state.authState?.user : null, signIn: openLoginModal, refreshCredits: refreshStudioCredits });
   studioTextTools = initStudioText({ getUser: () => state.authState?.user, enabled: () => studioEnabled, signIn: openLoginModal, refreshCredits: refreshStudioCredits,
@@ -332,10 +354,22 @@ function updateWindowTitlebar() {
   const selected = document.querySelector('.nav-item.active');
   const studioTool = ['studio-text', 'bestshorts'].includes(state.currentTab) ? document.querySelector(`[data-studio-mode="${state.studioMode}"]`) : null;
   const settingsOpen = !document.getElementById('settings-modal').classList.contains('hidden');
-  const label = settingsOpen ? 'Settings' : studioTool ? `Studio · ${studioTool.textContent.trim()}` : selected?.querySelector('.nav-label')?.textContent || 'SmoothyEdit';
-  const accent = settingsOpen ? '#E6E4DF' : studioTool ? getComputedStyle(studioTool).getPropertyValue('--tool-color').trim() : selected && getComputedStyle(selected).getPropertyValue('--tab-accent').trim();
-  const titlebarColor = accent || '#E6E4DF';
-  document.querySelector('.window-titlebar').style.setProperty('--window-accent', titlebarColor);
+  const label = settingsOpen ? 'Settings' : studioTool ? `Studio · ${studioTool.textContent.trim()}` : selected?.querySelector('.nav-label')?.textContent || 'SmoothyApp';
+  // Status strip uses a hex so the Windows caption-button overlay can match it.
+  // Settings: the strip takes the selected section's soft tint (Design Bible §11).
+  const settingsItem = settingsOpen ? document.querySelector('.settings-nav-item.active') : null;
+  const selectedStyle = settingsItem ? getComputedStyle(settingsItem) : !settingsOpen && selected ? getComputedStyle(selected) : null;
+  // Strip = selected item = icon tile: the flavor's soft tint, never the pale wash (Design Bible).
+  const strip = selectedStyle?.getPropertyValue(settingsItem ? '--settings-tint' : '--tab-tint').trim() || '';
+  // The strip keeps the tool's soft tint in both themes (dark text); only with no tool is it neutral.
+  const dark = document.documentElement.dataset.theme === 'dark';
+  const tint = /^#[0-9a-f]{6}$/i.test(strip) ? strip : '';
+  const titlebarColor = tint || (dark ? '#262523' : '#F3F2EF');
+  const titlebar = document.querySelector('.window-titlebar');
+  titlebar.style.setProperty('--window-accent', titlebarColor);
+  // Dark or light status text, whichever reads better on the strip colour.
+  const lum = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(c => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)).reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
+  titlebar.style.setProperty('--window-status-ink', lum(titlebarColor) > 0.2 ? '#151515' : '#EEECE7');
   window.electronAPI.setWindowTitlebarColor?.(titlebarColor)?.catch(() => {});
   document.querySelectorAll('.window-titlebar > .status-bar').forEach(bar => {
     bar.dataset.windowActive = String(bar.dataset.windowTab === state.currentTab);
@@ -399,7 +433,6 @@ function setupSidebar() {
   const studioNav = document.querySelector('#channels-studio [data-tab="studio-text"]');
   studioNav.querySelector('.nav-label').textContent = 'Studio';
   studioNav.setAttribute('aria-label', 'Studio · Shorts, Condense, Hooks, Titles, Descriptions, Thumbnails, B-roll, Social, Blog, SFX');
-  document.querySelector('#channels-studio [data-tab="chat"] .nav-icon svg').innerHTML = '<path d="M19 11a7 7 0 0 1-7 7H7l-4 3V10a7 7 0 0 1 7-7h2a7 7 0 0 1 7 7z"/><path d="M8 9h8M8 13h5"/>';
   for (const [tab, label] of [['photos', 'AI Photos · uses Studio credits · generate, edit, reactions, image history'], ['chat', 'Chat · uses Studio credits']]) {
     const item = document.querySelector(`#channels-studio [data-tab="${tab}"]`);
     item.setAttribute('aria-label', label);
@@ -467,7 +500,7 @@ function setupSidebar() {
   });
   document.addEventListener('keydown', event => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-      if (document.querySelector('dialog[open], .modal:not(.hidden)')) return;
+      if (document.querySelector('dialog[open], .overlay:not(.hidden), .agentic-approval:not(.hidden), .modal:not(.hidden)')) return;
       event.preventDefault(); applyCollapsed(false);
       try { localStorage.setItem('sidebarCollapsed', 'false'); } catch {}
       search.focus(); search.select();
@@ -691,9 +724,11 @@ function setupEventListeners() {
   if (captionEngineSelect) captionEngineSelect.addEventListener('change', onCaptionEngineChange);
   if (captionsCapitalizeBtn) captionsCapitalizeBtn.addEventListener('click', () => toggleCaptionTransform('capitalize'));
   if (captionsRemovePunctBtn) captionsRemovePunctBtn.addEventListener('click', () => toggleCaptionTransform('removePunctuation'));
+  if (captionsCloseGapsBtn) captionsCloseGapsBtn.addEventListener('click', () => toggleCaptionTransform('closeGaps'));
 
   document.getElementById('caption-max-chars').addEventListener('input', (e) => {
-    document.getElementById('caption-max-chars-value').textContent = e.target.value;
+    const val = Number(e.target.value);
+    document.getElementById('caption-max-chars-value').textContent = val === 1 ? '1 (1 word)' : String(val);
   });
 
   document.querySelectorAll('#caption-max-lines-group .toggle-btn').forEach(btn => {
@@ -707,7 +742,7 @@ function setupEventListeners() {
   });
 
   document.getElementById('caption-max-duration').addEventListener('input', (e) => {
-    document.getElementById('caption-max-duration-value').textContent = `${e.target.value}s`;
+    document.getElementById('caption-max-duration-value').textContent = `${Number(e.target.value).toFixed(1)}s`;
   });
 
   // Best Shorts Tab
@@ -768,9 +803,14 @@ function setupEventListeners() {
       }
       return;
     }
+    const errModal = document.getElementById('error-modal');
+    if (e.key === 'Escape' && errModal && !errModal.classList.contains('hidden')) {
+      hideError();
+      return;
+    }
     if (e.key === 'Escape' && !settingsModal.classList.contains('hidden')) closeSettings();
-    if (e.key === 'Tab' && !settingsModal.classList.contains('hidden') && document.getElementById('error-modal').classList.contains('hidden')) {
-      const focusable = [...settingsModal.querySelectorAll('button, input, select, summary, a[href]')].filter(element => !element.disabled && element.getClientRects().length);
+    if (e.key === 'Tab' && !settingsModal.classList.contains('hidden') && errModal?.classList.contains('hidden')) {
+      const focusable = [...settingsModal.querySelectorAll('button, input, select, textarea, summary, a[href]')].filter(element => !element.disabled && element.getClientRects().length);
       const first = focusable[0], last = focusable[focusable.length - 1];
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
@@ -881,42 +921,37 @@ function setupEventListeners() {
 
   // Check for updates button
   checkUpdateBtn.addEventListener('click', manualCheckForUpdates);
+  autoUpdatesToggle.addEventListener('change', setAutoUpdatesPreference);
   if (settingsInstallUpdateBtn) {
     settingsInstallUpdateBtn.addEventListener('click', () => showUpdateModal(state.updateState.version));
   }
   if (discordBtn) {
     discordBtn.addEventListener('click', () => window.electronAPI.openExternal('https://discord.gg/KmJRqUZzDe'));
   }
-  if (settingsDiscordBtn) {
-    settingsDiscordBtn.addEventListener('click', () => window.electronAPI.openExternal('https://discord.gg/KmJRqUZzDe'));
-  }
-  if (settingsTwitterBtn) {
-    settingsTwitterBtn.addEventListener('click', () => window.electronAPI.openExternal('https://x.com/alibahrawy34'));
-  }
-  document.getElementById('settings-smoothy-twitter-btn').addEventListener('click', () => window.electronAPI.openExternal('https://x.com/smoothyedit'));
+  // Community → social and SmoothyREC buttons: the URL lives on the button.
+  document.querySelectorAll('[data-open-url]').forEach(button => {
+    button.addEventListener('click', () => window.electronAPI.openExternal(button.dataset.openUrl));
+  });
   document.querySelectorAll('[data-feedback-kind]').forEach(button => {
     button.addEventListener('click', async () => {
       const drafts = {
-        feedback: ['SmoothyEdit feedback', 'My feedback:\n'],
-        feature: ['SmoothyEdit feature request', 'The feature I’d like to see:\n\nHow it would help my editing:\n'],
-        bug: ['SmoothyEdit bug report', 'What happened:\n\nSteps to reproduce:\n\nWhat I expected:\n']
+        feedback: ['SmoothyApp feedback', 'My feedback:\n'],
+        feature: ['SmoothyApp feature request', 'The feature I’d like to see:\n\nHow it would help my editing:\n'],
+        bug: ['SmoothyApp bug report', 'What happened:\n\nSteps to reproduce:\n\nWhat I expected:\n']
       };
       const [subject, prompt] = drafts[button.dataset.feedbackKind];
       const status = document.getElementById('settings-feedback-status');
       status.classList.add('hidden');
       button.disabled = true;
       try {
-        await window.electronAPI.openExternal(`mailto:support@smoothyedit.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`SmoothyEdit v${state.appVersion || '?'}\n\n${prompt}`)}`);
+        await window.electronAPI.openExternal(`mailto:support@smoothyedit.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`SmoothyApp ${state.appVersion || '?'}\n\n${prompt}`)}`);
       } catch {
         status.textContent = 'Could not open your email app. Email support@smoothyedit.com or use the Discord link below.';
         status.classList.remove('hidden');
       } finally { button.disabled = false; }
     });
   });
-  settingsInstagramBtn.addEventListener('click', () => window.electronAPI.openExternal('https://www.instagram.com/alibahrawy34/'));
   instagramBtn.addEventListener('click', () => window.electronAPI.openExternal('https://www.instagram.com/alibahrawy34/'));
-  settingsLinkedinBtn.addEventListener('click', () => window.electronAPI.openExternal('https://www.linkedin.com/in/alibahrawy/'));
-  settingsWebsiteBtn.addEventListener('click', () => window.electronAPI.openExternal('https://www.alibahrawy.com/'));
 
   // Dev tab logs
   if (logsClearBtn) {
@@ -935,7 +970,7 @@ function setupEventListeners() {
 
   if (multicamUpgradeBtn) {
     multicamUpgradeBtn.addEventListener('click', () => {
-      window.electronAPI.openExternal('https://smoothyedit.com/pricing');
+      window.electronAPI.openProCheckout();
     });
   }
   if (multicamLoginBtn) {
@@ -1425,7 +1460,11 @@ function setupElectronListeners() {
     if (operation === 'silence') {
       // Silence removal result
       if (result.success) {
-        setSilenceStatus(`Done! Removed ${formatDuration(result.stats?.silenceRemoved || 0)} of silence`, 'success');
+        const retakesCount = result.stats?.retakesCount || 0;
+        const retakesNote = result.stats?.retakesEnabled
+          ? (retakesCount > 0 ? ` and ${retakesCount} repeated ${retakesCount === 1 ? 'take' : 'takes'}` : ' (no repeated takes found)')
+          : '';
+        setSilenceStatus(`Done! Removed ${formatDuration(result.stats?.silenceRemoved || 0)} of silence${retakesNote}`, 'success');
         silenceFooterStatus.textContent = result.imported?'Silence removed · new timeline opened in Resolve.':result.handoff?'Silence removed · XML saved. Retry sending in manual options.':'Silence removed - check Premiere for new sequence';
         if(result.handoff && !result.imported){document.getElementById('resolve-result-btn').classList.remove('hidden');document.getElementById('silence-send-resolve').classList.remove('hidden');}
 
@@ -1435,7 +1474,9 @@ function setupElectronListeners() {
         document.getElementById('stat-silence-removed').textContent = formatDuration(result.stats?.silenceRemoved || 0);
         document.getElementById('stat-new-duration').textContent = formatDuration(result.stats?.newDuration || 0);
         document.getElementById('stat-cuts-count').textContent = result.stats?.cuts || 0;
+        silenceRetakes?.renderResults(result.stats);
       } else {
+        if (result.requiresPro) silenceRetakes?.handleProDenied();
         setSilenceStatus('Error', 'error');
         showError(result.error || 'Silence removal failed');
       }
@@ -1555,9 +1596,13 @@ function setupElectronListeners() {
 }
 
 function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+  return String(text ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character]);
 }
 
 function getNLEDisplayName() {
@@ -1590,9 +1635,20 @@ function updateConnectionGuide() {
     card.classList.toggle('hidden', state.activeNLE === 'resolve' || !!(localFile || (state.isConnected && state.sequenceInfo?.hasSequence)));
     const installed = state.bridgeInstalled !== false;
     const steps = card.querySelectorAll('li');
-    [installed, state.isConnected, !!state.sequenceInfo?.hasSequence].forEach((complete, index) => steps[index].classList.toggle('complete', complete));
-    card.querySelector('button').textContent = !installed ? 'Install bridge' : !state.isConnected ? 'Connection settings' : 'Refresh sequence';
-    card.querySelector('p').textContent = !installed ? 'Install the bridge, then restart Premiere.' : !state.isConnected ? 'In Premiere, open Window → Extensions → SmoothyEdit.' : 'Open the sequence you want to edit, then refresh.';
+    const statuses = [installed, state.isConnected, !!state.sequenceInfo?.hasSequence];
+    const nextIndex = statuses.indexOf(false);
+    const labels = [
+      installed ? 'Bridge installed' : '1 · Install bridge',
+      '2 · Open panel',
+      '3 · Open sequence',
+    ];
+    statuses.forEach((complete, index) => {
+      steps[index].classList.toggle('complete', complete);
+      steps[index].classList.toggle('is-next', !complete && index === nextIndex);
+      steps[index].textContent = labels[index];
+    });
+    card.querySelector('button').textContent = !installed ? 'Install bridge' : !state.isConnected ? 'Help' : 'Refresh sequence';
+    card.querySelector('p').textContent = !installed ? 'Install the bridge, then restart Premiere.' : !state.isConnected ? 'Open Window → Extensions → SmoothyEdit, then open a sequence.' : 'Open the sequence you want to edit, then refresh.';
   });
 }
 function setupReviewUI() {
@@ -1600,17 +1656,25 @@ function setupReviewUI() {
     const card = document.createElement('section');
     card.className = 'section premiere-guide';
     card.dataset.premiereGuide = '';
-    card.innerHTML = '<h2>Connect Premiere</h2><ol><li>Install bridge</li><li>Open Premiere panel</li><li>Open sequence</li></ol><p class="help-text"></p><button type="button" class="btn btn-secondary btn-small"></button>';
+    card.innerHTML =
+      '<div class="premiere-guide-head">' +
+        '<span class="premiere-guide-badge" aria-hidden="true">Pr</span>' +
+        '<div class="premiere-guide-copy"><h2>Connect Premiere Pro</h2><p class="help-text"></p></div>' +
+        '<button type="button" class="btn btn-secondary btn-small"></button>' +
+      '</div>' +
+      '<ol class="premiere-guide-steps"><li>1 · Install bridge</li><li>2 · Open panel</li><li>3 · Open sequence</li></ol>';
     card.querySelector('button').addEventListener('click', async () => {
       if (state.bridgeInstalled === false) {
         const result = await window.electronAPI.installBridge();
         if (!result?.success) { showError(result?.error || 'Could not install the bridge.'); return; }
         state.bridgeInstalled = true; updateConnectionGuide();
-      } else if (!state.isConnected) { await openSettings(); }
+      } else if (!state.isConnected) { await openSettings('editors'); }
       else window.electronAPI.refreshSequence();
     });
     const scroll = document.querySelector(`#tab-${name} > .content-scroll`);
-    scroll.prepend(card);
+    const header = scroll.querySelector(':scope > .brand-tool-header');
+    if (header) header.after(card);
+    else scroll.prepend(card);
   }
   window.electronAPI.getBridgeStatus().then(result => { state.bridgeInstalled = !!result?.cep?.installed; updateConnectionGuide(); }).catch(() => {});
   document.querySelectorAll('#caption-max-lines-group .toggle-btn').forEach(button => button.addEventListener('click', scheduleCaptionReformat));
@@ -1763,6 +1827,7 @@ function reconcileSequenceActions() {
   silenceRemoveBtn.disabled = resolve ? state.isProcessing || !!state.editorHandoffBusy : !ready || !silenceAudioTracksList.querySelector('.silence-audio-track-cb:checked');
   updateGenerateCaptionsButton();
   importCaptionsBtn.disabled = (state.activeNLE!=='resolve' && (!state.isConnected || !state.sequenceInfo?.hasSequence)) || !state.captionResult?.captions?.length || state.isProcessing;
+  if (proCaptions) { proCaptions.section.classList.toggle('hidden', resolve); proCaptions.refresh(); }
   document.getElementById('multicam-editor').disabled = state.isProcessing || !!state.editorHandoffBusy;
   document.getElementById('resolve-load-btn').disabled = state.isProcessing;
   const cancel = document.getElementById('resolve-cancel-btn');
@@ -2091,6 +2156,7 @@ function displaySilenceSequenceInfo(info) {
 
   // Hide stats section until we run analysis
   document.getElementById('silence-stats-section').style.display = 'none';
+  silenceRetakes?.clearResults();
 }
 
 async function runSilenceRemoval() {
@@ -2134,10 +2200,14 @@ async function runSilenceRemoval() {
   }
 
   const editInPlace = state.activeNLE!=='resolve' && document.getElementById('edit-in-place').checked;
+  const removeRetakes = !!silenceRetakes?.isEnabled();
+  const retakeSensitivity = silenceRetakes?.getSensitivity() || 'balanced';
 
   if (editInPlace) {
     const confirmed = window.confirm(
-      'Silence Removal will ripple-delete the silent parts directly from the current sequence. ' +
+      (removeRetakes
+        ? 'Silence Removal will ripple-delete silent parts and repeated takes directly from the current sequence. '
+        : 'Silence Removal will ripple-delete the silent parts directly from the current sequence. ') +
       'Premiere records each cut as a separate undo step. Continue?'
     );
     if (!confirmed) return;
@@ -2146,7 +2216,7 @@ async function runSilenceRemoval() {
   const config = {
     sources: audioSources,
     options: {
-      sequenceName: state.sequenceInfo.name + ' - Silence Removed',
+      sequenceName: state.sequenceInfo.name + (removeRetakes ? ' - Silence & Retakes Removed' : ' - Silence Removed'),
       fps: state.sequenceInfo.fps,
       width: state.sequenceInfo.width,
       height: state.sequenceInfo.height,
@@ -2155,6 +2225,8 @@ async function runSilenceRemoval() {
       padding: parseFloat(document.getElementById('padding-amount').value),
       sequenceId: state.sequenceInfo.id,
       editInPlace: editInPlace,
+      removeRetakes,
+      retakeSensitivity,
       videoTracks: videoClips
     }
   };
@@ -2251,7 +2323,7 @@ function updateMessage({ status, version, percent, error }) {
     available: `Update v${version} is available. Review the changes before installing.`,
     skipped: `Skipped v${version}. You’re staying on v${state.appVersion || '?'}.`,
     downloading: `Downloading v${version}… ${percent}%`,
-    downloaded: `Update v${version} is ready. Restart when you choose to install it.`,
+    downloaded: state.updateState.autoUpdates !== false ? `Update v${version} is ready. It installs when you quit SmoothyApp, or restart now.` : `Update v${version} is ready. Restart when you choose to install it.`,
     installing: `Restarting to install v${version}…`,
     'up-to-date': `You’re on the latest version (v${state.appVersion || '?'}).`,
     error: `Update failed${error ? `: ${error}` : '. Try again later.'}`,
@@ -2273,10 +2345,13 @@ function renderUpdateState() {
   const { status, version } = state.updateState;
   const busy = ['checking', 'downloading', 'installing'].includes(status);
   checkUpdateBtn.disabled = busy || status === 'dev-build';
-  checkUpdateBtn.classList.toggle('hidden', status === 'dev-build');
+  const auto = state.updateState.autoUpdates !== false;
+  autoUpdatesToggle.checked = auto;
   document.getElementById('settings-update-help').textContent = status === 'dev-build'
-    ? 'This local preview does not receive automatic updates. Update checks are enabled in the published app.'
-    : 'SmoothyEdit checks for updates on startup and every six hours. Downloads and installation only start when you choose. Skip any version and keep using the one you have.';
+    ? 'This local preview does not check for updates. Your automatic-updates choice is saved and applies to the published app.'
+    : auto
+      ? 'SmoothyApp checks on startup and every six hours, downloads new versions in the background and installs them when you quit. Skip any version to stay on yours.'
+      : 'SmoothyApp checks on startup and every six hours. Downloads and installation only start when you choose.';
   checkUpdateBtn.textContent = status === 'checking' ? 'Checking…' : 'Check for Updates';
   settingsInstallUpdateBtn.classList.toggle('hidden', !version || status === 'checking');
   settingsInstallUpdateBtn.textContent = status === 'skipped' ? 'View skipped update' : 'View update';
@@ -2886,6 +2961,10 @@ function syncCaptionTransformButtons() {
     captionsRemovePunctBtn.classList.toggle('active', state.captionTransforms.removePunctuation);
     captionsRemovePunctBtn.setAttribute('aria-pressed', String(state.captionTransforms.removePunctuation));
   }
+  if (captionsCloseGapsBtn) {
+    captionsCloseGapsBtn.classList.toggle('active', state.captionTransforms.closeGaps);
+    captionsCloseGapsBtn.setAttribute('aria-pressed', String(state.captionTransforms.closeGaps));
+  }
 }
 
 /**
@@ -2895,7 +2974,7 @@ function syncCaptionTransformButtons() {
 function applyCaptionTransforms() {
   if (!state.captionResult || !Array.isArray(state.captionRaw)) return;
 
-  const { capitalize, removePunctuation } = state.captionTransforms;
+  const { capitalize, removePunctuation, closeGaps } = state.captionTransforms;
   const transform = (text) => {
     let out = text;
     if (removePunctuation) {
@@ -2910,16 +2989,32 @@ function applyCaptionTransforms() {
     return out;
   };
 
-  state.captionResult.captions = state.captionRaw.map((cap) => ({
+  const captions = state.captionRaw.map((cap) => ({
     ...cap,
     text: transform(cap.text)
   }));
+  state.captionResult.captions = closeGaps ? closeCaptionGaps(captions, currentCaptionSettings().maxDurationSeconds) : captions;
   state.captionResult.srt = buildSRT(state.captionResult.captions);
   state.captionResult.vtt = buildVTT(state.captionResult.captions);
 
   if (captionsPreviewSection.style.display !== 'none') {
     displayCaptionsPreview(state.captionResult.captions);
   }
+}
+
+/**
+ * Hold each caption until the next one starts so there are no empty frames
+ * between them. A caption never grows past Max Caption Duration, so a long
+ * pause in speech still clears the screen.
+ */
+function closeCaptionGaps(captions, maxDurationSeconds) {
+  const limit = Number.isFinite(maxDurationSeconds) && maxDurationSeconds > 0 ? maxDurationSeconds : Infinity;
+  return captions.map((cap, index) => {
+    const next = captions[index + 1];
+    if (!next || !(next.startTime > cap.endTime)) return cap;
+    const endTime = Math.max(cap.endTime, Math.min(next.startTime, cap.startTime + limit));
+    return endTime === cap.endTime ? cap : { ...cap, endTime };
+  });
 }
 
 function buildSRT(captions) {
@@ -3051,6 +3146,7 @@ async function runGenerateCaptions() {
       // Apply the active text-style toggles, then show the preview.
       applyCaptionTransforms();
       displayCaptionsPreview(state.captionResult.captions);
+      proCaptions?.refresh();
       captionsPreviewSection.scrollIntoView({ block: 'start' });
     } else {
       setCaptionsStatus('Generation failed', 'error');
@@ -3106,7 +3202,14 @@ function captionWarning(caption) {
   const limit = currentCaptionSettings().maxCharsPerLine;
   const messages = [];
   if (speed > 20) messages.push(`${Math.round(speed)} characters/s — may be hard to read`);
-  if (caption.text.split('\n').some(line => Array.from(line).length > limit)) messages.push('Line exceeds your character limit');
+  const exceedsLine = caption.text.split('\n').some(line => {
+    const trimmed = line.trim();
+    const len = Array.from(trimmed).length;
+    if (len <= limit) return false;
+    // A single unbroken word longer than a tight character limit (e.g. 1-word mode) is intentional.
+    return /\s/.test(trimmed) || len > 20;
+  });
+  if (exceedsLine) messages.push('Line exceeds your character limit');
   return messages.join(' · ');
 }
 function updateCaptionExports() {
@@ -3216,13 +3319,32 @@ function undoCaptionReplacement() {
   updateCaptionExports(); displayCaptionsPreview(state.captionResult.captions);
   document.getElementById('caption-replace-status').textContent = 'Replacement undone.';
 }
+function formatCaptionClock(seconds) {
+  const total = Math.max(0, Number(seconds) || 0);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = (total % 60).toFixed(2).padStart(5, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${String(m).padStart(2, '0')}:${s}`;
+}
+
+function parseCaptionClock(raw) {
+  const text = String(raw ?? '').trim().replace(',', '.');
+  if (!text) return NaN;
+  if (/^\d+(?:\.\d+)?$/.test(text)) return Number(text);
+  const parts = text.split(':').map(Number);
+  if (parts.some(p => !Number.isFinite(p) || p < 0)) return NaN;
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  return NaN;
+}
+
 function displayCaptionsPreview(captions) {
   captionsPreviewSection.style.display = 'block';
   captionsCount.textContent = `${captions.length} captions`;
   captionsPreview.innerHTML = '';
   captions.forEach((caption, index) => {
     const row = document.createElement('div'); row.className = 'caption-item';
-    row.innerHTML = `<div class="caption-row-heading">Caption ${index + 1}</div><div class="caption-time-inputs"><label>Start (s)<input type="number" step="0.01" min="0" value="${caption.startTime}" aria-label="Caption ${index + 1} start"></label><label>End (s)<input type="number" step="0.01" min="0" value="${caption.endTime}" aria-label="Caption ${index + 1} end"></label></div><textarea class="caption-text-editor" dir="auto" aria-label="Caption ${index + 1} text" rows="2">${escapeHtml(caption.text)}</textarea><p class="caption-warning help-text"></p>`;
+    row.innerHTML = `<div class="caption-row-heading">Caption ${index + 1}</div><div class="caption-time-inputs"><label>Start<input type="text" inputmode="decimal" value="${formatCaptionClock(caption.startTime)}" aria-label="Caption ${index + 1} start"></label><label>End<input type="text" inputmode="decimal" value="${formatCaptionClock(caption.endTime)}" aria-label="Caption ${index + 1} end"></label></div><textarea class="caption-text-editor" dir="auto" aria-label="Caption ${index + 1} text" rows="2">${escapeHtml(caption.text)}</textarea><p class="caption-warning help-text"></p>`;
     const warning = row.querySelector('.caption-warning'); warning.textContent = captionWarning(caption);
     row.querySelector('textarea').addEventListener('input', event => {
       invalidateCaptionReformat(); discardCaptionReplacementUndo(); state.captionEdited = true;
@@ -3231,18 +3353,19 @@ function displayCaptionsPreview(captions) {
     });
     row.querySelectorAll('input').forEach((input, field) => {
       const commitTiming = (resetInvalid) => {
-        const value = Number(input.value), key = field === 0 ? 'startTime' : 'endTime';
+        const value = Math.round(parseCaptionClock(input.value) * 1000) / 1000, key = field === 0 ? 'startTime' : 'endTime';
         const candidate = { ...caption, [key]: value };
-        const valid = input.value !== '' && Number.isFinite(value) && value >= 0 && candidate.startTime < candidate.endTime &&
+        const valid = Number.isFinite(value) && value >= 0 && candidate.startTime < candidate.endTime &&
           (!captions[index - 1] || candidate.startTime >= captions[index - 1].endTime) && (!captions[index + 1] || candidate.endTime <= captions[index + 1].startTime);
         if (!valid) {
-          if (resetInvalid) input.value = caption[key];
-          warning.textContent = 'Use increasing, non-overlapping caption timings.'; return;
+          if (resetInvalid) input.value = formatCaptionClock(caption[key]);
+          warning.textContent = 'Use increasing, non-overlapping timings (MM:SS.ms or seconds).'; return;
         }
         if (value !== caption[key]) {
           invalidateCaptionReformat(); discardCaptionReplacementUndo(); state.captionEdited = true;
           caption[key] = value; state.captionRaw[index][key] = value; updateCaptionExports();
         }
+        if (resetInvalid) input.value = formatCaptionClock(value);
         warning.textContent = captionWarning(caption);
       };
       input.addEventListener('input', () => commitTiming(false));
@@ -3325,7 +3448,8 @@ function setupSettingsLayout() {
   const scroller = document.getElementById('settings-panes');
 
   const select = (name) => {
-    const button = buttons.find((entry) => entry.dataset.settingsPane === name) || buttons[0];
+    const target = name === 'connections' ? 'profile' : name;
+    const button = buttons.find((entry) => entry.dataset.settingsPane === target) || buttons[0];
     if (!button) return;
     buttons.forEach((entry) => {
       const active = entry === button;
@@ -3336,6 +3460,7 @@ function setupSettingsLayout() {
     title.textContent = button.dataset.paneTitle || 'Settings';
     description.textContent = button.dataset.paneDescription || '';
     if (scroller) scroller.scrollTop = 0;
+    updateWindowTitlebar();
   };
 
   buttons.forEach((button) => button.addEventListener('click', () => select(button.dataset.settingsPane)));
@@ -3347,6 +3472,10 @@ function setupSettingsLayout() {
       const visible = !query || haystack.includes(query);
       button.classList.toggle('is-filtered-out', !visible);
       if (visible && !first) first = button;
+    });
+    nav.querySelectorAll('.settings-nav-group').forEach((group) => {
+      const hasVisible = [...group.querySelectorAll('[data-settings-pane]')].some((btn) => !btn.classList.contains('is-filtered-out'));
+      group.classList.toggle('is-empty', !hasVisible);
     });
     const current = buttons.find((button) => button.classList.contains('active'));
     if (query && first && (!current || current.classList.contains('is-filtered-out'))) {
@@ -3510,7 +3639,7 @@ function setupProfileSettings() {
   renderProfileSettings();
 }
 
-async function openSettings() {
+async function openSettings(pane) {
   if (settingsModal.classList.contains('hidden')) settingsReturnFocus = document.activeElement;
   document.querySelector('.app-container').inert = true;
   settingsModal.classList.remove('hidden');
@@ -3520,6 +3649,8 @@ async function openSettings() {
   renderProfileSettings();
   document.querySelector('.window-titlebar')?.classList.add('settings-open');
   updateWindowTitlebar();
+  // Callers such as the Community "Profile" button open a specific section.
+  if (typeof pane === 'string') document.querySelector(`[data-settings-pane="${pane}"]`)?.click();
 
   // Load saved token
   const token = await window.electronAPI.getConnectionToken();
@@ -3582,7 +3713,7 @@ async function toggleWebsiteConnection() {
 
     const connected = await window.electronAPI.connectToWebsite();
     if (!connected) {
-      showError('Failed to connect to SmoothyEdit. Check your token and try again.');
+      showError('Failed to connect to Smoothy. Check your token and try again.');
     }
   }
 }
@@ -3595,7 +3726,8 @@ async function loadBridgeStatus() {
   try {
     const status = await window.electronAPI.getBridgeStatus();
     const cep = status.cep || {};
-    cepPathInput.value = status.extensionsPath;
+    cepPathInput.value = status.extensionsPath || '';
+    cepPathInput.placeholder = 'Not set';
 
     if (cep.installed) {
       bridgeStatusDot.className = 'connection-dot connected';
@@ -3713,6 +3845,19 @@ function updateNLESelectorUI() {
 // Update Functions
 // ========================================
 
+async function setAutoUpdatesPreference() {
+  const status = document.getElementById('auto-updates-status'), enabled = autoUpdatesToggle.checked;
+  autoUpdatesToggle.disabled = true;
+  try {
+    const result = await window.electronAPI.setAutoUpdates(enabled);
+    if (!result?.success) throw new Error(result?.error || 'Could not save this setting.');
+    status.textContent = enabled ? 'Automatic updates are on.' : 'Automatic updates are off. You choose when to download and install.';
+  } catch (error) {
+    autoUpdatesToggle.checked = !enabled;
+    status.textContent = error instanceof Error ? error.message : 'Could not save this setting.';
+  } finally { autoUpdatesToggle.disabled = false; }
+}
+
 async function manualCheckForUpdates() {
   checkUpdateBtn.disabled = true;
   try { applyUpdateState(await window.electronAPI.checkForUpdates()); }
@@ -3730,9 +3875,19 @@ function initTheme() {
   applyTheme();
 }
 
+// Light/Dark comes from the Appearance setting: the main process sets
+// nativeTheme.themeSource, which drives prefers-color-scheme here.
+const darkScheme = window.matchMedia('(prefers-color-scheme: dark)');
+function syncColorScheme() {
+  document.documentElement.dataset.theme = darkScheme.matches ? 'dark' : 'light';
+  updateWindowTitlebar();
+}
+darkScheme.addEventListener('change', syncColorScheme);
+
 function applyTheme() {
   state.currentTheme = THEME;
   document.documentElement.classList.add(`theme-${THEME}`);
+  document.documentElement.dataset.theme = darkScheme.matches ? 'dark' : 'light';
   localStorage.setItem('smoothyedit-theme', THEME);
 
   // Remember for next launch's window background colour
@@ -3754,7 +3909,7 @@ function updatePinButton(isOnTop) {
   pinBtn.classList.toggle('active', isOnTop);
   pinBtn.setAttribute('aria-pressed', String(isOnTop));
   pinBtn.setAttribute('aria-label', isOnTop ? 'Turn off stay on top' : 'Stay on top');
-  pinBtn.title = isOnTop ? 'Stop keeping SmoothyEdit above other windows' : 'Keep SmoothyEdit above other windows';
+  pinBtn.title = isOnTop ? 'Stop keeping SmoothyApp above other windows' : 'Keep SmoothyApp above other windows';
 }
 
 async function toggleAlwaysOnTop() {
@@ -3799,15 +3954,29 @@ function detectPlatformFallback() {
 // ========================================
 // Compressor Tab Functions
 // ========================================
+// Media Encoder & Compressor Tab Functions
+// ========================================
 
 const compressorState = {
+  mode: 'compress',
+  videoFormat: 'mp4_h264',
+  audioFormat: 'mp3',
+  audioBitrate: '192k',
+  resolution: 'original',
+  fps: 'original',
+  muteAudio: false,
   currentSourcePath: null,
+  currentSourcePaths: [],
   currentSourceType: null,
   sourceName: null,
   videoFiles: [],
+  probeByPath: {},
+  probeGeneration: 0,
   outputFolder: null,
+  customOutputFolder: false,
   quality: 'high',
   hardwareInfo: null,
+  hardwareRequestId: 0,
   isCompressing: false,
   compressionResults: [],
   lastBatchResult: null,
@@ -3817,6 +3986,32 @@ const compressorState = {
   }
 };
 
+function getEncoderCodecTarget() {
+  if (compressorState.mode === 'extract_audio') return 'audio';
+  if (compressorState.mode === 'compress') return 'hevc';
+  if (compressorState.videoFormat === 'mp4_h264') return 'h264';
+  if (compressorState.videoFormat === 'mp4_hevc') return 'hevc';
+  if (compressorState.videoFormat === 'mov_prores') return 'prores';
+  if (compressorState.videoFormat === 'webm_vp9') return 'vp9';
+  return 'remux';
+}
+
+function getEncoderOutputLabel() {
+  if (compressorState.mode === 'compress') return 'HEVC MP4';
+  if (compressorState.mode === 'extract_audio') {
+    const map = { mp3: 'MP3', wav: 'WAV', m4a: 'M4A (AAC)', flac: 'FLAC' };
+    return map[compressorState.audioFormat] || 'MP3';
+  }
+  const map = {
+    mp4_h264: 'MP4 (H.264)',
+    mp4_hevc: 'MP4 (HEVC)',
+    mov_prores: 'MOV (ProRes 422)',
+    webm_vp9: 'WebM (VP9)',
+    mp4_remux: 'MP4 (Remux)'
+  };
+  return map[compressorState.videoFormat] || 'MP4 (H.264)';
+}
+
 // Load saved settings
 function loadCompressorSettings() {
   const saved = localStorage.getItem('compressorSettings');
@@ -3824,7 +4019,15 @@ function loadCompressorSettings() {
     try {
       const parsed = JSON.parse(saved);
       compressorState.settings = { ...compressorState.settings, ...parsed };
-      compressorState.quality = compressorState.settings.quality;
+      if (['high', 'balanced', 'fast'].includes(parsed.quality)) compressorState.quality = parsed.quality;
+      if (['compress', 'convert', 'extract_audio'].includes(parsed.mode)) compressorState.mode = parsed.mode;
+      if (['mp4_h264', 'mp4_hevc', 'mov_prores', 'webm_vp9', 'mp4_remux'].includes(parsed.videoFormat)) {
+        compressorState.videoFormat = parsed.videoFormat;
+      }
+      if (['mp3', 'wav', 'm4a', 'flac'].includes(parsed.audioFormat)) compressorState.audioFormat = parsed.audioFormat;
+      if (['320k', '192k', '128k'].includes(parsed.audioBitrate)) compressorState.audioBitrate = parsed.audioBitrate;
+      if (['original', '2160', '1080', '720', '480'].includes(parsed.resolution)) compressorState.resolution = parsed.resolution;
+      if (['original', '60', '30', '24'].includes(parsed.fps)) compressorState.fps = parsed.fps;
     } catch (e) {
       console.error('Failed to load compressor settings:', e);
     }
@@ -3833,13 +4036,19 @@ function loadCompressorSettings() {
 
 function saveCompressorSettings() {
   localStorage.setItem('compressorSettings', JSON.stringify({
+    mode: compressorState.mode,
+    videoFormat: compressorState.videoFormat,
+    audioFormat: compressorState.audioFormat,
+    audioBitrate: compressorState.audioBitrate,
+    resolution: compressorState.resolution,
+    fps: compressorState.fps,
     quality: compressorState.quality,
     encoder: 'auto'
   }));
 }
 
 function formatBytes(bytes) {
-  if (bytes === 0) return '0 B';
+  if (!bytes || bytes <= 0) return '0 B';
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -3858,38 +4067,159 @@ function formatDurationMs(ms) {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+function formatCodecBadge(codec) {
+  if (!codec) return '';
+  const map = {
+    h264: 'H.264',
+    hevc: 'HEVC',
+    av1: 'AV1',
+    vp9: 'VP9',
+    vp8: 'VP8',
+    prores: 'ProRes',
+    mpeg4: 'MPEG-4',
+    mpeg2video: 'MPEG-2',
+    flv1: 'FLV',
+    wmv3: 'WMV',
+    theora: 'Theora',
+    gif: 'GIF',
+    aac: 'AAC',
+    opus: 'Opus',
+    vorbis: 'Vorbis',
+    mp3: 'MP3',
+    flac: 'FLAC',
+    pcm_s16le: 'PCM',
+    pcm_s24le: 'PCM 24-bit',
+    ac3: 'AC3',
+    eac3: 'EAC3'
+  };
+  return map[codec.toLowerCase()] || codec.toUpperCase();
+}
+
 function fileNameFromPath(filePath) {
   return (filePath || '').split(/[\\/]/).pop() || filePath || 'Unknown file';
+}
+
+async function refreshCompressorHardware() {
+  const reqId = ++compressorState.hardwareRequestId;
+  const target = getEncoderCodecTarget();
+  try {
+    const info = await window.electronAPI.compressorDetectHardware(target);
+    if (reqId !== compressorState.hardwareRequestId) return;
+    compressorState.hardwareInfo = info;
+    updateCompressorHardwareUI();
+  } catch (e) {
+    console.error('Failed to detect hardware:', e);
+  }
 }
 
 async function initCompressor() {
   loadCompressorSettings();
   setupCompressorListeners();
   setupCompressorIPCListeners();
-
-  // Detect hardware on init
-  try {
-    compressorState.hardwareInfo = await window.electronAPI.compressorDetectHardware();
-    updateCompressorHardwareUI();
-  } catch (e) {
-    console.error('Failed to detect hardware:', e);
-  }
-
-  // Update quality button states
-  updateQualityButtons();
+  syncEncoderControlsUI();
+  updateCompressorUI();
+  await refreshCompressorHardware();
 }
 
 function setupCompressorListeners() {
-  // Drop zone
   const dropZone = document.getElementById('compressor-drop-zone');
-  const browseBtn = document.getElementById('compressor-browse-btn');
-  const changeFolderBtn = document.getElementById('compressor-change-folder-btn');
+  const browseFilesBtn = document.getElementById('compressor-browse-btn');
+  const browseFolderBtn = document.getElementById('compressor-browse-folder-btn');
+  const changeFilesBtn = document.getElementById('compressor-change-folder-btn');
+  const changeDirBtn = document.getElementById('compressor-change-dir-btn');
+  const clearSourceBtn = document.getElementById('compressor-clear-source-btn');
   const changeOutputBtn = document.getElementById('compressor-change-output-btn');
+  const openOutputBtn = document.getElementById('compressor-open-output-btn');
   const startBtn = document.getElementById('compressor-start-btn');
   const cancelBtn = document.getElementById('compressor-cancel-btn');
+  const modeButtons = document.querySelectorAll('#encoder-mode-group .encoder-mode');
+  const videoFormatButtons = document.querySelectorAll('#encoder-video-format-buttons .toggle-btn');
+  const audioFormatButtons = document.querySelectorAll('#encoder-audio-format-buttons .toggle-btn');
+  const audioBitrateButtons = document.querySelectorAll('#encoder-audio-bitrate-buttons .toggle-btn');
   const qualityButtons = document.querySelectorAll('#compressor-quality-group .toggle-btn');
+  const resolutionSelect = document.getElementById('encoder-resolution-select');
+  const fpsSelect = document.getElementById('encoder-fps-select');
+  const muteCheckbox = document.getElementById('encoder-mute-audio');
 
-  // Drag and drop
+  // Mode cards
+  modeButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (compressorState.isCompressing) return;
+      const nextMode = btn.dataset.encoderMode;
+      if (!nextMode || nextMode === compressorState.mode) return;
+      compressorState.mode = nextMode;
+      saveCompressorSettings();
+      syncEncoderControlsUI();
+      if (compressorState.currentSourcePaths.length > 0) {
+        await rescanCompressorSourcesForMode();
+      } else {
+        updateCompressorUI();
+      }
+      await refreshCompressorHardware();
+    });
+  });
+
+  // Video output format buttons
+  videoFormatButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (compressorState.isCompressing) return;
+      compressorState.videoFormat = btn.dataset.value;
+      saveCompressorSettings();
+      syncEncoderControlsUI();
+      updateCompressorUI();
+      await refreshCompressorHardware();
+    });
+  });
+
+  // Audio output format buttons
+  audioFormatButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (compressorState.isCompressing) return;
+      compressorState.audioFormat = btn.dataset.value;
+      saveCompressorSettings();
+      syncEncoderControlsUI();
+      updateCompressorUI();
+      await refreshCompressorHardware();
+    });
+  });
+
+  // Audio bitrate buttons
+  audioBitrateButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (compressorState.isCompressing) return;
+      compressorState.audioBitrate = btn.dataset.value;
+      saveCompressorSettings();
+      syncEncoderControlsUI();
+    });
+  });
+
+  // Quality buttons
+  qualityButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (compressorState.isCompressing) return;
+      compressorState.quality = btn.dataset.value;
+      compressorState.settings.quality = btn.dataset.value;
+      saveCompressorSettings();
+      syncEncoderControlsUI();
+    });
+  });
+
+  // Resolution / FPS / Mute
+  resolutionSelect?.addEventListener('change', () => {
+    compressorState.resolution = resolutionSelect.value;
+    saveCompressorSettings();
+  });
+
+  fpsSelect?.addEventListener('change', () => {
+    compressorState.fps = fpsSelect.value;
+    saveCompressorSettings();
+  });
+
+  muteCheckbox?.addEventListener('change', () => {
+    compressorState.muteAudio = Boolean(muteCheckbox.checked);
+  });
+
+  // Drag and drop (supports 1 file, multiple files, or folders)
   dropZone.addEventListener('dragover', (e) => {
     e.preventDefault();
     dropZone.classList.add('drag-over');
@@ -3902,118 +4232,187 @@ function setupCompressorListeners() {
   dropZone.addEventListener('drop', async (e) => {
     e.preventDefault();
     dropZone.classList.remove('drag-over');
+    if (compressorState.isCompressing) return;
 
-    const file = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file) {
+    const droppedFiles = Array.from(e.dataTransfer.files || []);
+    if (droppedFiles.length > 0) {
       try {
-        const filePath = window.electronAPI.getDroppedFilePath(file);
-        if (!filePath) throw new Error('This dropped item has no local file path. Use Browse to select it.');
-        await selectCompressorSource(filePath);
-      } catch (error) { showCompressorError(error.message || 'Could not read the dropped file.'); }
+        const paths = droppedFiles
+          .map(f => window.electronAPI.getDroppedFilePath(f))
+          .filter(Boolean);
+        if (paths.length === 0) {
+          throw new Error('These dropped items have no local file path. Use Choose Files or Choose Folder.');
+        }
+        await selectCompressorSources(paths);
+      } catch (error) {
+        showCompressorError(error.message || 'Could not read the dropped media.');
+      }
     }
   });
 
   dropZone.addEventListener('click', () => {
-    browseCompressorSource();
+    if (!compressorState.isCompressing) browseCompressorFiles();
   });
 
-  browseBtn.addEventListener('click', () => {
-    browseCompressorSource();
+  browseFilesBtn.addEventListener('click', () => browseCompressorFiles());
+  browseFolderBtn?.addEventListener('click', () => browseCompressorFolderOnly());
+  changeFilesBtn.addEventListener('click', () => browseCompressorFiles());
+  changeDirBtn?.addEventListener('click', () => browseCompressorFolderOnly());
+  clearSourceBtn?.addEventListener('click', () => clearCompressorSource());
+
+  if (changeOutputBtn) {
+    changeOutputBtn.addEventListener('click', () => changeOutputFolder());
+  }
+
+  openOutputBtn?.addEventListener('click', async () => {
+    const folder = compressorState.lastBatchResult?.outputFolder || compressorState.outputFolder;
+    if (!folder) return;
+    try {
+      const res = await window.electronAPI.compressorOpenOutputFolder(folder);
+      if (!res?.success) showCompressorError(res?.error || 'Could not open output folder.');
+    } catch {
+      showCompressorError('Could not open output folder.');
+    }
   });
 
-  changeFolderBtn.addEventListener('click', () => {
-    browseCompressorSource();
-  });
+  startBtn.addEventListener('click', () => startCompression());
+  cancelBtn.addEventListener('click', () => cancelCompression());
 
-  if (changeOutputBtn) changeOutputBtn.addEventListener('click', () => {
-    changeOutputFolder();
-  });
-
-  startBtn.addEventListener('click', () => {
-    startCompression();
-  });
-
-  cancelBtn.addEventListener('click', () => {
-    cancelCompression();
-  });
-
-  // Quality buttons
-  qualityButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      compressorState.quality = btn.dataset.value;
-      compressorState.settings.quality = btn.dataset.value;
-      saveCompressorSettings();
-      updateQualityButtons();
-      updateQualityHelp();
-    });
+  // Delegated remove-file click
+  document.getElementById('compressor-files-list')?.addEventListener('click', (e) => {
+    const removeBtn = e.target.closest('.compressor-file-remove');
+    if (!removeBtn || compressorState.isCompressing) return;
+    const index = parseInt(removeBtn.dataset.index, 10);
+    if (!Number.isFinite(index) || index < 0 || index >= compressorState.videoFiles.length) return;
+    const removed = compressorState.videoFiles[index];
+    compressorState.videoFiles.splice(index, 1);
+    if (compressorState.currentSourceType === 'files') {
+      compressorState.currentSourcePaths = compressorState.videoFiles.map(f => f.path);
+    }
+    if (compressorState.videoFiles.length === 0) {
+      clearCompressorSource();
+    } else {
+      if (removed && compressorState.currentSourceType === 'file') {
+        clearCompressorSource();
+        return;
+      }
+      updateCompressorUI();
+    }
   });
 }
 
 function setupCompressorIPCListeners() {
-  // Progress updates
   window.electronAPI.onCompressorProgress((progress) => {
     updateCompressorProgress(progress);
   });
 
-  // Hardware detected
   window.electronAPI.onCompressorHardwareDetected((hardware) => {
     compressorState.hardwareInfo = hardware;
     updateCompressorHardwareUI();
   });
 
-  // Stats update
   window.electronAPI.onCompressorStatsUpdate((stats) => {
     updateCompressorStats(stats);
   });
 
-  // Complete
   window.electronAPI.onCompressorComplete((results) => {
     compressionComplete(results);
   });
 }
 
-async function browseCompressorFolder() {
-  return browseCompressorSource();
+function clearCompressorSource() {
+  if (compressorState.isCompressing) return;
+  compressorState.currentSourcePath = null;
+  compressorState.currentSourcePaths = [];
+  compressorState.currentSourceType = null;
+  compressorState.sourceName = null;
+  compressorState.videoFiles = [];
+  compressorState.probeByPath = {};
+  compressorState.outputFolder = null;
+  compressorState.customOutputFolder = false;
+  compressorState.compressionResults = [];
+  compressorState.lastBatchResult = null;
+  document.getElementById('compressor-results-section')?.classList.add('hidden');
+  document.getElementById('compressor-status-bar').className = 'status-bar status-idle';
+  document.getElementById('compressor-status-text').textContent = 'Media Encoder';
+  updateCompressorUI();
 }
 
-async function browseCompressorSource() {
+async function browseCompressorFiles() {
   try {
-    const result = window.electronAPI.compressorSelectSource
-      ? await window.electronAPI.compressorSelectSource()
-      : await window.electronAPI.compressorSelectFolder();
-    if (!result.canceled && result.path) {
-      await selectCompressorSource(result.path);
+    const result = window.electronAPI.compressorSelectFiles
+      ? await window.electronAPI.compressorSelectFiles(compressorState.mode)
+      : await window.electronAPI.compressorSelectSource(compressorState.mode);
+    if (!result.canceled) {
+      const paths = Array.isArray(result.paths) && result.paths.length > 0
+        ? result.paths
+        : result.path ? [result.path] : [];
+      if (paths.length > 0) await selectCompressorSources(paths);
     }
   } catch (e) {
-    console.error('Failed to browse source:', e);
-    showCompressorError('Failed to open video or folder browser');
+    console.error('Failed to browse files:', e);
+    showCompressorError('Failed to open file browser');
   }
 }
 
-async function selectCompressorFolder(folderPath) {
-  return selectCompressorSource(folderPath);
+async function browseCompressorFolderOnly() {
+  try {
+    const result = await window.electronAPI.compressorSelectFolder();
+    if (!result.canceled && result.path) {
+      await selectCompressorSources([result.path]);
+    }
+  } catch (e) {
+    console.error('Failed to browse folder:', e);
+    showCompressorError('Failed to open folder browser');
+  }
+}
+
+async function browseCompressorSource() {
+  return browseCompressorFiles();
 }
 
 async function selectCompressorSource(sourcePath) {
-  compressorState.currentSourcePath = sourcePath;
+  return selectCompressorSources([sourcePath]);
+}
+
+async function rescanCompressorSourcesForMode() {
+  if (compressorState.currentSourcePaths.length === 0) return;
+  try {
+    const scan = window.electronAPI.compressorScanSources
+      ? await window.electronAPI.compressorScanSources(compressorState.currentSourcePaths, compressorState.mode)
+      : await window.electronAPI.compressorScanSource(compressorState.currentSourcePaths[0], compressorState.mode);
+
+    compressorState.currentSourcePath = scan.sourcePath;
+    compressorState.currentSourceType = scan.sourceType;
+    compressorState.sourceName = scan.sourceName;
+    if (!compressorState.customOutputFolder) {
+      compressorState.outputFolder = scan.outputFolder;
+    }
+    compressorState.videoFiles = scan.files || [];
+    updateCompressorUI();
+    probeQueuedMediaFiles();
+  } catch (e) {
+    console.error('Failed to rescan source:', e);
+  }
+}
+
+async function selectCompressorSources(sourcePaths) {
+  compressorState.currentSourcePaths = sourcePaths.slice();
+  compressorState.currentSourcePath = sourcePaths[0] || null;
   compressorState.currentSourceType = null;
   compressorState.sourceName = null;
   compressorState.outputFolder = null;
+  compressorState.customOutputFolder = false;
   compressorState.videoFiles = [];
   compressorState.compressionResults = [];
   compressorState.lastBatchResult = null;
+  document.getElementById('compressor-results-section')?.classList.add('hidden');
   updateCompressorUI();
 
   try {
-    const scan = window.electronAPI.compressorScanSource
-      ? await window.electronAPI.compressorScanSource(sourcePath)
-      : {
-          sourcePath,
-          sourceType: 'folder',
-          sourceName: fileNameFromPath(sourcePath),
-          outputFolder: '_compressed',
-          files: await window.electronAPI.compressorScanDirectory(sourcePath)
-        };
+    const scan = window.electronAPI.compressorScanSources
+      ? await window.electronAPI.compressorScanSources(sourcePaths, compressorState.mode)
+      : await window.electronAPI.compressorScanSource(sourcePaths[0], compressorState.mode);
 
     compressorState.currentSourcePath = scan.sourcePath;
     compressorState.currentSourceType = scan.sourceType;
@@ -4021,19 +4420,40 @@ async function selectCompressorSource(sourcePath) {
     compressorState.outputFolder = scan.outputFolder;
     compressorState.videoFiles = scan.files || [];
     updateCompressorUI();
+    probeQueuedMediaFiles();
   } catch (e) {
     console.error('Failed to scan source:', e);
-    showCompressorError('Failed to scan selected video or folder');
+    showCompressorError('Failed to scan selected media or folder');
+  }
+}
+
+async function probeQueuedMediaFiles() {
+  if (!window.electronAPI.compressorProbeFiles) return;
+  const unprobed = compressorState.videoFiles
+    .map(f => f.path)
+    .filter(p => !(p in compressorState.probeByPath));
+  if (unprobed.length === 0) return;
+
+  const gen = ++compressorState.probeGeneration;
+  try {
+    const results = await window.electronAPI.compressorProbeFiles(unprobed);
+    if (gen !== compressorState.probeGeneration) return;
+    if (results && typeof results === 'object') {
+      Object.assign(compressorState.probeByPath, results);
+      renderCompressorFilesList();
+    }
+  } catch {
+    // Probing is informational only; encoding still probes each file directly.
   }
 }
 
 async function changeOutputFolder() {
   try {
-    const result = await window.electronAPI.compressorSelectOutputFolder(compressorState.currentFolder);
+    const defaultDir = compressorState.outputFolder || compressorState.currentSourcePath || '';
+    const result = await window.electronAPI.compressorSelectOutputFolder(defaultDir);
     if (!result.canceled && result.path) {
       compressorState.outputFolder = result.path;
-      compressorState.settings.outputFolder = result.path;
-      saveCompressorSettings();
+      compressorState.customOutputFolder = true;
       updateCompressorUI();
     }
   } catch (e) {
@@ -4042,9 +4462,209 @@ async function changeOutputFolder() {
   }
 }
 
+function syncEncoderControlsUI() {
+  const mode = compressorState.mode;
+  const isConvert = mode === 'convert';
+  const isAudio = mode === 'extract_audio';
+  const isRemux = isConvert && compressorState.videoFormat === 'mp4_remux';
+  const isProRes = isConvert && compressorState.videoFormat === 'mov_prores';
+
+  // Mode cards
+  document.querySelectorAll('#encoder-mode-group .encoder-mode').forEach(btn => {
+    const selected = btn.dataset.encoderMode === mode;
+    btn.classList.toggle('is-selected', selected);
+    btn.setAttribute('aria-checked', String(selected));
+    btn.disabled = compressorState.isCompressing;
+  });
+
+  // Drop zone copy
+  const dropHeading = document.getElementById('compressor-drop-heading');
+  const dropText = document.getElementById('compressor-drop-text');
+  const dropHelp = document.getElementById('compressor-drop-help');
+  if (dropHeading) {
+    dropHeading.textContent = isAudio ? 'Source Video or Audio' : 'Source Videos';
+  }
+  if (dropText) {
+    dropText.textContent = isAudio
+      ? 'Drop video or audio files, or a folder here'
+      : 'Drop videos or a folder here, or browse';
+  }
+  if (dropHelp) {
+    dropHelp.textContent = isAudio
+      ? 'Supports any video (MP4, WebM, MKV, MOV, AVI…) or audio file (WAV, M4A, OGG, FLAC, Opus…)'
+      : 'Supports WebM, MP4, MOV, MKV, AVI, FLV, WMV, TS, MXF, AV1, HEVC, GIF & more';
+  }
+
+  // Settings heading & group visibility
+  const settingsHeading = document.getElementById('compressor-settings-heading');
+  if (settingsHeading) {
+    settingsHeading.textContent = isAudio
+      ? 'Audio Extraction Settings'
+      : isConvert
+        ? 'Conversion Settings'
+        : 'Compression Settings';
+  }
+
+  document.getElementById('encoder-video-format-group')?.classList.toggle('hidden', !isConvert);
+  document.getElementById('encoder-audio-format-group')?.classList.toggle('hidden', !isAudio);
+  const showBitrate = isAudio && (compressorState.audioFormat === 'mp3' || compressorState.audioFormat === 'm4a');
+  document.getElementById('encoder-audio-bitrate-group')?.classList.toggle('hidden', !showBitrate);
+  document.getElementById('compressor-quality-container')?.classList.toggle('hidden', isAudio || isRemux);
+  document.getElementById('encoder-video-extras')?.classList.toggle('hidden', isAudio || isRemux);
+  document.getElementById('encoder-mute-group')?.classList.toggle('hidden', isAudio);
+
+  // Active states on toggle buttons
+  document.querySelectorAll('#encoder-video-format-buttons .toggle-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.value === compressorState.videoFormat);
+  });
+  document.querySelectorAll('#encoder-audio-format-buttons .toggle-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.value === compressorState.audioFormat);
+  });
+  document.querySelectorAll('#encoder-audio-bitrate-buttons .toggle-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.value === compressorState.audioBitrate);
+  });
+
+  // Quality button labels & active states
+  const qualityLabel = document.getElementById('compressor-quality-label');
+  if (qualityLabel) {
+    qualityLabel.textContent = isProRes ? 'ProRes Profile' : 'Quality Preset';
+  }
+  const proResLabels = { high: '422 HQ', balanced: '422 Standard', fast: '422 LT' };
+  const defaultLabels = { high: 'High', balanced: 'Balanced', fast: 'Fast' };
+  document.querySelectorAll('#compressor-quality-group .toggle-btn').forEach(btn => {
+    const val = btn.dataset.value;
+    btn.textContent = isProRes ? (proResLabels[val] || val) : (defaultLabels[val] || val);
+    btn.classList.toggle('active', val === compressorState.quality);
+  });
+
+  // Selects & checkbox
+  const resSelect = document.getElementById('encoder-resolution-select');
+  if (resSelect) resSelect.value = compressorState.resolution;
+  const fpsSelect = document.getElementById('encoder-fps-select');
+  if (fpsSelect) fpsSelect.value = compressorState.fps;
+  const muteCheckbox = document.getElementById('encoder-mute-audio');
+  if (muteCheckbox) muteCheckbox.checked = compressorState.muteAudio;
+
+  // Format & quality help copy
+  const videoHelpMap = {
+    mp4_h264: 'MP4 (H.264 + AAC): Universal format for Premiere, Resolve, social & any device. Great for converting AV1, H.265, WebM or MKV.',
+    mp4_hevc: 'MP4 (H.265 / HEVC + AAC): Smaller file size with high visual quality and hvc1 tag for Apple & modern editors.',
+    mov_prores: 'MOV (Apple ProRes 422 + PCM audio): Intra-frame editing intermediate for butter-smooth scrubbing in Premiere & Resolve.',
+    webm_vp9: 'WebM (VP9 + Opus): Open web video format for browsers and web delivery.',
+    mp4_remux: 'MP4 Remux: Instant lossless container swap with zero video re-encoding (works when source is already H.264, HEVC, AV1 or MPEG-4).'
+  };
+  const videoHelp = document.getElementById('encoder-video-format-help');
+  if (videoHelp) videoHelp.textContent = videoHelpMap[compressorState.videoFormat] || '';
+
+  const audioHelpMap = {
+    mp3: 'MP3: Universal compressed audio extracted cleanly from any video or audio file.',
+    wav: 'WAV: Uncompressed 16-bit PCM audio — ideal for Premiere Pro, DaVinci Resolve and audio cleanup.',
+    m4a: 'M4A (AAC): High-efficiency audio with broad Apple, mobile and web compatibility.',
+    flac: 'FLAC: Lossless compressed audio with smaller size than WAV and zero quality loss.'
+  };
+  const audioHelp = document.getElementById('encoder-audio-format-help');
+  if (audioHelp) audioHelp.textContent = audioHelpMap[compressorState.audioFormat] || '';
+
+  const bitrateHelpMap = {
+    '320k': '320 kbps: Maximum MP3/AAC clarity for music and master audio.',
+    '192k': '192 kbps: Crisp quality with compact file sizes — great default.',
+    '128k': '128 kbps: Smallest files, great for voiceovers and podcasts.'
+  };
+  const bitrateHelp = document.getElementById('encoder-audio-bitrate-help');
+  if (bitrateHelp) bitrateHelp.textContent = bitrateHelpMap[compressorState.audioBitrate] || '';
+
+  updateQualityHelp();
+
+  // Output folder help + Footer action note + Start button label
+  const outputLabel = getEncoderOutputLabel();
+  const outputHelp = document.getElementById('compressor-output-help');
+  if (outputHelp) {
+    outputHelp.textContent = `${outputLabel} files will be saved here. Your original files stay unchanged.`;
+  }
+  const actionNote = document.getElementById('compressor-action-note');
+  if (actionNote) {
+    actionNote.textContent = isAudio
+      ? `Extracts ${outputLabel} audio into a separate folder. Your original files stay unchanged.`
+      : isConvert
+        ? `Converts files to ${outputLabel} in a separate folder. Your original files stay unchanged.`
+        : 'Creates HEVC MP4 copies in a separate folder. Your original files stay unchanged.';
+  }
+  const startLabel = document.getElementById('compressor-start-btn-label');
+  if (startLabel) {
+    startLabel.textContent = isAudio
+      ? `Extract ${outputLabel}`
+      : isConvert
+        ? `Convert to ${outputLabel}`
+        : 'Start Compression';
+  }
+}
+
+function renderCompressorFilesList() {
+  const filesList = document.getElementById('compressor-files-list');
+  const filesCount = document.getElementById('compressor-files-count');
+  const startBtn = document.getElementById('compressor-start-btn');
+  const footerStatus = document.getElementById('compressor-footer-status');
+
+  if (!filesList || !filesCount) return;
+
+  if (compressorState.videoFiles.length === 0) {
+    filesList.innerHTML = `<p class="empty-message">${compressorState.mode === 'extract_audio' ? 'No supported media files found' : 'No supported video files found'}</p>`;
+    filesCount.textContent = '0 files';
+    startBtn.disabled = true;
+    footerStatus.textContent = compressorState.currentSourceType === 'folder'
+      ? (compressorState.mode === 'extract_audio' ? 'No media files found in this folder' : 'No top-level video files found in this folder')
+      : 'No supported files selected';
+    return;
+  }
+
+  const totalSize = compressorState.videoFiles.reduce((sum, f) => sum + (f.size || 0), 0);
+  filesCount.textContent = `${compressorState.videoFiles.length} file${compressorState.videoFiles.length === 1 ? '' : 's'} (${formatBytes(totalSize)})`;
+
+  const isAudioMode = compressorState.mode === 'extract_audio';
+
+  filesList.innerHTML = compressorState.videoFiles.map((file, idx) => {
+    const probe = compressorState.probeByPath[file.path];
+    const badges = [];
+    if (probe) {
+      if (probe.hasVideo && probe.width && probe.height) {
+        badges.push(`<span class="encoder-badge">${probe.width}×${probe.height}</span>`);
+      }
+      if (probe.videoCodec) {
+        badges.push(`<span class="encoder-badge">${escapeHtml(formatCodecBadge(probe.videoCodec))}</span>`);
+      }
+      if (probe.audioCodec) {
+        badges.push(`<span class="encoder-badge">${escapeHtml(formatCodecBadge(probe.audioCodec))}</span>`);
+      }
+      if (probe.duration) {
+        badges.push(`<span class="encoder-badge">${formatDurationMs(probe.duration * 1000)}</span>`);
+      }
+      if (isAudioMode && !probe.hasAudio) {
+        badges.push('<span class="encoder-badge encoder-badge--warn">No audio track</span>');
+      } else if (!isAudioMode && !probe.hasVideo) {
+        badges.push('<span class="encoder-badge encoder-badge--warn">Audio only</span>');
+      }
+    }
+
+    return `
+      <div class="compressor-file-item">
+        <div class="compressor-file-main">
+          <span class="compressor-file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
+          ${badges.length > 0 ? `<div class="compressor-file-meta">${badges.join('')}</div>` : ''}
+        </div>
+        <div class="compressor-file-right">
+          <span class="compressor-file-size">${formatBytes(file.size)}</span>
+          <button type="button" class="compressor-file-remove" data-index="${idx}" title="Remove file" aria-label="Remove ${escapeHtml(file.name)}">&times;</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  startBtn.disabled = compressorState.isCompressing;
+  footerStatus.textContent = '';
+}
+
 function updateCompressorUI() {
   const dropSection = document.getElementById('compressor-drop-section');
-  const emptyGuide = document.getElementById('compressor-empty-guide');
   const folderSection = document.getElementById('compressor-folder-section');
   const filesSection = document.getElementById('compressor-files-section');
   const hardwareSection = document.getElementById('compressor-hardware-section');
@@ -4052,62 +4672,40 @@ function updateCompressorUI() {
   const startBtn = document.getElementById('compressor-start-btn');
   const footerStatus = document.getElementById('compressor-footer-status');
 
+  syncEncoderControlsUI();
+
   if (compressorState.currentSourcePath) {
     dropSection.classList.add('hidden');
-    emptyGuide?.classList.add('hidden');
     folderSection.classList.remove('hidden');
     filesSection.classList.remove('hidden');
-    hardwareSection.classList.remove('hidden');
-    settingsSection.classList.remove('hidden');
+    hardwareSection.classList.toggle('hidden', compressorState.mode === 'extract_audio');
+    settingsSection.classList.toggle('hidden', compressorState.isCompressing);
 
     const sourceHeading = document.getElementById('compressor-source-heading');
     if (sourceHeading) {
-      sourceHeading.textContent = compressorState.currentSourceType === 'file' ? 'Selected Video' : 'Selected Folder';
+      sourceHeading.textContent =
+        compressorState.currentSourceType === 'file'
+          ? 'Selected File'
+          : compressorState.currentSourceType === 'files'
+            ? `Selected Files (${compressorState.videoFiles.length})`
+            : 'Selected Folder';
     }
 
-    document.getElementById('compressor-folder-path').textContent = compressorState.currentSourcePath;
+    document.getElementById('compressor-folder-path').textContent =
+      compressorState.currentSourceType === 'files'
+        ? `${compressorState.videoFiles.length} files in ${compressorState.currentSourcePath}`
+        : compressorState.currentSourcePath;
 
-    // Check for large files
     const largeFiles = compressorState.videoFiles.filter(f => f.size > 10 * 1024 * 1024 * 1024);
     const largeWarning = document.getElementById('compressor-large-file-warning');
-    if (largeFiles.length > 0) {
-      largeWarning.classList.remove('hidden');
-    } else {
-      largeWarning.classList.add('hidden');
-    }
+    largeWarning.classList.toggle('hidden', largeFiles.length === 0);
 
-    // Update files list
-    const filesList = document.getElementById('compressor-files-list');
-    const filesCount = document.getElementById('compressor-files-count');
+    renderCompressorFilesList();
 
-    if (compressorState.videoFiles.length === 0) {
-      filesList.innerHTML = '<p class="empty-message">No video files found in this folder</p>';
-      filesCount.textContent = '0 files';
-      startBtn.disabled = true;
-      footerStatus.textContent = compressorState.currentSourceType === 'file'
-        ? 'Selected file is not a supported video'
-        : 'No top-level video files found';
-    } else {
-      const totalSize = compressorState.videoFiles.reduce((sum, f) => sum + f.size, 0);
-      filesCount.textContent = `${compressorState.videoFiles.length} files (${formatBytes(totalSize)})`;
-
-      filesList.innerHTML = compressorState.videoFiles.map(file => `
-        <div class="compressor-file-item">
-          <span class="compressor-file-name">${escapeHtml(file.name)}</span>
-          <span class="compressor-file-size">${formatBytes(file.size)}</span>
-        </div>
-      `).join('');
-
-      startBtn.disabled = compressorState.isCompressing;
-      footerStatus.textContent = '';
-    }
-
-    // Update output path
-    document.getElementById('compressor-output-path').textContent = compressorState.outputFolder || 'Output folder will be created automatically';
-
+    document.getElementById('compressor-output-path').textContent =
+      compressorState.outputFolder || 'Output folder will be created automatically';
   } else {
     dropSection.classList.remove('hidden');
-    emptyGuide?.classList.remove('hidden');
     folderSection.classList.add('hidden');
     filesSection.classList.add('hidden');
     hardwareSection.classList.add('hidden');
@@ -4125,47 +4723,53 @@ function updateCompressorHardwareUI() {
   const hardwareAcceleration = document.getElementById('compressor-hardware-acceleration');
   const hardwareHelp = document.getElementById('compressor-hardware-help');
 
-  if (compressorState.hardwareInfo) {
-    hardwareName.textContent = compressorState.hardwareInfo.name;
-    hardwareSystem.textContent = compressorState.hardwareInfo.systemName || 'Unknown';
-    hardwareEncoder.textContent = compressorState.hardwareInfo.encoderName || compressorState.hardwareInfo.encoder || 'Unknown';
-    hardwareAcceleration.textContent = compressorState.hardwareInfo.isHardwareAccelerated ? 'Hardware' : 'CPU fallback';
+  if (!compressorState.hardwareInfo) return;
+  const hw = compressorState.hardwareInfo;
+  hardwareName.textContent = hw.name;
+  hardwareSystem.textContent = hw.systemName || 'Unknown';
+  hardwareEncoder.textContent = hw.encoderName || hw.encoder || 'Unknown';
 
-    if (compressorState.hardwareInfo.isHardwareAccelerated) {
-      hardwareDot.classList.remove('disconnected');
-      hardwareDot.classList.add('connected');
-      hardwareHelp.textContent = `Hardware acceleration active - FFmpeg will use ${compressorState.hardwareInfo.name}`;
-    } else if (compressorState.hardwareInfo.fallbackUsed) {
-      hardwareDot.classList.remove('connected');
-      hardwareDot.classList.add('disconnected');
-      hardwareHelp.textContent = 'Hardware encoder failed; continuing with CPU libx265 HEVC fallback';
-    } else {
-      hardwareDot.classList.remove('connected');
-      hardwareDot.classList.add('disconnected');
-      hardwareHelp.textContent = 'No hardware HEVC encoder detected - using CPU libx265 HEVC';
-    }
+  if (hw.encoder === 'copy') {
+    hardwareAcceleration.textContent = 'Direct copy';
+    hardwareDot.classList.remove('disconnected');
+    hardwareDot.classList.add('connected');
+    hardwareHelp.textContent = 'Lossless container remux — copies the video stream directly without re-encoding';
+  } else if (hw.isHardwareAccelerated) {
+    hardwareAcceleration.textContent = 'Hardware';
+    hardwareDot.classList.remove('disconnected');
+    hardwareDot.classList.add('connected');
+    hardwareHelp.textContent = `Hardware acceleration active — FFmpeg will use ${hw.name}`;
+  } else if (hw.fallbackUsed) {
+    hardwareAcceleration.textContent = 'CPU fallback';
+    hardwareDot.classList.remove('connected');
+    hardwareDot.classList.add('disconnected');
+    hardwareHelp.textContent = `Hardware encoder could not encode this input; continuing with ${hw.name}`;
+  } else {
+    hardwareAcceleration.textContent = 'CPU';
+    hardwareDot.classList.remove('connected');
+    hardwareDot.classList.add('disconnected');
+    hardwareHelp.textContent = `Using ${hw.name} (bundled FFmpeg)`;
   }
-}
-
-function updateQualityButtons() {
-  const buttons = document.querySelectorAll('#compressor-quality-group .toggle-btn');
-  buttons.forEach(btn => {
-    if (btn.dataset.value === compressorState.quality) {
-      btn.classList.add('active');
-    } else {
-      btn.classList.remove('active');
-    }
-  });
 }
 
 function updateQualityHelp() {
   const help = document.getElementById('compressor-quality-help');
+  if (!help) return;
+  if (compressorState.mode === 'convert' && compressorState.videoFormat === 'mov_prores') {
+    const map = {
+      high: 'ProRes 422 HQ: Highest editing fidelity for color grading and heavy effects',
+      balanced: 'ProRes 422 Standard: Ideal balance of editing speed and file size',
+      fast: 'ProRes 422 LT: Lighter editing proxy with ~30% smaller files'
+    };
+    help.textContent = map[compressorState.quality] || '';
+    return;
+  }
   const qualityMap = {
     high: 'High: Near-original quality, larger files, slower encoding',
-    balanced: 'Balanced: Quality-first compression with smaller files',
-    fast: 'Fast: More compression, still prioritizes usable quality'
+    balanced: 'Balanced: Quality-first encoding with smaller files',
+    fast: 'Fast: Quicker encoding and smaller files, still clean quality'
   };
-  help.textContent = qualityMap[compressorState.quality];
+  help.textContent = qualityMap[compressorState.quality] || '';
 }
 
 async function startCompression() {
@@ -4177,7 +4781,11 @@ async function startCompression() {
     return;
   }
 
+  const mode = compressorState.mode;
+  const actionVerb = mode === 'extract_audio' ? 'Extracting audio...' : mode === 'convert' ? 'Converting videos...' : 'Compressing videos...';
+
   compressorState.isCompressing = true;
+  syncEncoderControlsUI();
   document.getElementById('compressor-cancel-btn').disabled = false;
   document.getElementById('compressor-cancel-btn').textContent = 'Cancel';
   compressorState.compressionResults = [];
@@ -4188,16 +4796,26 @@ async function startCompression() {
   document.getElementById('compressor-results-section').classList.add('hidden');
   document.getElementById('compressor-start-btn').disabled = true;
   document.getElementById('compressor-settings-section').classList.add('hidden');
-  document.getElementById('compressor-footer-status').textContent = 'Compressing videos...';
+  document.getElementById('compressor-footer-status').textContent = actionVerb;
   document.getElementById('compressor-progress-fill').style.width = '0%';
   document.getElementById('compressor-current-file').textContent = 'Preparing...';
   document.getElementById('compressor-file-progress').textContent = `0/${compressorState.videoFiles.length}`;
-  document.getElementById('compressor-fps').textContent = '-- fps';
+  const fpsEl = document.getElementById('compressor-fps');
+  if (fpsEl) {
+    fpsEl.textContent = '-- fps';
+    fpsEl.classList.toggle('hidden', mode === 'extract_audio');
+  }
   document.getElementById('compressor-speed').textContent = '--x';
   document.getElementById('compressor-time').textContent = '--:--';
 
-  // Prepare settings
   const settings = {
+    mode,
+    videoFormat: compressorState.videoFormat,
+    audioFormat: compressorState.audioFormat,
+    audioBitrate: compressorState.audioBitrate,
+    resolution: compressorState.resolution,
+    fps: compressorState.fps,
+    muteAudio: compressorState.muteAudio,
     encoder: 'auto',
     quality: compressorState.quality,
     outputFolder: compressorState.outputFolder,
@@ -4213,16 +4831,20 @@ async function startCompression() {
 
     if (!result.success) {
       compressorState.isCompressing = false;
+      syncEncoderControlsUI();
+      document.getElementById('compressor-progress-section').classList.add('hidden');
       document.getElementById('compressor-start-btn').disabled = false;
       document.getElementById('compressor-settings-section').classList.remove('hidden');
-      showCompressorError(result.error || 'Compression failed');
+      showCompressorError(result.error || 'Encoding failed');
     }
   } catch (e) {
-    console.error('Compression error:', e);
+    console.error('Encoding error:', e);
     compressorState.isCompressing = false;
+    syncEncoderControlsUI();
+    document.getElementById('compressor-progress-section').classList.add('hidden');
     document.getElementById('compressor-start-btn').disabled = false;
     document.getElementById('compressor-settings-section').classList.remove('hidden');
-    showCompressorError('Failed to start compression');
+    showCompressorError('Failed to start encoding');
   }
 }
 
@@ -4239,25 +4861,24 @@ function updateCompressorProgress(progress) {
   const visibleProgress = progress.overallProgress ?? progress.progress;
   progressFill.style.width = `${visibleProgress}%`;
 
-  // Update file info
   currentFile.textContent = progress.fileName;
   fileProgress.textContent = `${progress.fileIndex + 1}/${progress.totalFiles}`;
 
-  // Update details
-  if (progress.fps) fps.textContent = `${progress.fps} fps`;
+  if (progress.fps && progress.mode !== 'extract_audio') fps.textContent = `${progress.fps} fps`;
   if (progress.speed) speed.textContent = progress.speed;
   if (progress.time) time.textContent = progress.time;
 
-  // Update status
   statusBar.className = 'status-bar status-processing';
-  const action = progress.status === 'analyzing' ? 'Analyzing' : progress.status === 'queued' ? 'Preparing' : 'Compressing';
-  const usingText = progress.encoderName ? ` - Using ${progress.encoderName}` : '';
+  const mode = progress.mode || compressorState.mode;
+  const activeVerb = mode === 'extract_audio' ? 'Extracting' : mode === 'convert' ? 'Converting' : 'Compressing';
+  const action = progress.status === 'analyzing' ? 'Analyzing' : progress.status === 'queued' ? 'Preparing' : activeVerb;
+  const usingText = progress.encoderName ? ` — ${progress.encoderName}` : '';
   const fallbackText = progress.fallbackUsed ? ' (CPU fallback)' : '';
   statusText.textContent = `${action} ${progress.fileName} (${progress.progress}%)${usingText}${fallbackText}`;
 }
 
 function updateCompressorStats(stats) {
-  // Update can be shown in real-time if needed
+  // Real-time stats hook
 }
 
 function compressionComplete(payload) {
@@ -4269,52 +4890,86 @@ function compressionComplete(payload) {
         outputFolder: compressorState.outputFolder,
         elapsedMs: 0,
         fallbackUsed: false,
-        canceled: false
+        canceled: false,
+        mode: compressorState.mode,
+        outputFormat: getEncoderOutputLabel()
       }
     : payload;
 
+  const mode = batch.mode || compressorState.mode;
+  const outputFormat = batch.outputFormat || getEncoderOutputLabel();
   const results = batch.results || [];
   compressorState.isCompressing = false;
   compressorState.compressionResults = results;
   compressorState.lastBatchResult = batch;
 
-  // Hide progress, show results
+  syncEncoderControlsUI();
   document.getElementById('compressor-progress-section').classList.add('hidden');
   document.getElementById('compressor-results-section').classList.remove('hidden');
   document.getElementById('compressor-settings-section').classList.remove('hidden');
   document.getElementById('compressor-start-btn').disabled = false;
 
-  // Calculate totals
   const successful = results.filter(r => r.success && !r.skipped && !r.canceled);
-  const failed = results.filter(r => !r.success);
-  const skipped = results.filter(r => r.skipped);
+  const failed = results.filter(r => !r.success && !r.canceled);
   const canceled = results.filter(r => r.canceled);
 
-  const totalInput = successful.reduce((sum, r) => sum + r.inputSize, 0);
-  const totalOutput = successful.reduce((sum, r) => sum + r.outputSize, 0);
+  const totalInput = successful.reduce((sum, r) => sum + (r.inputSize || 0), 0);
+  const totalOutput = successful.reduce((sum, r) => sum + (r.outputSize || 0), 0);
   const bytesSaved = totalInput - totalOutput;
-  const savings = totalInput > 0 ? ((totalInput - totalOutput) / totalInput * 100).toFixed(1) : 0;
+  const ratioPct = totalInput > 0 ? ((totalInput - totalOutput) / totalInput * 100) : 0;
   const elapsedMs = batch.elapsedMs || successful.reduce((sum, r) => sum + (r.elapsedMs || 0), 0);
-  const encoderName = batch.hardware?.name || successful[0]?.encoderName || compressorState.hardwareInfo?.name || 'Unknown';
+  const encoderName = batch.hardware?.name || successful[0]?.encoderName || compressorState.hardwareInfo?.name || 'FFmpeg';
   const outputFolder = batch.outputFolder || compressorState.outputFolder || 'Unknown output folder';
 
-  // Update stats
+  const resultsHeading = document.getElementById('compressor-results-heading');
+  if (resultsHeading) {
+    resultsHeading.textContent = mode === 'extract_audio'
+      ? 'Audio Extraction Complete'
+      : mode === 'convert'
+        ? 'Conversion Complete'
+        : 'Compression Complete';
+  }
+
+  const outputLabelEl = document.getElementById('compressor-stat-output-label');
+  const savedLabelEl = document.getElementById('compressor-stat-saved-label');
+  if (outputLabelEl) {
+    outputLabelEl.textContent = mode === 'compress' ? 'Compressed Size' : 'Output Size';
+  }
+  if (savedLabelEl) {
+    savedLabelEl.textContent = mode === 'compress' ? 'Space Saved' : 'Size Change';
+  }
+
   document.getElementById('compressor-stat-files').textContent = successful.length;
   document.getElementById('compressor-stat-input').textContent = formatBytes(totalInput);
   document.getElementById('compressor-stat-output').textContent = formatBytes(totalOutput);
-  document.getElementById('compressor-stat-saved').textContent = `${formatBytes(Math.max(bytesSaved, 0))} (${savings}%)`;
+  if (mode === 'compress') {
+    document.getElementById('compressor-stat-saved').textContent =
+      bytesSaved >= 0
+        ? `${formatBytes(bytesSaved)} (${ratioPct.toFixed(1)}%)`
+        : `+${formatBytes(Math.abs(bytesSaved))} (${Math.abs(ratioPct).toFixed(1)}%)`;
+  } else {
+    document.getElementById('compressor-stat-saved').textContent =
+      bytesSaved >= 0
+        ? `-${ratioPct.toFixed(1)}%`
+        : `+${Math.abs(ratioPct).toFixed(1)}%`;
+  }
   document.getElementById('compressor-stat-time').textContent = formatDurationMs(elapsedMs);
   document.getElementById('compressor-stat-encoder').textContent = encoderName;
   document.getElementById('compressor-results-summary').textContent =
-    `Output: ${outputFolder} | Saved ${formatBytes(Math.max(bytesSaved, 0))} (${savings}%) in ${formatDurationMs(elapsedMs)} using ${encoderName}`;
+    `${outputFormat} saved to ${outputFolder} in ${formatDurationMs(elapsedMs)} using ${encoderName}`;
 
-  // Update results list
   const resultsList = document.getElementById('compressor-results-list');
   resultsList.innerHTML = results.map(result => {
     let statusClass = 'success';
-    let statusText = result.compressionRatio >= 0
-      ? `Saved ${result.compressionRatio.toFixed(1)}%`
-      : `${Math.abs(result.compressionRatio).toFixed(1)}% larger`;
+    let statusText = mode === 'compress'
+      ? (result.compressionRatio >= 0
+          ? `Saved ${result.compressionRatio.toFixed(1)}%`
+          : `${Math.abs(result.compressionRatio).toFixed(1)}% larger`)
+      : mode === 'extract_audio'
+        ? formatBytes(result.outputSize)
+        : (result.compressionRatio >= 0
+            ? `-${result.compressionRatio.toFixed(1)}%`
+            : `+${Math.abs(result.compressionRatio).toFixed(1)}%`);
 
     if (result.skipped) {
       statusClass = 'skipped';
@@ -4327,17 +4982,15 @@ function compressionComplete(payload) {
       statusText = 'Failed';
     }
 
-    // Extract filename from path
     const fileName = fileNameFromPath(result.inputPath);
     const outputName = result.outputName || fileNameFromPath(result.outputPath);
-    const detailParts = [
-      `${formatBytes(result.inputSize)} to ${formatBytes(result.outputSize)}`,
-      outputName
-    ];
+    const detailParts = result.success
+      ? [`${formatBytes(result.inputSize)} → ${formatBytes(result.outputSize)}`, outputName]
+      : [outputName];
 
     if (result.encoderName) detailParts.push(result.encoderName);
     if (result.fallbackUsed) detailParts.push('CPU fallback');
-    if (!result.success && result.error) detailParts.push(result.error.slice(0, 140));
+    if (!result.success && result.error) detailParts.push(result.error.slice(0, 160));
 
     return `
       <div class="result-item">
@@ -4350,37 +5003,43 @@ function compressionComplete(payload) {
     `;
   }).join('');
 
-  // Update status
   const statusBar = document.getElementById('compressor-status-bar');
   const statusText = document.getElementById('compressor-status-text');
   const footerStatus = document.getElementById('compressor-footer-status');
+  const noun = mode === 'extract_audio' ? 'Audio extraction' : mode === 'convert' ? 'Conversion' : 'Compression';
 
   if (batch.canceled || canceled.length > 0) {
     statusBar.className = 'status-bar status-idle';
-    statusText.textContent = `Compression cancelled - ${successful.length} completed`;
+    statusText.textContent = `${noun} cancelled — ${successful.length} completed`;
   } else if (failed.length === 0) {
     statusBar.className = 'status-bar status-success';
     statusText.textContent = batch.fallbackUsed
-      ? 'Compression complete with CPU fallback'
-      : 'Compression complete!';
+      ? `${noun} complete (CPU fallback)`
+      : `${noun} complete!`;
   } else if (successful.length === 0) {
     statusBar.className = 'status-bar status-error';
-    statusText.textContent = 'All files failed to compress';
+    statusText.textContent = `All files failed (${outputFormat})`;
   } else {
     statusBar.className = 'status-bar status-idle';
-    statusText.textContent = `Complete - ${successful.length} successful, ${failed.length} failed`;
+    statusText.textContent = `Complete — ${successful.length} succeeded, ${failed.length} failed`;
   }
 
-  footerStatus.textContent = `Compressed ${successful.length} file${successful.length === 1 ? '' : 's'} in ${formatDurationMs(elapsedMs)}, saved ${formatBytes(Math.max(bytesSaved, 0))} (${savings}%)`;
+  const pastVerb = mode === 'extract_audio' ? 'Extracted' : mode === 'convert' ? 'Converted' : 'Compressed';
+  footerStatus.textContent = `${pastVerb} ${successful.length} file${successful.length === 1 ? '' : 's'} to ${outputFormat} in ${formatDurationMs(elapsedMs)}`;
 }
 
 async function cancelCompression() {
   const button = document.getElementById('compressor-cancel-btn');
-  button.disabled = true; button.textContent = 'Canceling…';
+  button.disabled = true;
+  button.textContent = 'Canceling…';
   document.getElementById('compressor-status-bar').className = 'status-bar status-idle';
-  document.getElementById('compressor-status-text').textContent = 'Canceling compression…';
-  try { await window.electronAPI.compressorStop(); }
-  catch { button.disabled = false; button.textContent = 'Retry cancel'; }
+  document.getElementById('compressor-status-text').textContent = 'Canceling…';
+  try {
+    await window.electronAPI.compressorStop();
+  } catch {
+    button.disabled = false;
+    button.textContent = 'Retry cancel';
+  }
 }
 
 function showCompressorError(message) {
@@ -4390,7 +5049,6 @@ function showCompressorError(message) {
   statusBar.className = 'status-bar status-error';
   statusText.textContent = message;
 
-  // Also show in error modal
   showError(message);
 }
 

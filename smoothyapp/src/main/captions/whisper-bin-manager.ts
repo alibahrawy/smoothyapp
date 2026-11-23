@@ -10,6 +10,7 @@
  * control. See `docs/PROJECT-STATUS.md`.
  */
 
+import AdmZip from 'adm-zip';
 import { app } from 'electron';
 import path from 'path';
 import fs from 'fs';
@@ -117,11 +118,21 @@ function findExe(dir: string, variant: WhisperVariant): string | null {
 function hasNvidiaGpu(): boolean {
   if (isMac) return false;
   try {
-    execFileSync('nvidia-smi', ['-L'], { stdio: 'ignore', timeout: 4000 });
+    execFileSync('nvidia-smi', ['-L'], { stdio: 'ignore', timeout: 4000, windowsHide: true });
     return true;
   } catch {
     return false;
   }
+}
+
+/** The best installed whisper-cli binary, without downloading anything. */
+export function findInstalledBinary(): { path: string; variant: WhisperVariant } | null {
+  const order = Array.from(new Set<WhisperVariant>([...getVariantOrder(), 'metal', 'cuda', 'cpu']));
+  for (const variant of order) {
+    const exe = findExe(getVariantDir(variant), variant);
+    if (exe) return { path: exe, variant };
+  }
+  return null;
 }
 
 export function isBinaryInstalled(variant: WhisperVariant): boolean {
@@ -181,30 +192,18 @@ export type BinProgressCallback = (progress: {
   total?: number;
 }) => void;
 
-/** Extract a zip using PowerShell (Windows) or `unzip`/`ditto` (macOS/Linux). */
+/** Extract a zip safely across Windows, macOS, and Linux using bundled adm-zip. */
 function extractZip(zipPath: string, destDir: string): void {
   fs.mkdirSync(destDir, { recursive: true });
-  if (isWindows) {
-    const escapedZip = zipPath.replace(/'/g, "''");
-    const escapedDest = destDir.replace(/'/g, "''");
-    execFileSync(
-      'powershell.exe',
-      [
-        '-NoProfile',
-        '-Command',
-        `Expand-Archive -LiteralPath '${escapedZip}' -DestinationPath '${escapedDest}' -Force`
-      ],
-      { timeout: 600000 }
-    );
-    return;
+  const zip = new AdmZip(zipPath);
+  const root = path.resolve(destDir);
+  for (const entry of zip.getEntries()) {
+    const target = path.resolve(root, entry.entryName);
+    if (target !== root && !target.startsWith(root + path.sep)) {
+      throw new Error(`Unsafe zip entry: ${entry.entryName}`);
+    }
   }
-  try {
-    execFileSync('mkdir', ['-p', destDir]);
-    execFileSync('unzip', ['-o', '-q', zipPath, '-d', destDir], { timeout: 600000 });
-  } catch {
-    // Fallback for macOS without unzip
-    execFileSync('ditto', ['-x', '-k', zipPath, destDir], { timeout: 600000 });
-  }
+  zip.extractAllTo(root, true);
 }
 
 /**

@@ -44,7 +44,7 @@ function getTempDir(): string {
 function runFFmpeg(args: string[], signal?: AbortSignal): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     signal?.throwIfAborted();
-    const ffmpeg = spawn(getFFmpegPath(), args);
+    const ffmpeg = spawn(getFFmpegPath(), args, { windowsHide: true });
     const abort = () => { try { ffmpeg.kill('SIGTERM'); } catch {} };
     signal?.addEventListener('abort', abort, { once: true });
     if (signal?.aborted) abort();

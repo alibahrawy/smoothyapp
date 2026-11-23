@@ -44,7 +44,7 @@ function runFFmpeg(args: string[]): Promise<{ stdout: string; stderr: string }> 
       reject(new Error('AUDIO_EXTRACTION_CANCELLED'));
       return;
     }
-    const ffmpeg = spawn(getFFmpegPath(), args);
+    const ffmpeg = spawn(getFFmpegPath(), args, { windowsHide: true });
     let stdout = '';
     let stderr = '';
     let cancelled = false;
@@ -181,43 +181,87 @@ export async function stitchTimelineAudio(
 
   const tempDir = getTempDir();
   const outputPath = path.join(tempDir, `${outputName}.wav`);
+  const CHUNK_SIZE = 48;
+  const tempFiles: string[] = [];
 
-  const args = ['-y'];
-  for (const clip of usable) {
-    args.push('-i', clip.input);
-  }
-
-  const filters = usable.map((clip, i) => {
-    const parts = [
-      `atrim=start=${clip.sourceStart.toFixed(3)}:duration=${clip.duration.toFixed(3)}`,
-      'asetpts=PTS-STARTPTS'
-    ];
-    if (clip.delayMs > 0) {
-      parts.push(`adelay=${clip.delayMs}:all=1`);
+  async function renderBatch(
+    batch: { input: string; sourceStart: number; duration: number; delayMs: number }[],
+    destPath: string
+  ): Promise<void> {
+    const args = ['-y'];
+    for (const clip of batch) {
+      // Seek before -i so long source files don't decode from 0:00 for every cut.
+      if (clip.sourceStart > 0) args.push('-ss', clip.sourceStart.toFixed(3));
+      args.push('-t', clip.duration.toFixed(3), '-i', clip.input);
     }
-    return `[${i}:a]${parts.join(',')}[a${i}]`;
-  });
 
-  let outputLabel = '[a0]';
-  if (usable.length > 1) {
-    const refs = usable.map((_, i) => `[a${i}]`).join('');
-    filters.push(`${refs}amix=inputs=${usable.length}:duration=longest:normalize=0[mix]`);
-    outputLabel = '[mix]';
+    const filters = batch.map((clip, i) => {
+      const parts = ['asetpts=PTS-STARTPTS'];
+      if (clip.delayMs > 0) parts.push(`adelay=${clip.delayMs}:all=1`);
+      return `[${i}:a]${parts.join(',')}[a${i}]`;
+    });
+
+    let outputLabel = '[a0]';
+    if (batch.length > 1) {
+      const refs = batch.map((_, i) => `[a${i}]`).join('');
+      filters.push(`${refs}amix=inputs=${batch.length}:duration=longest:normalize=0[mix]`);
+      outputLabel = '[mix]';
+    }
+
+    const graphPath = `${destPath}.filter.txt`;
+    tempFiles.push(graphPath);
+    fs.writeFileSync(graphPath, filters.join(';\n'), 'utf8');
+
+    args.push(
+      '-filter_complex_script', graphPath,
+      '-map', outputLabel,
+      '-ac', '1',
+      '-ar', SAMPLE_RATE.toString(),
+      '-sample_fmt', 's16',
+      '-f', 'wav',
+      destPath
+    );
+
+    await runFFmpeg(args);
   }
-
-  args.push(
-    '-filter_complex', filters.join(';'),
-    '-map', outputLabel,
-    '-ac', '1',
-    '-ar', SAMPLE_RATE.toString(),
-    '-sample_fmt', 's16',
-    '-f', 'wav',
-    outputPath
-  );
 
   console.log(`[AudioExtractor] Stitching ${usable.length} clip(s) into timeline audio...`);
-  try { await runFFmpeg(args); }
-  catch (error) { cleanupTempFile(outputPath); throw error; }
+  try {
+    if (usable.length <= CHUNK_SIZE) {
+      await renderBatch(usable, outputPath);
+    } else {
+      // Chunk large multi-cut timelines so we never hit OS FD limits or Windows cmd length caps.
+      const chunkPaths: string[] = [];
+      for (let start = 0; start < usable.length; start += CHUNK_SIZE) {
+        const chunkPath = path.join(tempDir, `${outputName}_chunk_${chunkPaths.length}.wav`);
+        tempFiles.push(chunkPath);
+        await renderBatch(usable.slice(start, start + CHUNK_SIZE), chunkPath);
+        chunkPaths.push(chunkPath);
+      }
+
+      const mixArgs = ['-y'];
+      for (const chunkPath of chunkPaths) mixArgs.push('-i', chunkPath);
+      const refs = chunkPaths.map((_, i) => `[${i}:a]`).join('');
+      const graphPath = `${outputPath}.mix.filter.txt`;
+      tempFiles.push(graphPath);
+      fs.writeFileSync(graphPath, `${refs}amix=inputs=${chunkPaths.length}:duration=longest:normalize=0[mix]`, 'utf8');
+      mixArgs.push(
+        '-filter_complex_script', graphPath,
+        '-map', '[mix]',
+        '-ac', '1',
+        '-ar', SAMPLE_RATE.toString(),
+        '-sample_fmt', 's16',
+        '-f', 'wav',
+        outputPath
+      );
+      await runFFmpeg(mixArgs);
+    }
+  } catch (error) {
+    cleanupTempFile(outputPath);
+    throw error;
+  } finally {
+    for (const file of tempFiles) cleanupTempFile(file);
+  }
 
   if (!fs.existsSync(outputPath)) {
     throw new Error(`Failed to create stitched audio: ${outputPath}`);

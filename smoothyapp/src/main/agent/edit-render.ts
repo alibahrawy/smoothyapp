@@ -7,6 +7,7 @@
  * encode, then joined without re-encoding.
  */
 
+import { placement, placementFilters } from './transform';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
@@ -175,13 +176,20 @@ export async function planRender(project: EditProject, options: PlanOptions): Pr
     const filters: string[] = [];
     filters.push(clip.speed !== 1 && clip.kind === 'video' ? `setpts=(PTS-STARTPTS)/${fixed(clip.speed)}` : 'setpts=PTS-STARTPTS');
     filters.push(`fps=${fps}`);
-    if (clip.kind !== 'text') {
+    let at = { x: 0, y: 0 };
+    const pictureAsset = clip.kind !== 'text' ? project.assets[clip.asset || ''] : null;
+    if (pictureAsset && pictureAsset.width > 0 && pictureAsset.height > 0) {
+      // Same geometry as the Premiere XML: region crop, fit, eye-anchored zoom.
+      const placed = placementFilters(placement(pictureAsset, clip, outW, outH), outW, outH);
+      filters.push(...placed.filters, 'setsar=1');
+      at = { x: placed.x, y: placed.y };
+    } else if (clip.kind !== 'text') {
       filters.push(clip.fit === 'contain'
         ? `scale=${outW}:${outH}:force_original_aspect_ratio=decrease,pad=${outW}:${outH}:(ow-iw)/2:(oh-ih)/2:color=black`
         : `scale=${outW}:${outH}:force_original_aspect_ratio=increase,crop=${outW}:${outH}`);
       filters.push('setsar=1');
     }
-    const needsAlpha = clip.kind === 'text' || clip.opacity < 1 || clip.fadeIn > 0 || clip.fadeOut > 0;
+    const needsAlpha = clip.kind === 'text' || clip.opacity < 1 || clip.fadeIn > 0 || clip.fadeOut > 0 || Boolean(pictureAsset?.alpha);
     filters.push(clip.kind === 'text' ? 'format=rgba' : needsAlpha ? 'format=yuva420p' : 'format=yuv420p');
     const startsHere = Math.abs(item.a - clip.start) < 1e-6;
     const endsHere = Math.abs(item.b - clipEnd(clip)) < 1e-6;
@@ -193,7 +201,7 @@ export async function planRender(project: EditProject, options: PlanOptions): Pr
     if (clip.opacity < 1) filters.push(`colorchannelmixer=aa=${fixed(clip.opacity)}`);
     filters.push(`setpts=PTS+${fixed(item.offset)}/TB`);
     graph.push(`[${index}:v]${filters.join(',')}[${label}]`);
-    graph.push(`[base${layer}][${label}]overlay=eof_action=pass:format=auto[base${layer + 1}]`);
+    graph.push(`[base${layer}][${label}]overlay=eof_action=pass:format=auto${at.x || at.y ? `:x=${at.x}:y=${at.y}` : ''}[base${layer + 1}]`);
     index += 1;
     layer += 1;
   }

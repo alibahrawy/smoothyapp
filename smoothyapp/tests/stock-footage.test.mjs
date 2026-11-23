@@ -54,8 +54,11 @@ test('downloads validate media, convert to persistent MP4, keep source credits, 
  const calls=[];let converted=0;const progress=[];
  const service=serviceWith(async(url,options)=>{calls.push({url,options});return url.includes('/w/api.php')?results():new Response(webm,{headers:{'content-length':String(webm.length)}});},async(a,b)=>{converted++;await copyFile(a,b);});
  await service.search({query:'ocean'});const first=await service.download(100,1,dir,new AbortController().signal,(...p)=>progress.push(p));const second=await service.download(100,1,dir,new AbortController().signal,()=>{});
- assert.notEqual(first,second);assert.match(first,/commons-100-1920x1080\.mp4$/);assert.equal(converted,2);assert.deepEqual(await readFile(first),webm);assert.equal(JSON.parse(await readFile(first+'.source.json','utf8')).license,'CC0');assert.equal(calls[1].options.headers,undefined);assert.equal(progress.at(-1)[2],'converting');assert.equal((await readdir(dir)).some(file=>file.endsWith('.part')),false);
+ assert.notEqual(first,second);assert.match(first,/commons-100-1920x1080\.mp4$/);assert.equal(converted,2);assert.deepEqual(await readFile(first),webm);assert.equal(JSON.parse(await readFile(first+'.source.json','utf8')).license,'CC0');assert.match(calls[1].options.headers['User-Agent'],/^SmoothyEdit\//);assert.equal(calls[1].options.headers.Authorization,undefined);assert.equal(progress.at(-1)[2],'converting');assert.equal((await readdir(dir)).some(file=>file.endsWith('.part')),false);
  await assert.rejects(service.download(100,999,dir,new AbortController().signal,()=>{}),/select a video/);
+ const limited=serviceWith(async url=>url.includes('/w/api.php')?results():new Response('Too many requests',{status:429}));
+ await limited.search({query:'ocean'});
+ await assert.rejects(limited.download(100,1,dir,new AbortController().signal,()=>{}),/rate-limiting/);
 }));
 test('cancellation and conversion failure remove all temporary files',async()=>folder(async dir=>{
  const service=serviceWith(async url=>url.includes('/w/api.php')?results():new Response(webm));await service.search({query:'ocean'});const abort=new AbortController();await assert.rejects(service.download(100,1,dir,abort.signal,()=>abort.abort()));assert.deepEqual(await readdir(dir),[]);

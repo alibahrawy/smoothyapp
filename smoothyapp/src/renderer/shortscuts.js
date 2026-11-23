@@ -8,10 +8,51 @@ import {
   resolveShortsCutIcon,
   shortsCutColorValue,
   shortsCutIconSvg,
+  shortsCutKeyInk,
 } from '../shared/shortscuts-icons';
 
 const COLUMN_RANGE = { phone: { min: 2, max: 5 }, tablet: { min: 3, max: 8 } };
 const MAX_STEPS = 16;
+const PRO_ONLY_KINDS = new Set(['unnest', 'motion-to-transform']);
+const SYSTEM_KINDS = new Set(['open-app', 'open-folder']);
+
+const BUILT_IN_ACTIONS = [
+  {
+    kind: 'unnest',
+    name: 'Unnest sequence',
+    target: '',
+    proOnly: true,
+    sub: 'Premiere Pro · Unpack a selected nested sequence onto the timeline',
+  },
+  {
+    kind: 'motion-to-transform',
+    name: 'Motion to Transform',
+    target: '',
+    proOnly: true,
+    sub: 'Premiere Pro · Move Motion values & keyframes into a Transform effect',
+  },
+  {
+    kind: 'adjustment-layer',
+    name: 'Add adjustment layer',
+    target: '',
+    duration: 5,
+    sub: 'Premiere Pro · Place above selected clips or at the playhead',
+  },
+  {
+    kind: 'open-app',
+    name: 'Open app…',
+    target: '',
+    pick: 'app',
+    sub: 'Mac / PC · Launch a specific application',
+  },
+  {
+    kind: 'open-folder',
+    name: 'Open folder…',
+    target: '',
+    pick: 'folder',
+    sub: 'Mac / PC · Open a specific folder in Finder or Explorer',
+  },
+];
 
 export function initShortsCuts() {
   const $ = (id) => document.getElementById(id);
@@ -39,6 +80,8 @@ export function initShortsCuts() {
   const deviceGrid = $('shortscuts-device-grid');
   const deviceTitle = $('shortscuts-device-title');
   const deviceBack = $('shortscuts-device-back');
+  const deviceUndo = $('shortscuts-device-undo');
+  const deviceRedo = $('shortscuts-device-redo');
   const inspector = $('shortscuts-inspector');
   const colsValue = $('shortscuts-cols');
 
@@ -69,16 +112,42 @@ export function initShortsCuts() {
   const folders = () => state?.config?.folders || [];
   const layout = () => state?.config?.layout || { phoneColumns: 3, tabletColumns: 5 };
   const canApply = () => Boolean(state?.connected && state?.editor === 'premiere' && !state?.busy);
-  // Free plan: only the first `freeKeys` keys work. Pro is unlimited.
+  // Free plan: only the first `freeKeys` non-Pro keys work. Pro is unlimited + Pro actions.
   const isPro = () => state?.pro !== false;
   const freeKeys = () => state?.freeKeys || 6;
-  const isActive = (id) => isPro() || deck().slice(0, freeKeys()).some((entry) => entry.id === id);
+  const isProOnly = (kind) => PRO_ONLY_KINDS.has(kind);
+  const isSystemKind = (kind) => SYSTEM_KINDS.has(kind);
+  const isProLockedItem = (item) => {
+    if (!item || isPro()) return false;
+    if (isProOnly(item.kind)) return true;
+    if (item.kind !== 'multi') return false;
+    return (item.steps || []).some((stepId) => {
+      const step = deck().find((entry) => entry.id === stepId);
+      return Boolean(step && isProOnly(step.kind));
+    });
+  };
+  const itemNeedsPremiere = (item) => {
+    if (!item) return true;
+    if (isSystemKind(item.kind)) return false;
+    if (item.kind !== 'multi') return true;
+    const steps = (item.steps || [])
+      .map((stepId) => deck().find((entry) => entry.id === stepId))
+      .filter((entry) => entry && entry.kind !== 'multi');
+    return steps.some((step) => !isSystemKind(step.kind));
+  };
+  const isActive = (id) => {
+    const item = deck().find((entry) => entry.id === id);
+    if (!item) return false;
+    if (isPro()) return true;
+    if (isProLockedItem(item)) return false;
+    return deck().slice(0, freeKeys()).some((entry) => entry.id === id);
+  };
+  const canRunItem = (item) => Boolean(item && !state?.busy && isActive(item.id) && (!itemNeedsPremiere(item) || (state?.connected && state?.editor === 'premiere')));
   const atFreeLimit = () => !isPro() && deck().length >= freeKeys();
-  const PRICING_URL = 'https://smoothyedit.com/pricing';
 
   function upgrade() {
     void window.electronAPI.proUpgradeClick?.('shortscuts');
-    void window.electronAPI.openExternal(PRICING_URL);
+    void window.electronAPI.openProCheckout();
   }
 
   function renderPlan() {
@@ -115,12 +184,18 @@ export function initShortsCuts() {
     if (kind === 'video-transition') return 'Video transition';
     if (kind === 'audio-transition') return 'Audio transition';
     if (kind === 'multi') return 'Multi-action';
+    if (kind === 'unnest') return 'Unnest';
+    if (kind === 'motion-to-transform') return 'Motion → Transform';
+    if (kind === 'adjustment-layer') return 'Adjustment layer';
+    if (kind === 'open-app') return 'Open app';
+    if (kind === 'open-folder') return 'Open folder';
     return 'Preset';
   }
 
   function kindGroup(kind) {
     if (kind === 'multi') return 'multi';
     if (kind === 'preset') return 'presets';
+    if (kind === 'unnest' || kind === 'motion-to-transform' || kind === 'adjustment-layer' || kind === 'open-app' || kind === 'open-folder') return 'actions';
     if (kind.endsWith('transition')) return 'transitions';
     return 'effects';
   }
@@ -175,9 +250,20 @@ export function initShortsCuts() {
     else showHint(result.message || 'Applied.', 'success');
   }
 
+  async function applyHistory(action) {
+    const result = await window.electronAPI.shortscutsHistory(action);
+    if (!result.success) showHint(result.error || `Could not ${action}.`, 'error');
+    else showHint(result.message || (action === 'undo' ? 'Undo.' : 'Redo.'), 'success');
+  }
+
   // ---------- Deck list ----------
 
   function transitionControls(item) {
+    if (item.kind === 'adjustment-layer') {
+      return `<div class="shortscuts-row-controls">
+        <input data-field="adj-duration" type="number" min="0.1" max="600" step="0.5" value="${Number(item.duration || 5).toFixed(1)}" title="Default length in seconds when no clips are selected" aria-label="Default adjustment layer duration in seconds">
+      </div>`;
+    }
     if (!item.kind.endsWith('transition')) return '';
     return `<div class="shortscuts-row-controls">
       <select data-field="edge" aria-label="Transition position">
@@ -198,7 +284,8 @@ export function initShortsCuts() {
   }
 
   function tile(entry, kind, size = 18) {
-    return `<span class="shortscuts-tile" style="--key:${escapeHtml(keyColor(entry, kind))}" aria-hidden="true">${shortsCutIconSvg(keyIcon(entry, kind), size)}</span>`;
+    const color = keyColor(entry, kind);
+    return `<span class="shortscuts-tile" style="--key:${escapeHtml(color)};--key-ink:${shortsCutKeyInk(color)}" aria-hidden="true">${shortsCutIconSvg(keyIcon(entry, kind), size)}</span>`;
   }
 
   function renderDeck() {
@@ -215,6 +302,8 @@ export function initShortsCuts() {
       const active = isActive(item.id);
       const steps = item.kind === 'multi' ? `<span class="shortscuts-meta">${(item.steps || []).length} action${(item.steps || []).length === 1 ? '' : 's'}</span>` : '';
       const folder = item.folderId ? `<span class="shortscuts-meta">in ${escapeHtml(folderName(item.folderId))}</span>` : '';
+      const proTag = (!active || isProOnly(item.kind)) ? '<span class="shortscuts-meta shortscuts-pro-note">Pro</span>' : '';
+      const runLabel = isSystemKind(item.kind) ? 'Open' : (item.kind === 'unnest' || item.kind === 'motion-to-transform' || item.kind === 'adjustment-layer') ? 'Run' : 'Apply';
       return `
       <div class="shortscuts-row ${conflict ? 'is-conflict' : ''} ${isSelected ? 'is-selected' : ''} ${active ? '' : 'is-inactive'}" data-id="${escapeHtml(item.id)}">
         <button type="button" class="shortscuts-tile-btn" data-action="select" title="Customize key">${tile(item)}</button>
@@ -222,10 +311,10 @@ export function initShortsCuts() {
         <div class="shortscuts-row-main">
           <strong>${escapeHtml(item.label)}</strong>
           <span class="shortscuts-kind">${kindLabel(item.kind)}</span>
-          ${steps}${folder}${active ? '' : '<span class="shortscuts-meta shortscuts-pro-note">Pro</span>'}
+          ${steps}${folder}${proTag}
           ${transitionControls(item)}
         </div>
-        <button class="btn btn-secondary btn-small shortscuts-apply" data-action="apply" ${canApply() && active ? '' : 'disabled'}>Apply</button>
+        <button class="btn btn-secondary btn-small shortscuts-apply" data-action="apply" ${canRunItem(item) ? '' : 'disabled'}>${runLabel}</button>
         <button class="shortscuts-remove" data-action="remove" aria-label="Remove ${escapeHtml(item.label)}" title="Remove key">&times;</button>
       </div>`;
     }).join('');
@@ -270,13 +359,22 @@ export function initShortsCuts() {
     const folder = folders().find((entry) => entry.id === openFolder);
     deviceTitle.textContent = folder ? folder.label : 'ShortsCuts';
     deviceBack.classList.toggle('hidden', !folder);
+    if (deviceUndo) {
+      deviceUndo.innerHTML = `${shortsCutIconSvg('undo', 13)}<span>Undo</span>`;
+      deviceUndo.disabled = !canApply();
+    }
+    if (deviceRedo) {
+      deviceRedo.innerHTML = `${shortsCutIconSvg('redo', 13)}<span>Redo</span>`;
+      deviceRedo.disabled = !canApply();
+    }
     const keys = visibleKeys();
     const cells = keys.map(({ type, entry }) => {
       const kind = type === 'folder' ? 'folder' : entry.kind;
       const isSelected = selected?.type === type && selected.id === entry.id;
       const count = type === 'folder' ? deck().filter((item) => item.folderId === entry.id).length : 0;
       const inactive = type === 'item' && !isActive(entry.id);
-      return `<button type="button" class="shortscuts-dkey ${type === 'folder' ? 'is-folder' : ''} ${isSelected ? 'is-selected' : ''} ${inactive ? 'is-inactive' : ''}" draggable="true" data-type="${type}" data-id="${escapeHtml(entry.id)}" style="--key:${escapeHtml(keyColor(entry, kind))}" title="${escapeHtml(type === 'folder' ? `${entry.label} · double-click to open` : entry.label)}">
+      const color = keyColor(entry, kind);
+      return `<button type="button" class="shortscuts-dkey ${type === 'folder' ? 'is-folder' : ''} ${isSelected ? 'is-selected' : ''} ${inactive ? 'is-inactive' : ''}" draggable="true" data-type="${type}" data-id="${escapeHtml(entry.id)}" style="--key:${escapeHtml(color)};--key-ink:${shortsCutKeyInk(color)}" title="${escapeHtml(type === 'folder' ? `${entry.label} · double-click to open` : entry.label)}">
         <span class="shortscuts-dkey-icon">${shortsCutIconSvg(keyIcon(entry, kind), 24)}</span>
         <span class="shortscuts-dkey-label">${escapeHtml(entry.label)}</span>
         ${type === 'folder' ? `<span class="shortscuts-dkey-count">${count}</span>` : ''}
@@ -345,15 +443,37 @@ export function initShortsCuts() {
       return;
     }
     const folderOptions = [`<option value="">Top level</option>`, ...folders().map((entry) => `<option value="${escapeHtml(entry.id)}" ${item.folderId === entry.id ? 'selected' : ''}>${escapeHtml(entry.label)}</option>`)].join('');
+    const targetField = item.kind === 'open-app'
+      ? `<div class="shortscuts-field"><label>Application</label><div class="shortscuts-path-row"><span class="shortscuts-path-value" title="${escapeHtml(item.target)}">${escapeHtml(item.target)}</span><button type="button" class="btn btn-secondary btn-small" data-inspect="pick-app">Change…</button></div></div>`
+      : item.kind === 'open-folder'
+        ? `<div class="shortscuts-field"><label>Folder</label><div class="shortscuts-path-row"><span class="shortscuts-path-value" title="${escapeHtml(item.target)}">${escapeHtml(item.target)}</span><button type="button" class="btn btn-secondary btn-small" data-inspect="pick-folder">Change…</button></div></div>`
+        : item.kind === 'adjustment-layer'
+          ? `<div class="shortscuts-field"><label for="shortscuts-edit-adj-duration">Default length (seconds)</label><input id="shortscuts-edit-adj-duration" type="number" min="0.1" max="600" step="0.5" value="${Number(item.duration || 5).toFixed(1)}"><p class="help-text">Covers selected clips or In/Out when set; otherwise uses this length at the playhead.</p></div>`
+          : '';
+    const testLabel = item.kind === 'open-app'
+      ? 'Open app'
+      : item.kind === 'open-folder'
+        ? 'Open folder'
+        : item.kind === 'adjustment-layer'
+          ? 'Add adjustment layer'
+          : item.kind === 'unnest'
+            ? 'Unnest selection'
+            : item.kind === 'motion-to-transform'
+              ? 'Move Motion → Transform'
+              : 'Test on selection';
+    const primaryAction = !isPro() && isProLockedItem(item)
+      ? `<button type="button" class="btn btn-pro btn-small" data-inspect="upgrade">Unlock with Smoothy Pro</button>`
+      : `<button type="button" class="btn btn-primary btn-small" data-inspect="apply" ${canRunItem(item) ? '' : 'disabled'}>${testLabel}</button>`;
     inspector.innerHTML = `
-      <div class="shortscuts-inspector-head">${tile(item, item.kind, 20)}<div><strong>${escapeHtml(item.label)}</strong><span>${kindLabel(item.kind)}${item.target ? ` · ${escapeHtml(item.target)}` : ''}</span></div></div>
+      <div class="shortscuts-inspector-head">${tile(item, item.kind, 20)}<div><strong>${escapeHtml(item.label)}</strong><span>${kindLabel(item.kind)}${item.target && !isSystemKind(item.kind) ? ` · ${escapeHtml(item.target)}` : ''}</span></div></div>
       <div class="shortscuts-field"><label for="shortscuts-edit-label">Name</label><input id="shortscuts-edit-label" maxlength="60" value="${escapeHtml(item.label)}"></div>
       <div class="shortscuts-field"><label for="shortscuts-edit-folder">Folder</label><select id="shortscuts-edit-folder">${folderOptions}</select></div>
+      ${targetField}
       ${item.kind === 'multi' ? stepsEditor(item) : ''}
       ${iconPicker(item.icon, resolveShortsCutIcon({ ...item, icon: undefined }))}
       ${colorPicker(item.color, item.kind)}
       <div class="shortscuts-inspector-actions">
-        <button type="button" class="btn btn-primary btn-small" data-inspect="apply" ${canApply() ? '' : 'disabled'}>Test on selection</button>
+        ${primaryAction}
         <button type="button" class="btn btn-secondary btn-small shortscuts-danger" data-inspect="delete">Remove key</button>
       </div>`;
   }
@@ -402,7 +522,7 @@ export function initShortsCuts() {
     renderDeck();
     renderDevice();
     const focused = document.activeElement;
-    const keepFocus = focused && inspector.contains(focused) && focused.id === 'shortscuts-edit-label';
+    const keepFocus = focused && inspector.contains(focused) && (focused.id === 'shortscuts-edit-label' || focused.id === 'shortscuts-edit-adj-duration');
     if (!keepFocus) renderInspector();
     renderServer();
     if (state.lastResult && state.lastResult.at !== lastShownResult) {
@@ -463,6 +583,9 @@ export function initShortsCuts() {
     const match = (text) => !query || text.toLowerCase().includes(query);
     const want = (tab) => catalogTab === 'all' || catalogTab === tab;
     const add = (group, list) => { const items = list.filter((row) => match(`${row.name} ${row.sub || ''}`)); if (items.length) rows.push({ group, items }); };
+    if (want('actions')) {
+      add('Actions', BUILT_IN_ACTIONS);
+    }
     if (want('effects') && catalog) {
       add('Video effects', (catalog.videoEffects || []).map((name) => ({ kind: 'video-effect', name, target: name })));
       add('Audio effects', (catalog.audioEffects || []).map((name) => ({ kind: 'audio-effect', name, target: name })));
@@ -490,7 +613,9 @@ export function initShortsCuts() {
     catalogList.innerHTML = groups.length
       ? groups.map(({ group, items }) => `${showGroups ? `<h4 class="shortscuts-catalog-group">${escapeHtml(group)} <span>${items.length}</span></h4>` : ''}${items.map((row) => {
         const entry = { label: row.name, target: row.target, kind: row.kind };
-        return `<button class="shortscuts-catalog-item" type="button" data-kind="${row.kind}" data-name="${escapeHtml(row.name)}" ${row.presetId ? `data-preset-id="${escapeHtml(row.presetId)}"` : `data-target="${escapeHtml(row.target)}"`}>${tile(entry, row.kind, 16)}<span class="shortscuts-catalog-copy"><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.sub || kindLabel(row.kind))}</small></span><b>+</b></button>`;
+        const locked = Boolean(row.proOnly && !isPro());
+        const badge = row.proOnly ? '<span class="shortscuts-pro-pill">Pro</span>' : '';
+        return `<button class="shortscuts-catalog-item ${locked ? 'is-pro-locked' : ''}" type="button" data-kind="${row.kind}" data-name="${escapeHtml(row.name)}" ${row.pick ? `data-pick="${row.pick}"` : ''} ${row.proOnly ? 'data-pro-only="true"' : ''} ${row.presetId ? `data-preset-id="${escapeHtml(row.presetId)}"` : `data-target="${escapeHtml(row.target || '')}"`}>${tile(entry, row.kind, 16)}<span class="shortscuts-catalog-copy"><strong>${escapeHtml(row.name)}</strong><small>${escapeHtml(row.sub || kindLabel(row.kind))}</small></span>${badge}<b>${locked ? '★' : '+'}</b></button>`;
       }).join('')}`).join('')
       : `<p class="help-text">${catalogSearch.value.trim() ? 'No matches.' : 'Nothing to show yet.'}</p>`;
     const total = groups.reduce((sum, group) => sum + group.items.length, 0);
@@ -533,9 +658,16 @@ export function initShortsCuts() {
   }
 
   async function addToDeck(item) {
+    if (atFreeLimit()) {
+      catalogStatus.textContent = `The free plan includes ${freeKeys()} keys. Remove one, or get Smoothy Pro for unlimited keys.`;
+      showHint(`The free plan includes ${freeKeys()} keys. Remove one, or get Smoothy Pro for unlimited keys.`, 'error');
+      return;
+    }
     const added = { id: crypto.randomUUID(), ...item, ...(openFolder ? { folderId: openFolder } : {}) };
     if (await save({ deck: [...deck(), added] }, `${item.label} added${openFolder ? ` to ${folderName(openFolder)}` : ''}.`)) {
-      catalogStatus.textContent = `${item.label} added. Keep adding, or close this window.`;
+      catalogStatus.textContent = atFreeLimit()
+        ? `${item.label} added (${freeKeys()} of ${freeKeys()} free keys used).`
+        : `${item.label} added. Keep adding, or close this window.`;
     }
   }
 
@@ -586,9 +718,90 @@ export function initShortsCuts() {
 
   // ---------- Events ----------
 
+  const STARTER_PACKS = {
+    youtube: {
+      name: 'YouTube Talking Head',
+      items: [
+        { label: 'Transform', kind: 'video-effect', target: 'Transform', icon: 'crop', color: 'lime' },
+        { label: 'Lumetri Color', kind: 'video-effect', target: 'Lumetri Color', icon: 'palette', color: 'amber' },
+        { label: 'Gaussian Blur', kind: 'video-effect', target: 'Gaussian Blur', icon: 'droplet', color: 'sky' },
+        { label: 'Cross Dissolve', kind: 'video-transition', target: 'Cross Dissolve', edge: 'end', duration: 0.4, icon: 'spark', color: 'violet' },
+        { label: 'Constant Power', kind: 'audio-transition', target: 'Constant Power', edge: 'end', duration: 0.25, icon: 'volume', color: 'teal' },
+      ],
+    },
+    podcast: {
+      name: 'Podcast Cut',
+      items: [
+        { label: 'DeNoise', kind: 'audio-effect', target: 'DeNoise', icon: 'mic', color: 'teal' },
+        { label: 'Dynamics', kind: 'audio-effect', target: 'Dynamics', icon: 'sliders', color: 'lime' },
+        { label: 'Parametric Equalizer', kind: 'audio-effect', target: 'Parametric Equalizer', icon: 'waveform', color: 'sky' },
+        { label: 'Constant Power', kind: 'audio-transition', target: 'Constant Power', edge: 'end', duration: 0.2, icon: 'volume', color: 'amber' },
+      ],
+    },
+    reels: {
+      name: 'Reels Transitions',
+      items: [
+        { label: 'Dip to Black', kind: 'video-transition', target: 'Dip to Black', edge: 'end', duration: 0.35, icon: 'moon', color: 'ink' },
+        { label: 'Dip to White', kind: 'video-transition', target: 'Dip to White', edge: 'end', duration: 0.25, icon: 'sun', color: 'amber' },
+        { label: 'Film Dissolve', kind: 'video-transition', target: 'Film Dissolve', edge: 'end', duration: 0.4, icon: 'film', color: 'coral' },
+        { label: 'Transform', kind: 'video-effect', target: 'Transform', icon: 'crop', color: 'lime' },
+        { label: 'Directional Blur', kind: 'video-effect', target: 'Directional Blur', icon: 'wind', color: 'violet' },
+      ],
+    },
+  };
+
+  async function applyStarterPack(packId) {
+    const pack = STARTER_PACKS[packId];
+    if (!pack) return;
+    const existing = deck();
+    const fresh = pack.items.filter(
+      (item) => !existing.some((entry) => entry.kind === item.kind && entry.target === item.target)
+    );
+    if (!fresh.length) {
+      showHint(`All keys from ${pack.name} are already on your deck.`, 'info');
+      return;
+    }
+    const maxToAdd = isPro() ? fresh.length : Math.max(0, freeKeys() - existing.length);
+    if (maxToAdd === 0) {
+      showHint(`The free plan includes ${freeKeys()} keys. Remove one, or get Smoothy Pro for unlimited keys.`, 'error');
+      $('shortscuts-plan')?.classList.add('is-nudge');
+      setTimeout(() => $('shortscuts-plan')?.classList.remove('is-nudge'), 1200);
+      return;
+    }
+    const toAdd = fresh.slice(0, maxToAdd).map((item) => ({
+      id: crypto.randomUUID(),
+      ...item,
+      ...(openFolder ? { folderId: openFolder } : {}),
+    }));
+    const note = toAdd.length < fresh.length
+      ? `Added ${toAdd.length} of ${fresh.length} keys from ${pack.name} (${freeKeys()}-key free limit reached).`
+      : `Added ${toAdd.length} key${toAdd.length === 1 ? '' : 's'} from ${pack.name}.`;
+    await save({ deck: [...existing, ...toAdd] }, note);
+  }
+
   function bind() {
     $('shortscuts-add').addEventListener('click', () => void openCatalog());
     $('shortscuts-plan-upgrade').addEventListener('click', upgrade);
+    $('shortscuts-starter-pack')?.addEventListener('change', async (event) => {
+      const selectEl = event.currentTarget;
+      const packId = selectEl.value;
+      selectEl.value = '';
+      if (packId) await applyStarterPack(packId);
+    });
+    $('shortscuts-toolbar-capture')?.addEventListener('click', async () => {
+      if (atFreeLimit()) {
+        showHint(`The free plan includes ${freeKeys()} keys. Remove one, or get Smoothy Pro for unlimited keys.`, 'error');
+        $('shortscuts-plan')?.classList.add('is-nudge');
+        setTimeout(() => $('shortscuts-plan')?.classList.remove('is-nudge'), 1200);
+        return;
+      }
+      showHint('Capturing effects from selected Premiere clip…', 'info');
+      const result = await window.electronAPI.shortscutsCapturePreset();
+      if (!result.success) { showHint(result.error || 'Select a clip in Premiere first to capture its effects.', 'error'); return; }
+      state = result.state;
+      render();
+      showHint('Preset captured from the selected clip.', 'success');
+    });
     captureButton.addEventListener('click', async () => {
       const result = await window.electronAPI.shortscutsCapturePreset();
       if (!result.success) { catalogStatus.textContent = result.error || 'Could not capture that preset.'; return; }
@@ -624,6 +837,10 @@ export function initShortsCuts() {
         const value = Number(event.target.value);
         if (Number.isFinite(value)) void updateItem(row.dataset.id, { duration: Math.min(10, Math.max(0.05, Math.round(value * 100) / 100)) });
       }
+      if (field === 'adj-duration') {
+        const value = Number(event.target.value);
+        if (Number.isFinite(value)) void updateItem(row.dataset.id, { duration: Math.min(600, Math.max(0.1, Math.round(value * 100) / 100)) });
+      }
     });
 
     window.addEventListener('keydown', (event) => {
@@ -654,6 +871,8 @@ export function initShortsCuts() {
       renderDevice();
     }));
     deviceBack.addEventListener('click', () => { openFolder = null; render(); });
+    deviceUndo?.addEventListener('click', () => { if (canApply()) void applyHistory('undo'); });
+    deviceRedo?.addEventListener('click', () => { if (canApply()) void applyHistory('redo'); });
     deviceGrid.addEventListener('click', (event) => {
       const key = event.target.closest('.shortscuts-dkey');
       if (key) select(key.dataset.type, key.dataset.id);
@@ -662,7 +881,10 @@ export function initShortsCuts() {
       const key = event.target.closest('.shortscuts-dkey');
       if (!key) return;
       if (key.dataset.type === 'folder') { openFolder = key.dataset.id; selected = null; render(); }
-      else if (canApply()) void applyItem(key.dataset.id);
+      else {
+        const item = deck().find((entry) => entry.id === key.dataset.id);
+        if (item && canRunItem(item)) void applyItem(key.dataset.id);
+      }
     });
     deviceGrid.addEventListener('dragstart', (event) => {
       const key = event.target.closest('.shortscuts-dkey');
@@ -712,6 +934,12 @@ export function initShortsCuts() {
       if (await save({ folders: [...folders(), { id, label }] }, `${label} created. Drag keys onto it.`)) select('folder', id);
     });
     $('shortscuts-new-multi').addEventListener('click', async () => {
+      if (atFreeLimit()) {
+        showHint(`The free plan includes ${freeKeys()} keys. Remove one, or get Smoothy Pro for unlimited keys.`, 'error');
+        $('shortscuts-plan')?.classList.add('is-nudge');
+        setTimeout(() => $('shortscuts-plan')?.classList.remove('is-nudge'), 1200);
+        return;
+      }
       const plain = deck().filter((entry) => entry.kind !== 'multi');
       if (!plain.length) { showHint('Add an effect, transition or preset first.', 'error'); return; }
       const id = crypto.randomUUID();
@@ -732,6 +960,9 @@ export function initShortsCuts() {
         const folderId = target.value || undefined;
         openFolder = folderId || null;
         void updateItem(selected.id, { folderId }, folderId ? `Moved to ${folderName(folderId)}.` : 'Moved to the top level.');
+      } else if (target.id === 'shortscuts-edit-adj-duration') {
+        const value = Number(target.value);
+        if (Number.isFinite(value)) void updateItem(selected.id, { duration: Math.min(600, Math.max(0.1, Math.round(value * 100) / 100)) }, '');
       } else if (target.matches('[data-step-add]') && target.value) {
         const item = deck().find((entry) => entry.id === selected.id);
         if (item) void updateItem(item.id, { steps: [...(item.steps || []), target.value].slice(0, MAX_STEPS) }, '');
@@ -765,6 +996,19 @@ export function initShortsCuts() {
         return;
       }
       if (action === 'apply') void applyItem(selected.id);
+      if (action === 'upgrade') { upgrade(); return; }
+      if (action === 'pick-app') {
+        void window.electronAPI.shortscutsPickApp().then((picked) => {
+          if (picked?.success && picked.path) void updateItem(selected.id, { target: picked.path }, `Updated app to ${picked.name}.`);
+        });
+        return;
+      }
+      if (action === 'pick-folder') {
+        void window.electronAPI.shortscutsPickFolder().then((picked) => {
+          if (picked?.success && picked.path) void updateItem(selected.id, { target: picked.path }, `Updated folder to ${picked.name}.`);
+        });
+        return;
+      }
       if (action === 'open') { openFolder = openFolder === selected.id ? null : selected.id; render(); }
       if (action === 'delete') {
         if (selected.type === 'item') { removeItem(selected.id); return; }
@@ -815,9 +1059,28 @@ export function initShortsCuts() {
     catalogSearch.addEventListener('input', renderCatalog);
     catalogRefresh.addEventListener('click', async () => { catalogStatus.textContent = 'Reading Premiere presets…'; await loadPresets(true); renderCatalog(); });
     document.querySelectorAll('[data-catalog-tab]').forEach((tab) => tab.addEventListener('click', () => { catalogTab = tab.dataset.catalogTab; renderCatalog(); }));
-    catalogList.addEventListener('click', (event) => {
+    catalogList.addEventListener('click', async (event) => {
       const button = event.target.closest('.shortscuts-catalog-item');
       if (!button) return;
+      if (button.dataset.proOnly === 'true' && !isPro()) {
+        const name = button.dataset.name || 'This action';
+        catalogStatus.textContent = `${name} requires Smoothy Pro. Click Upgrade to unlock Pro actions and unlimited keys.`;
+        showHint(`${name} requires Smoothy Pro.`, 'error');
+        upgrade();
+        return;
+      }
+      if (button.dataset.pick === 'app') {
+        const picked = await window.electronAPI.shortscutsPickApp();
+        if (!picked?.success || !picked.path) return;
+        await addToDeck({ label: String(picked.name || 'Open app').slice(0, 60), kind: 'open-app', target: picked.path });
+        return;
+      }
+      if (button.dataset.pick === 'folder') {
+        const picked = await window.electronAPI.shortscutsPickFolder();
+        if (!picked?.success || !picked.path) return;
+        await addToDeck({ label: String(picked.name || 'Open folder').slice(0, 60), kind: 'open-folder', target: picked.path });
+        return;
+      }
       if (button.dataset.presetId) { void addPremierePreset(button.dataset.presetId); return; }
       const kind = button.dataset.kind;
       void addToDeck({
@@ -825,6 +1088,7 @@ export function initShortsCuts() {
         kind,
         target: button.dataset.target || '',
         ...(kind.endsWith('transition') ? { edge: 'end', duration: 0.5 } : {}),
+        ...(kind === 'adjustment-layer' ? { duration: 5 } : {}),
       });
     });
     document.addEventListener('keydown', (event) => {

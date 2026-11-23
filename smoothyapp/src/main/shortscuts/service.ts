@@ -12,6 +12,9 @@ import { ShortsCutsServer, type ShortsCutsApplyResponse, type ShortsCutsMobileSt
 import {
   FREE_DECK_KEYS,
   MAX_DECK_ITEMS,
+  isProOnlyShortsCutKind,
+  isSystemShortsCutKind,
+  type ShortsCutHistoryAction,
   type ShortsCutItem,
   type ShortsCutsApplyResult,
   type ShortsCutsCapturedPreset,
@@ -49,11 +52,14 @@ export interface ShortsCutsState {
 interface ServiceOptions {
   store: PreferencesStore;
   applyToPremiere: (item: ShortsCutItem) => Promise<ShortsCutsApplyResult>;
+  openApp?: (target: string) => Promise<ShortsCutsApplyResult>;
+  openFolder?: (target: string) => Promise<ShortsCutsApplyResult>;
+  sendHistory?: (action: ShortsCutHistoryAction) => Promise<ShortsCutsApplyResult>;
   readCatalog: () => Promise<ShortsCutsCatalog>;
   capturePreset: () => Promise<ShortsCutsCapturedPreset>;
   connected: () => boolean;
   editor: () => string;
-  /** Smoothy Pro: unlimited keys. Without it only the first FREE_DECK_KEYS keys work. */
+  /** Smoothy Pro: unlimited keys & Pro actions. Without it only the first FREE_DECK_KEYS non-Pro keys work. */
   allowed: () => boolean;
   track: (id: string) => void;
   onState: (state: ShortsCutsState) => void;
@@ -74,8 +80,31 @@ const FREE_LIMIT = `The free plan includes ${FREE_DECK_KEYS} ShortsCuts keys. Up
 function trackId(item: ShortsCutItem): string {
   if (item.kind === 'multi') return 'shortscuts_multi';
   if (item.kind === 'preset') return 'shortscuts_preset';
+  if (item.kind === 'unnest') return 'shortscuts_unnest';
+  if (item.kind === 'motion-to-transform') return 'shortscuts_motion_to_transform';
+  if (item.kind === 'adjustment-layer') return 'shortscuts_adjustment_layer';
+  if (item.kind === 'open-app') return 'shortscuts_open_app';
+  if (item.kind === 'open-folder') return 'shortscuts_open_folder';
   if (item.kind.endsWith('transition')) return 'shortscuts_transition';
   return 'shortscuts_effect';
+}
+
+function isProLocked(item: ShortsCutItem, deck: ShortsCutItem[]): boolean {
+  if (isProOnlyShortsCutKind(item.kind)) return true;
+  if (item.kind !== 'multi') return false;
+  return (item.steps || []).some((stepId) => {
+    const step = deck.find((entry) => entry.id === stepId);
+    return Boolean(step && isProOnlyShortsCutKind(step.kind));
+  });
+}
+
+function itemNeedsPremiere(item: ShortsCutItem, deck: ShortsCutItem[]): boolean {
+  if (isSystemShortsCutKind(item.kind)) return false;
+  if (item.kind !== 'multi') return true;
+  const steps = (item.steps || [])
+    .map((stepId) => deck.find((entry) => entry.id === stepId))
+    .filter((entry): entry is ShortsCutItem => Boolean(entry) && entry!.kind !== 'multi');
+  return steps.some((step) => !isSystemShortsCutKind(step.kind));
 }
 
 export function createShortsCutsService(options: ServiceOptions) {
@@ -86,9 +115,10 @@ export function createShortsCutsService(options: ServiceOptions) {
   let remoteSince = Date.now();
   let lastAllowed = true;
 
-  /** Keys that work on the current plan: all of them with Pro, otherwise the first FREE_DECK_KEYS. */
+  /** Keys that work on the current plan: all of them with Pro, otherwise the first FREE_DECK_KEYS non-Pro keys. */
   function activeDeck(deck: ShortsCutItem[] = store.get().deck): ShortsCutItem[] {
-    return options.allowed() ? deck : deck.slice(0, FREE_DECK_KEYS);
+    if (options.allowed()) return deck;
+    return deck.slice(0, FREE_DECK_KEYS).filter((item) => !isProLocked(item, deck));
   }
   let lastResult: ShortsCutsState['lastResult'] = null;
   const store = createShortsCutsStore(options.store, () => notify());
@@ -96,27 +126,32 @@ export function createShortsCutsService(options: ServiceOptions) {
     void apply(item.id, 'keyboard');
   });
   const server = new ShortsCutsServer({
-    getState: (): ShortsCutsMobileState => ({
-      connected: options.connected() && options.editor() === 'premiere',
-      editor: options.editor(),
-      deck: activeDeck().map((item) => ({
-        id: item.id,
-        label: item.label,
-        kind: item.kind,
-        icon: resolveShortsCutIcon(item),
-        color: shortsCutColorValue(item.color, item.kind),
-        folderId: item.folderId || null,
-      })),
-      folders: store.get().folders.map((folder) => ({
-        id: folder.id,
-        label: folder.label,
-        icon: resolveShortsCutIcon({ ...folder, kind: 'folder' }),
-        color: shortsCutColorValue(folder.color, 'folder'),
-      })),
-      layout: store.get().layout,
-      lastAction: lastResult?.message || null,
-    }),
+    getState: (): ShortsCutsMobileState => {
+      const fullDeck = store.get().deck;
+      return {
+        connected: options.connected() && options.editor() === 'premiere',
+        editor: options.editor(),
+        deck: activeDeck(fullDeck).map((item) => ({
+          id: item.id,
+          label: item.label,
+          kind: item.kind,
+          icon: resolveShortsCutIcon(item),
+          color: shortsCutColorValue(item.color, item.kind),
+          folderId: item.folderId || null,
+          system: !itemNeedsPremiere(item, fullDeck),
+        })),
+        folders: store.get().folders.map((folder) => ({
+          id: folder.id,
+          label: folder.label,
+          icon: resolveShortsCutIcon({ ...folder, kind: 'folder' }),
+          color: shortsCutColorValue(folder.color, 'folder'),
+        })),
+        layout: store.get().layout,
+        lastAction: lastResult?.message || null,
+      };
+    },
     apply: (id) => apply(id, 'phone'),
+    history: (action) => runHistory(action, 'phone'),
     onAction: () => notify(),
   });
 
@@ -148,21 +183,39 @@ export function createShortsCutsService(options: ServiceOptions) {
     notify();
   }
 
+  async function runSingle(item: ShortsCutItem): Promise<ShortsCutsApplyResult> {
+    if (item.kind === 'open-app') {
+      if (!options.openApp) return { success: false, error: 'Opening apps is not configured.' };
+      return options.openApp(item.target);
+    }
+    if (item.kind === 'open-folder') {
+      if (!options.openFolder) return { success: false, error: 'Opening folders is not configured.' };
+      return options.openFolder(item.target);
+    }
+    return options.applyToPremiere(item);
+  }
+
   async function apply(id: string, source: 'keyboard' | 'phone' | 'panel'): Promise<ShortsCutsApplyResponse> {
     if (busy) return { success: false, error: 'Wait for the current ShortsCut to finish.' };
-    const item = store.get().deck.find((entry) => entry.id === id);
+    const fullDeck = store.get().deck;
+    const item = fullDeck.find((entry) => entry.id === id);
     if (!item) return { success: false, error: 'That shortcut is no longer in the deck.' };
-    if (!activeDeck().some((entry) => entry.id === id)) return { success: false, error: FREE_LIMIT };
-    if (options.editor() !== 'premiere') {
-      return { success: false, error: 'ShortsCuts works with Premiere Pro. Switch the editor to Premiere first.' };
+    if (!options.allowed() && isProLocked(item, fullDeck)) {
+      return { success: false, error: `${item.label} requires Smoothy Pro.` };
     }
-    if (!options.connected()) {
-      return { success: false, error: 'Connect Premiere and open a sequence first.' };
+    if (!activeDeck(fullDeck).some((entry) => entry.id === id)) return { success: false, error: FREE_LIMIT };
+    if (itemNeedsPremiere(item, fullDeck)) {
+      if (options.editor() !== 'premiere') {
+        return { success: false, error: 'ShortsCuts works with Premiere Pro. Switch the editor to Premiere first.' };
+      }
+      if (!options.connected()) {
+        return { success: false, error: 'Connect Premiere and open a sequence first.' };
+      }
     }
     busy = true;
     notify();
     try {
-      const result = item.kind === 'multi' ? await applySteps(item) : await options.applyToPremiere(item);
+      const result = item.kind === 'multi' ? await applySteps(item) : await runSingle(item);
       if (result.success) {
         try {
           options.track(trackId(item));
@@ -173,11 +226,48 @@ export function createShortsCutsService(options: ServiceOptions) {
         setLast(true, message, source);
         return { success: true, message };
       }
-      const error = [result.error || 'Premiere did not apply that shortcut.', ...(result.details || [])].join(' ');
+      const error = [result.error || 'Could not run that shortcut.', ...(result.details || [])].join(' ');
       setLast(false, error, source);
       return { success: false, error };
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Premiere did not apply that shortcut.';
+      const message = error instanceof Error ? error.message : 'Could not run that shortcut.';
+      setLast(false, message, source);
+      return { success: false, error: message };
+    } finally {
+      busy = false;
+      notify();
+    }
+  }
+
+  async function runHistory(action: ShortsCutHistoryAction, source: 'phone' | 'panel'): Promise<ShortsCutsApplyResponse> {
+    if (action !== 'undo' && action !== 'redo') return { success: false, error: 'Invalid history action.' };
+    if (busy) return { success: false, error: 'Wait for the current ShortsCut to finish.' };
+    if (options.editor() !== 'premiere') {
+      return { success: false, error: 'Undo and Redo work with Premiere Pro. Switch the editor to Premiere first.' };
+    }
+    if (!options.connected()) {
+      return { success: false, error: 'Connect Premiere and open a sequence first.' };
+    }
+    if (!options.sendHistory) return { success: false, error: 'Undo and Redo are not available.' };
+    busy = true;
+    notify();
+    try {
+      const result = await options.sendHistory(action);
+      if (result.success) {
+        try {
+          options.track(action === 'undo' ? 'shortscuts_undo' : 'shortscuts_redo');
+        } catch {
+          // Analytics never blocks undo/redo.
+        }
+        const message = result.message || (action === 'undo' ? 'Undo in Premiere.' : 'Redo in Premiere.');
+        setLast(true, message, source);
+        return { success: true, message };
+      }
+      const error = result.error || `Could not ${action} in Premiere.`;
+      setLast(false, error, source);
+      return { success: false, error };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `Could not ${action} in Premiere.`;
       setLast(false, message, source);
       return { success: false, error: message };
     } finally {
@@ -197,7 +287,11 @@ export function createShortsCutsService(options: ServiceOptions) {
     let applied = 0;
     for (const step of steps) {
       try {
-        const result = await options.applyToPremiere(step);
+        if (!options.allowed() && isProOnlyShortsCutKind(step.kind)) {
+          failed.push(`${step.label}: requires Smoothy Pro`);
+          continue;
+        }
+        const result = await runSingle(step);
         if (result.success) applied++;
         else failed.push(`${step.label}: ${result.error || 'not applied'}`);
       } catch (error) {
@@ -215,7 +309,7 @@ export function createShortsCutsService(options: ServiceOptions) {
 
   // Keep deck keys active only while Premiere (or Smoothy) is in front.
   function startFocusWatch() {
-    if (focusTimer || process.platform !== 'darwin') return;
+    if (focusTimer || (process.platform !== 'darwin' && process.platform !== 'win32')) return;
     const check = async () => {
       if (focusChecking) return;
       focusChecking = true;
@@ -295,6 +389,10 @@ export function createShortsCutsService(options: ServiceOptions) {
       const previous = new Set(store.get().deck.map((item) => item.id));
       const next = validateShortsCutsConfig(mergeDeck(store.get(), value));
       checkFreeLimit(next.deck.length);
+      if (!options.allowed()) {
+        const blocked = next.deck.find((item) => !previous.has(item.id) && isProOnlyShortsCutKind(item.kind));
+        if (blocked) throw new Error(`${blocked.label} requires Smoothy Pro.`);
+      }
       const registration = manager.register(activeDeck(next.deck));
       if (!registration.success) throw new Error(registration.error || 'Those keyboard shortcuts are not available.');
       store.saveDeck(next);
@@ -394,6 +492,10 @@ export function createShortsCutsService(options: ServiceOptions) {
 
     async applyFromPanel(id: string): Promise<ShortsCutsApplyResponse> {
       return apply(id, 'panel');
+    },
+
+    async historyFromPanel(action: ShortsCutHistoryAction): Promise<ShortsCutsApplyResponse> {
+      return runHistory(action, 'panel');
     },
 
     sanitize: sanitizeShortsCutsConfig,

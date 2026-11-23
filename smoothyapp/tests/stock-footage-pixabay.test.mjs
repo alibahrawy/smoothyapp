@@ -47,7 +47,7 @@ test('Pixabay errors redact keys and provider bodies while respecting cancellati
 });
 test('All sources includes Pixabay only in service-enabled builds and preserves its independent cursor',async()=>{
  let pixabayCalls=0;
- const stock=service(async url=>{const parsed=new URL(url);if(parsed.hostname==='stock.example'){pixabayCalls++;return data();}if(parsed.hostname==='commons.wikimedia.org')return Response.json({batchcomplete:true});if(parsed.hostname==='archive.org')return Response.json({response:{numFound:0,docs:[]}});return Response.json({collection:{metadata:{total_hits:0},items:[]}});});
+ const stock=service(async url=>{const parsed=new URL(url);if(parsed.hostname==='stock.example'){if(parsed.pathname.endsWith('/coverr'))return Response.json({total:0,pages:0,hits:[]});pixabayCalls++;return data();}if(parsed.hostname==='commons.wikimedia.org')return Response.json({batchcomplete:true});if(parsed.hostname==='archive.org')return Response.json({response:{numFound:0,docs:[]}});return Response.json({collection:{metadata:{total_hits:0},items:[]}});});
  const initial=await stock.search({query:'ocean',provider:'all'});assert.equal(pixabayCalls,0);assert.equal(initial.sourceCursors.pixabay,undefined);
  stock.configurePixabayService(endpoint);const first=await stock.search({query:'ocean',provider:'all'});assert.deepEqual(first.videos.map(video=>video.provider),['pixabay']);assert.equal(first.sourceCursors.pixabay.page,2);
  const next=await stock.search({query:'ocean',provider:'all',page:2,sourceCursors:first.sourceCursors});assert.equal(pixabayCalls,2);assert.equal(next.sourceCursors.pixabay.page,3);

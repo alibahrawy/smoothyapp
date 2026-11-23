@@ -129,6 +129,58 @@ export class EditStore {
     return rows.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0, 30);
   }
 
+  /** Where saved versions live: the project folder's Edit/versions, else the project's own folder. */
+  versionsDir(project: EditProject): string {
+    return project.folder ? path.join(project.folder, 'Edit', 'versions') : path.join(this.dir(project.id), 'versions');
+  }
+
+  async versions(project: EditProject): Promise<{ version: number; label: string; revision: number; clips: number; duration: number; savedAt: string; file: string }[]> {
+    const dir = this.versionsDir(project);
+    let names: string[] = [];
+    try { names = await fs.readdir(dir); } catch { return []; }
+    const rows = [];
+    for (const name of names) {
+      const match = /^v(\d+)\.json$/.exec(name);
+      if (!match) continue;
+      try {
+        const saved = JSON.parse(await fs.readFile(path.join(dir, name), 'utf8'));
+        if (saved?.project?.id !== project.id) continue;
+        rows.push({ version: Number(match[1]), label: String(saved.label || ''), revision: Number(saved.project.revision) || 0, clips: saved.project.clips?.length || 0, duration: Number(projectDuration(saved.project).toFixed(2)), savedAt: String(saved.savedAt || ''), file: path.join(dir, name) });
+      } catch {
+        // Skip unreadable files.
+      }
+    }
+    return rows.sort((a, b) => a.version - b.version);
+  }
+
+  /** Saves the project as the next version (v1, v2 …). Existing versions are never overwritten. */
+  async snapshot(project: EditProject, label = ''): Promise<{ version: number; file: string }> {
+    const dir = this.versionsDir(project);
+    await fs.mkdir(dir, { recursive: true });
+    const existing = await this.versions(project);
+    let version = existing.reduce((max, row) => Math.max(max, row.version), 0) + 1;
+    for (;; version += 1) {
+      const file = path.join(dir, `v${version}.json`);
+      try {
+        await fs.writeFile(file, JSON.stringify({ label: String(label).slice(0, 120), savedAt: new Date().toISOString(), project }, null, 1), { flag: 'wx' });
+        return { version, file };
+      } catch (error: any) {
+        if (error?.code !== 'EEXIST') throw error;
+      }
+    }
+  }
+
+  /** Makes a saved version the current state. The change can be undone, and versions are kept. */
+  async restore(version: number): Promise<EditProject> {
+    const project = await this.active();
+    const row = (await this.versions(project)).find(item => item.version === version);
+    if (!row) throw new EditOpError(`Version v${version} was not found. List versions with smoothy_edit action "versions".`, 'E_NOT_FOUND');
+    const saved = JSON.parse(await fs.readFile(row.file, 'utf8')).project as EditProject;
+    const next: EditProject = { ...saved, id: project.id, folder: project.folder, revision: project.revision + 1, updatedAt: new Date().toISOString() };
+    await this.commit(project, next);
+    return next;
+  }
+
   describe(project: EditProject, clips = true): any {
     return describeProject(project, { clips });
   }
