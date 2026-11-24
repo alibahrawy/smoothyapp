@@ -3,7 +3,7 @@
  *
  * The look: one line of Plus Jakarta Sans ExtraBold on a rounded colour box,
  * bottom centre. Words not spoken yet are dimmed and light up (with a crisp
- * drop shadow) as they are spoken; the box pops in after a pause. Source of
+ * drop shadow) as they are spoken; the box fades in after a pause (no bounce). Source of
  * truth: docs/caption-pro/box-highlight (STYLE-SPEC.md, presets/box-highlight.json,
  * golden frames).
  *
@@ -41,14 +41,14 @@
   try {
     var current = app.project;
     if (current) {
-      // Only discard a project that holds nothing but a previous build of this
-      // template (its comp and the solids its nulls create).
-      var buildFile = current.file && current.file.name === 'smoothy-box-highlight-build.aep';
+      // Only discard a project that holds nothing but a previous template build
+      // (Smoothy template comps and the solids their nulls create).
+      var buildFile = current.file && (current.file.name === 'smoothy-box-highlight-build.aep' || current.file.name === 'smoothy-caption-template-build.aep');
       var onlyOurs = !current.file || buildFile;
       for (var n = 1; onlyOurs && n <= current.numItems; n++) {
         var item = current.item(n);
         var inSolids = item.parentFolder && item.parentFolder.name === 'Solids';
-        if (item.name !== TEMPLATE_NAME && item.name !== 'Solids' && !inSolids) onlyOurs = false;
+        if (item.name.indexOf('Smoothy ') !== 0 && item.name !== 'Solids' && !inSolids) onlyOurs = false;
       }
       if (!onlyOurs && current.numItems > 0) throw new Error('Save and close your After Effects project first.');
       current.close(CloseOptions.DO_NOT_SAVE_CHANGES);
@@ -85,7 +85,7 @@
     addControl('ADBE Checkbox Control', 'Pop In', 1);
 
     var C = 'thisComp.layer("Controls").effect';
-    // Pop-in progress for the first frames of the clip: 0, .55, .85, 1 (no overshoot).
+    // Fade-in progress for the first frames of the clip: 0, .55, .85, 1 (no scale, no overshoot).
     var POP = [
       'var popOn = ' + C + '("Pop In")("Checkbox") > 0;',
       'var f = Math.floor(timeToFrames(time - inPoint) + 0.001);',
@@ -93,14 +93,15 @@
       'var k = (!popOn || f >= steps.length) ? 1 : steps[Math.max(0, f)];'
     ].join('\n');
 
-    // Rig null: everything hangs off it, so size and pop scale around the box centre.
+    // Rig null: everything hangs off it, so size scales around the box centre.
     var rig = comp.layers.addNull();
     rig.name = 'Rig';
     var rigT = rig.property('ADBE Transform Group');
     rigT.property('ADBE Position').expression =
       '[thisComp.width / 2, thisComp.height * ' + C + '("Vertical Position")("Slider") / 100]';
-    rigT.property('ADBE Scale').expression = POP + '\n' +
-      'var s = ' + C + '("Caption Size")("Slider") * (0.94 + 0.06 * k) * thisComp.width / 1920;\n[s, s]';
+    // No scale bounce: after a pause the line only fades in (owner request, 2026-11-24).
+    rigT.property('ADBE Scale').expression =
+      'var s = ' + C + '("Caption Size")("Slider") * thisComp.width / 1920;\n[s, s]';
 
     // Hidden data layer: per-word timings.
     var timings = comp.layers.addText('0,0.5;0.5,1;1,1.5;1.5,2;2,2.5;2.5,3');

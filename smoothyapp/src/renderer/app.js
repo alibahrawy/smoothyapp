@@ -364,12 +364,12 @@ function updateWindowTitlebar() {
   // The strip keeps the tool's soft tint in both themes (dark text); only with no tool is it neutral.
   const dark = document.documentElement.dataset.theme === 'dark';
   const tint = /^#[0-9a-f]{6}$/i.test(strip) ? strip : '';
-  const titlebarColor = tint || (dark ? '#262523' : '#F3F2EF');
+  const titlebarColor = tint || (dark ? '#17181C' : '#F3F2EF');
   const titlebar = document.querySelector('.window-titlebar');
   titlebar.style.setProperty('--window-accent', titlebarColor);
   // Dark or light status text, whichever reads better on the strip colour.
   const lum = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(c => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)).reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
-  titlebar.style.setProperty('--window-status-ink', lum(titlebarColor) > 0.2 ? '#151515' : '#EEECE7');
+  titlebar.style.setProperty('--window-status-ink', lum(titlebarColor) > 0.2 ? '#151515' : '#F4F5F8');
   window.electronAPI.setWindowTitlebarColor?.(titlebarColor)?.catch(() => {});
   document.querySelectorAll('.window-titlebar > .status-bar').forEach(bar => {
     bar.dataset.windowActive = String(bar.dataset.windowTab === state.currentTab);
@@ -3463,12 +3463,16 @@ function setupSettingsLayout() {
     updateWindowTitlebar();
   };
 
+  const searchEmpty = document.getElementById('settings-search-empty');
+  const paneByKey = new Map(panes.map((pane) => [pane.dataset.pane, pane]));
+
   buttons.forEach((button) => button.addEventListener('click', () => select(button.dataset.settingsPane)));
   search?.addEventListener('input', () => {
     const query = search.value.trim().toLowerCase();
     let first = null;
     buttons.forEach((button) => {
-      const haystack = `${button.dataset.search || ''} ${button.textContent || ''}`.toLowerCase();
+      const paneText = paneByKey.get(button.dataset.settingsPane)?.textContent || '';
+      const haystack = `${button.dataset.search || ''} ${button.dataset.paneTitle || ''} ${button.dataset.paneDescription || ''} ${button.textContent || ''} ${paneText}`.toLowerCase();
       const visible = !query || haystack.includes(query);
       button.classList.toggle('is-filtered-out', !visible);
       if (visible && !first) first = button;
@@ -3477,6 +3481,7 @@ function setupSettingsLayout() {
       const hasVisible = [...group.querySelectorAll('[data-settings-pane]')].some((btn) => !btn.classList.contains('is-filtered-out'));
       group.classList.toggle('is-empty', !hasVisible);
     });
+    searchEmpty?.classList.toggle('hidden', Boolean(!query || first));
     const current = buttons.find((button) => button.classList.contains('active'));
     if (query && first && (!current || current.classList.contains('is-filtered-out'))) {
       select(first.dataset.settingsPane);

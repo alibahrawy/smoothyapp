@@ -48,7 +48,7 @@ if (typeof JSON === 'undefined') {
   };
 }
 
-var SMOOTHY_CEP_HOST_VERSION = "20261123-box-highlight-captions-v42";
+var SMOOTHY_CEP_HOST_VERSION = "20261124-caption-styles-v45";
 
 function getSmoothyCepHostVersion() {
   return SMOOTHY_CEP_HOST_VERSION;
@@ -3176,12 +3176,14 @@ function captureShortsCutPreset() {
 // ---------------------------------------------------------------------------
 // Smoothy Pro animated captions
 // ---------------------------------------------------------------------------
-// Places one Motion Graphics Template clip per caption ("Smoothy Box Highlight";
-// the panel picks the template file through payload.mogrtPath) on a
+// Places one Motion Graphics Template clip per caption (Box Highlight, Word
+// Rise, Word Slide or Outline; the panel picks the template file through
+// payload.mogrtPath) on a
 // new video track at the top of the active sequence. The template animates
 // each word while it is spoken, driven by its "Word Timings" parameter
 // ("start,end;…" seconds from the clip start). Templates are built by
-// smoothyedit-app/scripts/pro-captions/build-mogrt.mjs.
+// smoothyedit-app/scripts/pro-captions/build-mogrt.mjs. A template that lacks
+// a parameter (Rise has no box, only Outline has a stroke) skips that value.
 // Every setter takes updateUI: only the last write on a clip refreshes
 // Premiere, which keeps a long caption send from redrawing on every value.
 function smoothyProCaptionSetText(param, value, updateUI) {
@@ -3314,7 +3316,10 @@ function smoothyImportProCaptions(payloadJSON) {
       ["Box Radius", "number", style.boxRadius],
       ["Box Padding", "number", style.boxPadding],
       ["Box Height", "number", style.boxHeight],
-      ["Shadow Opacity", "number", style.shadowOpacity]
+      ["Shadow Opacity", "number", style.shadowOpacity],
+      ["Highlight Color", "color", style.highlightColor],
+      ["Stroke Color", "color", style.strokeColor],
+      ["Stroke Width", "number", style.strokeWidth]
     ];
     var styleChecked = false, popInDefault = null;
     // The first caption imports the template; later ones place copies of it.

@@ -4,32 +4,38 @@
    Turned on by <html data-theme="dark">, which app.js sets from
    prefers-color-scheme (driven by Settings → General → Theme through
    nativeTheme). Rules:
-   • Surfaces stay neutral warm greys, never near-black (owner, 2026-11-23).
-   • The app keeps its colour, but in dark shades: tiles, title bar and the
-     selected item use a deep muted shade of the flavor with light text;
-     buttons keep a softened flavor fill with dark text. Large panels stay
-     neutral (no tinted panels).
-   • Ink flips to near-white text; things filled with Ink flip to a light
-     fill with dark text (--on-ink). Icons on a flavor tile stay dark
+   • Surfaces use clean neutral-slate charcoals — lifted off true black,
+     with zero olive/brownish/greenish tint.
+   • Controls, pills and secondary buttons step clearly above cards with
+     a crisp 1 px edge so every interactive control is immediately visible.
+   • Ink flips to crisp near-white text; things filled with Ink flip to a
+     light fill with dark text (--on-ink). Icons on a flavor tile stay dark
      (--tile-ink).
-   • Elevation comes from a lighter surface plus a faint top edge, not
-     from bigger shadows.
    ═══════════════════════════════════════════════════════════════════ */
 :root[data-theme="dark"] {
   color-scheme: dark;
 
-  --ink: oklch(0.965 0.004 95);             /* text */
-  --on-ink: oklch(0.2 0 0);                 /* text on an Ink (now light) fill */
-  --canvas: oklch(0.235 0.004 95);          /* window #1F1E1C */
-  --sunken: oklch(0.265 0.004 95);          /* sidebar, fields, wells #262523: lifted, never black */
-  --surface: oklch(0.28 0.004 95);          /* cards, white buttons #292927 */
-  --hover: oklch(0.33 0.004 95);            /* hover, raised #363533 */
-  --border: oklch(0.37 0.004 95);
-  --border-strong: oklch(0.44 0.005 95);
-  --muted-text: oklch(0.74 0.006 95);
-  --secondary-text: oklch(0.86 0.005 95);
+  --ink: #F4F5F8;                           /* crisp near-white text */
+  --on-ink: #121316;                        /* text on an Ink (now light) fill */
+  --canvas: #121316;                        /* window & main content canvas (lifted charcoal, never pure black) */
+  --sunken: #17181C;                        /* sidebar & Settings rail */
+  --surface: #1D1E24;                       /* cards, modals, elevated panels */
+  --hover: #272931;                         /* hover, raised rows */
+  --border: #2C2E37;                        /* card & section borders */
+  --border-strong: #3C3F4B;                 /* strong borders */
+  --muted-text: #8F92A1;                    /* labels & hints */
+  --secondary-text: #C4C6D0;                /* body & unselected controls */
 
-  /* Washes were pale flavor backgrounds: neutral raised grey in the dark. */
+  /* Interactive dark controls (matching pill/button elevation reference) */
+  --control-bg: #282A33;
+  --control-hover: #323540;
+  --control-border: #3E414E;
+  --seg-track: #111216;
+  --seg-track-border: #2A2C35;
+  --seg-active: #282A33;
+  --seg-active-border: #424554;
+
+  /* Washes were pale flavor backgrounds: neutral raised slate in the dark. */
   --lime-wash: var(--hover); --mango-wash: var(--hover); --papaya-wash: var(--hover);
   --watermelon-wash: var(--hover); --rose-wash: var(--hover); --dragonfruit-wash: var(--hover);
   --grape-wash: var(--hover); --blueberry-wash: var(--hover); --sky-wash: var(--hover);
@@ -50,11 +56,10 @@
   --grape: oklch(0.64 0.21 295);
   --dragonfruit: oklch(0.62 0.21 335);
 
-  /* Two layers of colour (owner's pick, 2026-11-23):
-     • --X-tint  = deep jewel shade for the big colour areas (title bar,
+  /* Two layers of colour:
+     • --X-tint  = deep jewel shade for big colour areas (title bar,
        selected sidebar/Settings item), light text on it (--tint-ink).
-     • --X-jewel = full-strength colour for small icon tiles, like macOS
-       System Settings; glyph ink per flavor (--X-jewel-ink).
+     • --X-jewel = full-strength colour for small icon tiles; glyph ink per flavor.
      Hex so the Windows caption overlay can match the title bar. */
   --lime-tint: #194224; --lime-jewel: #1DA835; --lime-jewel-ink: #151515;
   --mango-tint: #473D13; --mango-jewel: #DCA822; --mango-jewel-ink: #151515;
@@ -65,8 +70,8 @@
   --grape-tint: #3A2A5E; --grape-jewel: #8151DB; --grape-jewel-ink: #FFFFFF;
   --blueberry-tint: #19355E; --blueberry-jewel: #126EE5; --blueberry-jewel-ink: #FFFFFF;
   --sky-tint: #0D3D51; --sky-jewel: #1E9FD0; --sky-jewel-ink: #151515;
-  --ink-tint: #3B3B39; --ink-jewel: #6B6A66; --ink-jewel-ink: #FFFFFF;
-  --tint-ink: oklch(0.94 0.008 95);
+  --ink-tint: #282A33; --ink-jewel: #585B6A; --ink-jewel-ink: #FFFFFF;
+  --tint-ink: #F4F5F8;
 
   /* Fills with dark text (tool buttons, Lime, Pro, switches): a notch softer
      than light mode so they don't glare on dark. */
@@ -77,23 +82,213 @@
   --watermelon: oklch(0.68 0.15 22);
   --rose: oklch(0.76 0.11 350);
   --sky: oklch(0.74 0.11 230);
-  --graphite: oklch(0.55 0.01 260);
+  --graphite: oklch(0.55 0.01 265);
 
-  --shadow-button: inset 0 1px 0 rgb(255 255 255 / .06), 0 0 0 1px rgb(255 255 255 / .09), 0 1px 2px rgb(0 0 0 / .45);
-  --shadow-white: 0 0 0 1px rgb(255 255 255 / .10), 0 1px 2px rgb(0 0 0 / .45), 0 3px 6px -3px rgb(0 0 0 / .5);
-  --shadow-bar: 0 0 0 1px rgb(255 255 255 / .06), 0 3px 6px -3px rgb(0 0 0 / .55), 0 8px 12px -8px rgb(0 0 0 / .45);
-  --shadow-1: 0 0 0 1px rgb(255 255 255 / .04), 0 1px 2px rgb(0 0 0 / .35);
-  --shadow-2: 0 0 0 1px rgb(255 255 255 / .05), 0 4px 10px -3px rgb(0 0 0 / .5);
-  --shadow-3: 0 0 0 1px rgb(255 255 255 / .06), 0 10px 24px -8px rgb(0 0 0 / .6);
+  --shadow-button: inset 0 1px 0 rgb(255 255 255 / .08), 0 0 0 1px rgb(255 255 255 / .12), 0 1px 2px rgb(0 0 0 / .45);
+  --shadow-white: inset 0 1px 0 rgb(255 255 255 / .05), 0 0 0 1px var(--control-border), 0 1px 2px rgb(0 0 0 / .42);
+  --shadow-bar: 0 0 0 1px rgb(255 255 255 / .07), 0 3px 6px -3px rgb(0 0 0 / .55), 0 8px 12px -8px rgb(0 0 0 / .45);
+  --shadow-1: 0 1px 2px rgb(0 0 0 / .35);
+  --shadow-2: 0 4px 12px -3px rgb(0 0 0 / .5);
+  --shadow-3: 0 12px 28px -8px rgb(0 0 0 / .62);
   --shadow-color: rgb(0 0 0 / .45);
 
-  --overlay-bg: rgb(0 0 0 / .6);
-  --feature-lock-bg: rgb(12 12 12 / .82);
-  --input-bg: var(--sunken);
+  --overlay-bg: rgb(6 7 10 / .68);
+  --feature-lock-bg: rgb(12 13 16 / .84);
+  --input-bg: #121317;
   --primary-hover: oklch(0.76 0.15 142);
 }
 
-/* ── Components ─────────────────────────────────────────────────────── */
+/* ── Segmented controls & pill toggles (crisp recessed track + raised active pill) ── */
+:root[data-theme="dark"] :is(.settings-seg, .caption-source-toggle, .shorts-source-toggle, .shortscuts-segmented, .toggle-group) {
+  background: var(--seg-track) !important;
+  border: 1px solid var(--seg-track-border) !important;
+  box-shadow: none !important;
+}
+:root[data-theme="dark"] :is(.settings-seg button, .caption-source-toggle button, .shorts-source-toggle button, .shortscuts-segmented button, .toggle-group .toggle-btn) {
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  color: #B8BAC6 !important;
+  box-shadow: none !important;
+}
+:root[data-theme="dark"] :is(.settings-seg button, .caption-source-toggle button, .shorts-source-toggle button, .shortscuts-segmented button, .toggle-group .toggle-btn):hover:not(:disabled) {
+  color: #FFFFFF !important;
+}
+:root[data-theme="dark"] :is(
+  .settings-seg button[aria-checked="true"],
+  .caption-source-toggle button.active,
+  .caption-source-toggle button[aria-pressed="true"],
+  .shorts-source-toggle button.active,
+  .shortscuts-segmented button.active,
+  .tab-content .toggle-btn.active,
+  .toggle-group .toggle-btn.active
+) {
+  background: var(--seg-active) !important;
+  border-color: var(--seg-active-border) !important;
+  color: #FFFFFF !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .06), 0 1px 2px rgb(0 0 0 / .45) !important;
+}
+
+/* ── Secondary & surface buttons: clearly raised above cards with a crisp border ── */
+:root[data-theme="dark"] :is(
+  .app-container .btn-secondary,
+  .modal .btn-secondary,
+  #settings-modal .btn-secondary,
+  #update-modal .btn-secondary,
+  .stock-text-button,
+  #settings-modal #whats-new-btn,
+  #settings-close-btn.settings-close-btn,
+  .modal-content .modal-close-btn,
+  .sidebar .user-info,
+  .sidebar .sidebar-signin-btn,
+  #tab-photos .photo-reference-add,
+  #tab-photos .photo-reactions-button:not([aria-expanded="true"]):not([aria-pressed="true"]),
+  .shortscuts-filter-chips button:not(.active),
+  .audio-row-play,
+  #audio-play-btn,
+  #tab-audio .audio-dock-controls #audio-dock-play
+) {
+  background: var(--control-bg) !important;
+  border: 1px solid var(--control-border) !important;
+  color: var(--ink) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .05), 0 1px 2px rgb(0 0 0 / .35) !important;
+}
+:root[data-theme="dark"] :is(
+  .app-container .btn-secondary,
+  .modal .btn-secondary,
+  #settings-modal .btn-secondary,
+  #update-modal .btn-secondary,
+  .stock-text-button,
+  #settings-modal #whats-new-btn,
+  #settings-close-btn.settings-close-btn,
+  .modal-content .modal-close-btn,
+  .sidebar .user-info,
+  .sidebar .sidebar-signin-btn,
+  #tab-photos .photo-reference-add,
+  #tab-photos .photo-reactions-button:not([aria-expanded="true"]):not([aria-pressed="true"]),
+  .shortscuts-filter-chips button:not(.active),
+  .audio-row-play,
+  #audio-play-btn,
+  #tab-audio .audio-dock-controls #audio-dock-play
+):hover:not(:disabled) {
+  background: var(--control-hover) !important;
+  border-color: #4E5263 !important;
+  color: #FFFFFF !important;
+}
+:root[data-theme="dark"] :is(
+  .app-container .btn-secondary,
+  .modal .btn-secondary,
+  #settings-modal .btn-secondary,
+  #update-modal .btn-secondary,
+  .stock-text-button
+):disabled {
+  background: var(--sunken) !important;
+  border-color: var(--border) !important;
+  color: var(--muted-text) !important;
+  box-shadow: none !important;
+  opacity: 0.6;
+}
+
+/* Primary Ink buttons (light fill in dark mode): hover stays bright, never dark */
+:root[data-theme="dark"] :is(
+  #settings-modal .btn-primary,
+  .modal .btn-primary,
+  #tab-photos .photo-send-button,
+  .chat-send-btn,
+  .photo-send-btn
+):hover:not(:disabled) {
+  background: #E2E4EC !important;
+  color: var(--on-ink) !important;
+}
+
+/* Danger button in dark mode */
+:root[data-theme="dark"] :is(.btn-danger, .settings-danger-btn) {
+  background: color-mix(in oklch, var(--watermelon) 14%, var(--control-bg)) !important;
+  border: 1px solid color-mix(in oklch, var(--watermelon) 42%, var(--control-border)) !important;
+  color: var(--watermelon-deep) !important;
+  box-shadow: none !important;
+}
+:root[data-theme="dark"] :is(.btn-danger, .settings-danger-btn):hover:not(:disabled) {
+  background: color-mix(in oklch, var(--watermelon) 22%, var(--control-hover)) !important;
+}
+
+/* ── Switches & fields in dark mode ─────────────────────────────────── */
+:root[data-theme="dark"] :is(
+  #settings-modal .settings-switch span,
+  #settings-modal .cs-switch span,
+  .switch .slider,
+  .toggle-switch .toggle-slider,
+  .settings-toggle .settings-toggle-track,
+  .setting-switch .setting-switch-track
+) {
+  background: var(--seg-track);
+  border: 1px solid var(--control-border);
+}
+:root[data-theme="dark"] :is(
+  #settings-modal .settings-switch span::after,
+  #settings-modal .cs-switch span::after,
+  .switch .slider::before,
+  .toggle-switch .toggle-slider::before,
+  .settings-toggle .settings-toggle-track::before,
+  .setting-switch .setting-switch-track::before
+) {
+  background: #C8CAD6;
+  box-shadow: 0 1px 2px rgb(0 0 0 / .45);
+}
+:root[data-theme="dark"] :is(
+  .tool-search,
+  #settings-modal .settings-search,
+  .shortscuts-search
+) {
+  background: var(--seg-track);
+  border-color: var(--border);
+  box-shadow: none;
+}
+:root[data-theme="dark"] :is(
+  .app-container :is(.select-input, .text-input, select, input[type="text"], input[type="number"], input[type="password"], input[type="email"]),
+  .modal :is(.select-input, .text-input, select, input[type="text"], input[type="number"], input[type="password"], input[type="email"]),
+  #settings-modal :is(.select-input, .text-input, select, input[type="text"], input[type="number"], input[type="password"], input[type="email"], textarea)
+) {
+  background: #121317;
+  border-color: #313440;
+  color: var(--ink);
+}
+
+/* ── Settings & components elevation in dark mode ───────────────────── */
+:root[data-theme="dark"] #settings-modal .settings-modal,
+:root[data-theme="dark"] #settings-modal .settings-detail,
+:root[data-theme="dark"] #settings-modal .settings-detail-head {
+  background: var(--canvas);
+}
+:root[data-theme="dark"] #settings-modal .settings-section {
+  background: var(--surface);
+  border-color: var(--border);
+}
+:root[data-theme="dark"] #settings-modal .settings-feedback-action,
+:root[data-theme="dark"] #settings-modal .cs-social,
+:root[data-theme="dark"] #settings-modal .cs-promo {
+  background: #16171C;
+  border-color: var(--border);
+}
+:root[data-theme="dark"] #settings-modal .settings-feedback-action:hover,
+:root[data-theme="dark"] #settings-modal .cs-social:hover {
+  background: var(--hover);
+  border-color: var(--control-border);
+}
+:root[data-theme="dark"] #settings-modal .cs-social-dark .cs-social-icon {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16);
+}
+:root[data-theme="dark"] #settings-modal .cs-hire-card {
+  background: color-mix(in oklch, var(--brand-lime) 10%, #16171C);
+  border-color: color-mix(in oklch, var(--brand-lime) 32%, var(--border));
+}
+:root[data-theme="dark"] #settings-modal .nle-option {
+  background: #15161B;
+  border-color: var(--border);
+}
+:root[data-theme="dark"] #settings-modal .nle-option:hover {
+  background: var(--hover);
+  border-color: var(--control-border);
+}
 
 /* Selected sidebar / Settings item: the deep flavor shade with light text. */
 :root[data-theme="dark"] .settings-nav-item.active {

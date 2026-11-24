@@ -324,3 +324,136 @@ test('host never places a copy over a caption that is out of order', () => {
   assert.equal(result.copied, 0);
   assert.equal(f.calls.imports.length, 2);
 });
+
+const fonts = await load('../src/main/captions/caption-fonts.ts');
+
+test('every caption template has a defaults shape, a bundled template file and a bundled font', async () => {
+  const { existsSync } = await import('node:fs');
+  const bridgeSource = await readFile(new URL('../../smoothyapp-cep/js/bridge.js', import.meta.url), 'utf8');
+  for (const id of pro.PRO_CAPTION_TEMPLATES) {
+    const file = bridgeSource.match(new RegExp(`'${id}': '([^']+\\.mogrt)'`))?.[1];
+    assert.ok(file, `bridge maps ${id}`);
+    assert.ok(existsSync(fileURLToPath(new URL(`../../smoothyapp-cep/mogrt/${file}`, import.meta.url))), file);
+    for (const font of fonts.CAPTION_TEMPLATE_FONTS[id]) {
+      assert.ok(existsSync(fileURLToPath(new URL(`../../smoothyapp-cep/fonts/${font.file}`, import.meta.url))), font.file);
+    }
+    const payload = pro.buildProCaptionPayload([{ index: 1, startTime: 0, endTime: 1, text: 'Hi there' }], { template: id });
+    assert.equal(payload.template, id);
+  }
+});
+
+test('word and outline styles default to white text without a pop-in, outline clamps its stroke', () => {
+  for (const id of ['word-rise', 'word-slide', 'stroke-highlight']) {
+    const payload = pro.buildProCaptionPayload([{ index: 1, startTime: 0, endTime: 1, text: 'Hi' }, { index: 2, startTime: 3, endTime: 4, text: 'again' }], { template: id });
+    assert.deepEqual(payload.style.textColor, [255, 255, 255], id);
+    assert.equal(payload.style.verticalPosition, 85, id);
+    assert.deepEqual(payload.captions.map(clip => clip.popIn), [false, false], id);
+  }
+  const outline = pro.buildProCaptionPayload([{ index: 1, startTime: 0, endTime: 1, text: 'Hi' }], { template: 'stroke-highlight', strokeWidth: 99, highlightColor: '#ffd400' });
+  assert.equal(outline.style.strokeWidth, 30);
+  assert.deepEqual(outline.style.highlightColor, [255, 212, 0]);
+  assert.deepEqual(outline.style.strokeColor, [21, 21, 21]);
+});
+
+test('host writes the outline parameters and skips ones a template lacks', () => {
+  const f = premiereFixture();
+  const style = pro.normalizeProCaptionStyle({ template: 'stroke-highlight', highlightColor: '#ffd400', strokeWidth: 12 });
+  const payload = { sequenceId: 'seq-1', mogrtPath: '/cep/mogrt/smoothy-outline.mogrt', template: 'stroke-highlight', style,
+    captions: [{ start: 0, end: 1, text: 'One two', timings: '0,0.5;0.5,1', popIn: false }] };
+  const result = JSON.parse(f.context.smoothyImportProCaptions(JSON.stringify(payload)));
+  assert.equal(result.success, true, result.error);
+  // The fixture template has no Highlight/Stroke parameters, so nothing is written for them and nothing breaks.
+  assert.equal(f.calls.colors['Highlight Color'], undefined);
+  assert.equal(f.calls.numbers['Stroke Width'], undefined);
+  assert.match(host, /\["Highlight Color", "color", style\.highlightColor\]/);
+  assert.match(host, /\["Stroke Width", "number", style\.strokeWidth\]/);
+});
+
+test('bundled word and outline templates expose the parameters the host sets', async (t) => {
+  const { execFileSync } = await import('node:child_process');
+  const { existsSync } = await import('node:fs');
+  const expected = {
+    'smoothy-word-rise.mogrt': ['Caption Text', 'Word Timings', 'Text Color', 'Shadow Opacity', 'Caption Size', 'Vertical Position'],
+    'smoothy-word-slide.mogrt': ['Caption Text', 'Word Timings', 'Text Color', 'Shadow Opacity', 'Caption Size', 'Vertical Position'],
+    'smoothy-outline.mogrt': ['Caption Text', 'Word Timings', 'Text Color', 'Highlight Color', 'Stroke Color', 'Stroke Width', 'Shadow Opacity', 'Caption Size', 'Vertical Position'],
+  };
+  for (const [file, params] of Object.entries(expected)) {
+    const mogrt = fileURLToPath(new URL(`../../smoothyapp-cep/mogrt/${file}`, import.meta.url));
+    if (!existsSync(mogrt)) { t.skip(`${file} not built yet`); continue; }
+    const definition = JSON.parse(execFileSync('unzip', ['-p', mogrt, 'definition.json'], { encoding: 'utf8' }));
+    const names = new Set();
+    const visit = node => {
+      if (Array.isArray(node)) return node.forEach(visit);
+      if (!node || typeof node !== 'object') return;
+      if (node.capPropUIName) names.add(node.capPropUIName);
+      Object.values(node).forEach(visit);
+    };
+    visit(definition);
+    for (const name of params) assert.ok(names.has(name), `${file}: ${name}`);
+  }
+});
+
+test('caption fonts install once into the user font folder and never overwrite', async () => {
+  const { mkdtempSync, writeFileSync, readFileSync, existsSync } = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const work = mkdtempSync(path.join(os.tmpdir(), 'smoothy-fonts-'));
+  const bundled = path.join(work, 'bundled'), target = path.join(work, 'Fonts');
+  (await import('node:fs')).mkdirSync(bundled);
+  writeFileSync(path.join(bundled, 'InterDisplay-Bold.ttf'), 'font');
+  let result = fonts.ensureCaptionFonts('word-rise', bundled, { platform: 'darwin', fontFolder: target });
+  assert.deepEqual(result, { installed: ['Inter Display Bold'], failed: [] });
+  assert.equal(readFileSync(path.join(target, 'InterDisplay-Bold.ttf'), 'utf8'), 'font');
+  writeFileSync(path.join(target, 'InterDisplay-Bold.ttf'), 'mine');
+  result = fonts.ensureCaptionFonts('word-slide', bundled, { platform: 'darwin', fontFolder: target });
+  assert.deepEqual(result, { installed: [], failed: [] });
+  assert.equal(readFileSync(path.join(target, 'InterDisplay-Bold.ttf'), 'utf8'), 'mine');
+  result = fonts.ensureCaptionFonts('stroke-highlight', bundled, { platform: 'darwin', fontFolder: target });
+  assert.deepEqual(result, { installed: [], failed: ['Inter Display ExtraBold'] });
+  assert.equal(existsSync(path.join(target, 'InterDisplay-ExtraBold.ttf')), false);
+  assert.deepEqual(fonts.ensureCaptionFonts('word-rise', bundled, { platform: 'linux' }), { installed: [], failed: [] });
+  assert.equal(fonts.userFontFolder('win32', { LOCALAPPDATA: 'C:\\Users\\a\\AppData\\Local' }, 'C:\\Users\\a').endsWith(path.join('Microsoft', 'Windows', 'Fonts')), true);
+});
+
+test('a free send places Outline in its default look while keeping position on screen', () => {
+  assert.equal(pro.FREE_PRO_CAPTION_TEMPLATE, 'stroke-highlight');
+  const caption = [{ index: 1, startTime: 0, endTime: 1, text: 'Hi there' }];
+  const free = pro.buildProCaptionPayload(caption, pro.freeProCaptionStyle());
+  const outline = pro.buildProCaptionPayload(caption, { template: 'stroke-highlight' });
+  assert.equal(free.template, 'stroke-highlight');
+  assert.deepEqual(free.style, outline.style);
+  assert.deepEqual(free.style.textColor, [255, 255, 255]);
+  assert.deepEqual(free.style.highlightColor, [146, 243, 136]);
+  assert.equal(free.style.verticalPosition, 85);
+  assert.equal(free.style.size, 100);
+
+  const moved = pro.buildProCaptionPayload(caption, pro.freeProCaptionStyle({
+    template: 'stroke-highlight', verticalPosition: 50, textColor: '#ff0000', highlightColor: '#0000ff', strokeWidth: 20, shadowOpacity: 100, size: 160,
+  }));
+  assert.equal(moved.template, 'stroke-highlight');
+  assert.equal(moved.style.verticalPosition, 50);
+  assert.deepEqual(moved.style.textColor, [255, 255, 255]);
+  assert.deepEqual(moved.style.highlightColor, [146, 243, 136]);
+  assert.equal(moved.style.strokeWidth, 9);
+  assert.equal(moved.style.shadowOpacity, 35);
+  assert.equal(moved.style.size, 100);
+
+  assert.equal(pro.freeProCaptionStyle({ verticalPosition: -50 }).verticalPosition, 0);
+  assert.equal(pro.freeProCaptionStyle({ verticalPosition: 250 }).verticalPosition, 100);
+});
+
+test('main process only lets a non-Pro send through for the free style, keeping position on screen', async () => {
+  const main = await readFile(new URL('../src/main/index.ts', import.meta.url), 'utf8');
+  const handler = main.slice(main.indexOf("ipcMain.handle('import-pro-captions-to-premiere'"), main.indexOf("ipcMain.handle('unload-caption-model'"));
+  assert.match(handler, /!pro && proCaptionTemplateOf\(style\) !== FREE_PRO_CAPTION_TEMPLATE/);
+  assert.match(handler, /buildProCaptionPayload\(captions, pro \? style : freeProCaptionStyle\(style\)\)/);
+  assert.match(handler, /if \(!pro\) trackTool\('captions_animated_free'\)/);
+});
+
+test('captions UI labels Position on screen and leaves it unlocked for the free style', async () => {
+  const html = await readFile(new URL('../src/renderer/index.html', import.meta.url), 'utf8');
+  const renderer = await readFile(new URL('../src/renderer/pro-captions.js', import.meta.url), 'utf8');
+  assert.match(html, /<div class="form-group">\s*<label id="pro-captions-position-label">Position on screen<\/label>/);
+  assert.doesNotMatch(html, /Height on screen/i);
+  assert.match(renderer, /key === 'position'/);
+});

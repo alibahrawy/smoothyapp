@@ -57,7 +57,8 @@ import {
   sendProCaptionsToPremiere,
   importXMLToPremiere
 } from './websocket-server';
-import { buildProCaptionPayload, type ProCaptionStyle } from './captions/pro-captions';
+import { buildProCaptionPayload, freeProCaptionStyle, FREE_PRO_CAPTION_TEMPLATE, proCaptionTemplateOf, type ProCaptionStyle } from './captions/pro-captions';
+import { ensureCaptionFonts } from './captions/caption-fonts';
 import { createShortsCutsService } from './shortscuts/service';
 import {
   createPremiereAdjustmentLayerViaMenu,
@@ -454,7 +455,7 @@ ipcMain.handle('set-appearance', (_, value) => {
   try {
     const result = appPreferences.setAppearance(value);
     applyAppearance();
-    mainWindow?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#1F1E1C' : '#FBFAF8');
+    mainWindow?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#121316' : '#FBFAF8');
     return { success: true, ...result };
   } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'Could not save this preference.' }; }
 });
@@ -785,7 +786,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false
     },
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1F1E1C' : '#FBFAF8',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#121316' : '#FBFAF8',
     icon: path.join(__dirname, '../../build/icon.png')
   };
 
@@ -1951,17 +1952,30 @@ ipcMain.handle('import-captions-to-premiere', async (_, captions: FormattedCapti
   }
 });
 
-// Smoothy Pro animated captions: Premiere only, one Motion Graphics Template
-// clip per caption on a new top video track. Counts one successful placement.
+// Animated captions: Premiere only, one Motion Graphics Template clip per
+// caption on a new top video track. Without Pro only the Outline style in its
+// default look is placed (position on screen is kept; other custom values are
+// dropped); other styles need Pro. Installs the style's font first (bundled with the panel). Counts one
+// successful placement in total, per style (captions_pro_<style>) and, for
+// free sends, captions_animated_free.
 ipcMain.handle('import-pro-captions-to-premiere', async (_, captions: FormattedCaption[], style?: Partial<ProCaptionStyle>) => {
   try {
-    if (!hasPro()) return { success: false, requiresPro: true, error: 'Animated captions are part of Smoothy Pro. See smoothyedit.com/pricing.' };
+    const pro = hasPro();
+    if (!pro && proCaptionTemplateOf(style) !== FREE_PRO_CAPTION_TEMPLATE) {
+      return { success: false, requiresPro: true, error: 'Box, Rise and Slide are part of Smoothy Pro. The Outline style is free.' };
+    }
     if (getActiveNLE() === 'resolve') return { success: false, error: 'Animated captions are available in Premiere Pro only.' };
     if (!getPremiereConnectionStatus()) return { success: false, error: 'Connect Premiere Pro first.' };
-    const payload = buildProCaptionPayload(captions, style);
+    const payload = buildProCaptionPayload(captions, pro ? style : freeProCaptionStyle(style));
+    const fonts = ensureCaptionFonts(payload.template, path.join(getCepPluginSource(), 'fonts'));
     const sequenceId = getSequenceInfo()?.id;
     const result = await sendProCaptionsToPremiere({ ...payload, sequenceId: sequenceId ? String(sequenceId) : undefined });
-    if (result?.success) trackTool('captions_pro_premiere');
+    if (result?.success) {
+      trackTool('captions_pro_premiere');
+      trackTool(`captions_pro_${payload.template.replace(/-/g, '_')}`);
+      if (!pro) trackTool('captions_animated_free');
+      if (fonts.installed.length) result.message = `${result.message} Installed ${fonts.installed.join(', ')}: restart Premiere to see the font.`;
+    }
     return result;
   } catch (error) {
     console.error('[Main] Pro captions error:', error);

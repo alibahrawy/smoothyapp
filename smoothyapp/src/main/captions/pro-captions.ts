@@ -1,5 +1,9 @@
 /**
- * Smoothy Pro animated captions (Premiere only).
+ * Animated captions (Premiere only). The Outline style in its default look
+ * (with the user's chosen position on screen) is free (owner decision,
+ * 2026-11-24, replacing an earlier free Box); Box, Rise, Slide and other
+ * changes to the look are Smoothy Pro. freeProCaptionStyle() is what a free
+ * send places.
  *
  * Turns formatted captions into the payload for the CEP host function
  * `smoothyImportProCaptions`, which places one Motion Graphics Template clip
@@ -7,16 +11,21 @@
  * seconds from the clip start, one pair per space/newline-separated word.
  *
  * Templates (smoothyapp-cep/mogrt/, built by scripts/pro-captions/build-mogrt.mjs):
- *   box-highlight  "Smoothy Box Highlight": one line on a rounded colour box;
- *                  upcoming words are dimmed and light up as they are spoken.
- *                  Spec: docs/caption-pro/box-highlight. Default colours are
- *                  Smoothy Lime (#92F388) with Ink (#151515) text.
- * More styles are added as new templates with the same contract.
+ *   box-highlight     "Smoothy Box Highlight": one line on a rounded colour box;
+ *                     upcoming words are dimmed and light up as they are spoken.
+ *                     Spec: docs/caption-pro/box-highlight. Default colours are
+ *                     Smoothy Lime (#92F388) with Ink (#151515) text. No bounce.
+ *   word-rise         "Smoothy Word Rise": each word fades in from below into place.
+ *   word-slide        "Smoothy Word Slide": each word fades in from the right into place.
+ *   stroke-highlight  "Smoothy Outline": white text with a dark outline; the word
+ *                     being said turns Smoothy Lime.
+ * Rise, Slide and Outline use Inter Display (smoothyapp-cep/fonts, installed by
+ * caption-fonts.ts). Templates ignore parameters they do not have.
  */
 import type { FormattedCaption } from './caption-formatter';
 
-export type ProCaptionTemplate = 'box-highlight';
-export const PRO_CAPTION_TEMPLATES: ProCaptionTemplate[] = ['box-highlight'];
+export type ProCaptionTemplate = 'box-highlight' | 'word-rise' | 'word-slide' | 'stroke-highlight';
+export const PRO_CAPTION_TEMPLATES: ProCaptionTemplate[] = ['box-highlight', 'word-rise', 'word-slide', 'stroke-highlight'];
 
 export interface ProCaptionStyle {
   template: ProCaptionTemplate;
@@ -30,7 +39,10 @@ export interface ProCaptionStyle {
   boxPadding: number;      // px at 1080p, 0–80
   boxHeight: number;       // px at 1080p, 40–240
   shadowOpacity: number;   // percent, 0–100 (0 = no shadow)
-  popIn: boolean;          // box pops in when a line follows a pause
+  popIn: boolean;          // box fades in when a line follows a pause
+  highlightColor: string;  // #rrggbb, Outline: the word being said
+  strokeColor: string;     // #rrggbb, Outline
+  strokeWidth: number;     // px at 1080p, 0–30, Outline
 }
 
 export interface ProCaptionClip {
@@ -57,12 +69,24 @@ export interface ProCaptionPayload {
     boxPadding: number;
     boxHeight: number;
     shadowOpacity: number;
+    highlightColor: Rgb;
+    strokeColor: Rgb;
+    strokeWidth: number;
   };
 }
 
-/** Defaults per template; box-highlight matches docs/caption-pro/box-highlight/presets/box-highlight.json. */
+const LIME = '#92f388', INK = '#151515', WHITE = '#ffffff';
+/** Values the template has no parameter for; kept so every style has a full shape. */
+const UNUSED = { boxColor: LIME, boxOpacity: 100, boxRadius: 7, boxPadding: 20, boxHeight: 95, upcomingOpacity: 0, highlightColor: LIME, strokeColor: INK, strokeWidth: 9 };
+
+/**
+ * Defaults per template, matching each template's own defaults (so the CEP
+ * host only writes what the user changed). box-highlight matches
+ * docs/caption-pro/box-highlight/presets/box-highlight.json.
+ */
 const TEMPLATE_DEFAULTS: Record<ProCaptionTemplate, ProCaptionStyle> = {
   'box-highlight': {
+    ...UNUSED,
     template: 'box-highlight',
     textColor: '#151515',
     size: 100,
@@ -76,12 +100,23 @@ const TEMPLATE_DEFAULTS: Record<ProCaptionTemplate, ProCaptionStyle> = {
     shadowOpacity: 0,
     popIn: true,
   },
+  'word-rise': { ...UNUSED, template: 'word-rise', textColor: WHITE, size: 100, verticalPosition: 85, shadowOpacity: 45, popIn: false },
+  'word-slide': { ...UNUSED, template: 'word-slide', textColor: WHITE, size: 100, verticalPosition: 85, shadowOpacity: 45, popIn: false },
+  'stroke-highlight': { ...UNUSED, template: 'stroke-highlight', textColor: WHITE, size: 100, verticalPosition: 85, shadowOpacity: 35, popIn: false },
 };
 
 export const DEFAULT_PRO_CAPTION_STYLE: ProCaptionStyle = TEMPLATE_DEFAULTS['box-highlight'];
 
 export function defaultProCaptionStyle(template: ProCaptionTemplate = 'box-highlight'): ProCaptionStyle {
   return { ...TEMPLATE_DEFAULTS[template] };
+}
+
+/** The style anyone can send without Pro: Outline in its default look, keeping position on screen. */
+export const FREE_PRO_CAPTION_TEMPLATE: ProCaptionTemplate = 'stroke-highlight';
+
+export function freeProCaptionStyle(style?: Partial<ProCaptionStyle>): ProCaptionStyle {
+  const base = defaultProCaptionStyle(FREE_PRO_CAPTION_TEMPLATE);
+  return { ...base, verticalPosition: clamp(style?.verticalPosition, 0, 100, base.verticalPosition) };
 }
 
 export function proCaptionTemplateOf(style: Partial<ProCaptionStyle> = {}): ProCaptionTemplate {
@@ -118,6 +153,9 @@ export function normalizeProCaptionStyle(style: Partial<ProCaptionStyle> = {}): 
     boxPadding: clamp(style.boxPadding, 0, 80, d.boxPadding),
     boxHeight: clamp(style.boxHeight, 40, 240, d.boxHeight),
     shadowOpacity: clamp(style.shadowOpacity, 0, 100, d.shadowOpacity),
+    highlightColor: hexToRgb(style.highlightColor, d.highlightColor),
+    strokeColor: hexToRgb(style.strokeColor, d.strokeColor),
+    strokeWidth: clamp(style.strokeWidth, 0, 30, d.strokeWidth),
   };
 }
 

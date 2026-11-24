@@ -249,16 +249,36 @@ body.platform-windows ::-webkit-scrollbar-thumb:hover {
   background-clip: content-box;
 }
 
-/* Accessible Blueberry focus ring everywhere (never lime) */
-:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+/* Accessible Blueberry focus ring for buttons/links/non-text controls (never on text inputs) */
+:where(button, a, [tabindex], input[type="checkbox"], input[type="radio"], input[type="range"]):focus-visible {
   outline: 2px solid var(--blueberry) !important;
   outline-offset: 2px !important;
   box-shadow: none !important;
 }
-.app-container :is(input[type="text"], input[type="number"], input[type="search"], input[type="password"], input[type="email"], select, textarea):focus {
-  border-color: var(--blueberry);
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in oklch, var(--blueberry) 20%, transparent);
+.app-container :is(input[type="text"], input[type="number"], input[type="search"], input[type="password"], input[type="email"], select, textarea):focus,
+.app-container :is(input[type="text"], input[type="number"], input[type="search"], input[type="password"], input[type="email"], select, textarea):focus-visible,
+.modal :is(input[type="text"], input[type="number"], input[type="search"], input[type="password"], input[type="email"], select, textarea):focus,
+.modal :is(input[type="text"], input[type="number"], input[type="search"], input[type="password"], input[type="email"], select, textarea):focus-visible {
+  border-color: var(--border-strong);
+  outline: none !important;
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--ink) 8%, transparent);
+}
+/* Borderless inputs inside rounded composer / search shells let their parent :focus-within handle focus */
+.community-composer textarea:focus,
+.community-composer textarea:focus-visible,
+.agentic-composer-row textarea:focus,
+.agentic-composer-row textarea:focus-visible,
+.studio-composer textarea:focus,
+.studio-composer textarea:focus-visible,
+.tool-search input:focus,
+.tool-search input:focus-visible,
+.shortscuts-search input:focus,
+.shortscuts-search input:focus-visible,
+.settings-search input:focus,
+.settings-search input:focus-visible {
+  border-color: transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* ═══════════════════════════════════════════════════
@@ -310,8 +330,8 @@ body.platform-windows ::-webkit-scrollbar-thumb:hover {
   box-shadow: var(--shadow-1);
 }
 .tool-search:focus-within {
-  border-color: var(--blueberry);
-  box-shadow: 0 0 0 2px color-mix(in oklch, var(--blueberry) 18%, transparent);
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--ink) 8%, transparent);
 }
 .tool-search-shortcut {
   color: var(--muted-text);
@@ -433,7 +453,8 @@ body.platform-windows ::-webkit-scrollbar-thumb:hover {
    6. Buttons, Shadows, White Controls (Bible §09 p.16-17)
    ═══════════════════════════════════════════════════ */
 .app-container .btn,
-.modal .btn {
+.modal .btn,
+#settings-modal .btn {
   min-height: 36px;
   padding: 0 15px;
   border-radius: var(--radius-button);
@@ -441,12 +462,13 @@ body.platform-windows ::-webkit-scrollbar-thumb:hover {
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.005em;
-  transition: background-color 140ms var(--ease-glide), filter 140ms var(--ease-glide), box-shadow 140ms var(--ease-glide), transform 80ms ease;
+  transition: background-color 140ms var(--ease-glide), border-color 140ms var(--ease-glide), filter 140ms var(--ease-glide), box-shadow 140ms var(--ease-glide), transform 80ms ease;
 }
 
 /* Secondary / white controls: faint 10 % edge + W shadow (Bible: every button has a faint edge) */
 .app-container .btn-secondary,
 .modal .btn-secondary,
+#settings-modal .btn-secondary,
 .stock-text-button,
 .photos-header button.stock-text-button,
 .studio-header-actions button.stock-text-button,
@@ -457,9 +479,9 @@ body.platform-windows ::-webkit-scrollbar-thumb:hover {
   box-shadow: var(--shadow-white);
   text-decoration: none;
   border-radius: var(--radius-button);
-  min-height: 34px;
-  padding: 0 13px;
-  font-size: 12.5px;
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
@@ -469,6 +491,7 @@ body.platform-windows ::-webkit-scrollbar-thumb:hover {
 }
 .app-container .btn-secondary:hover:not(:disabled),
 .modal .btn-secondary:hover:not(:disabled),
+#settings-modal .btn-secondary:hover:not(:disabled),
 .stock-text-button:hover:not(:disabled) {
   background: var(--canvas);
   color: var(--ink);
@@ -476,6 +499,7 @@ body.platform-windows ::-webkit-scrollbar-thumb:hover {
 }
 .app-container .btn-secondary:disabled,
 .modal .btn-secondary:disabled,
+#settings-modal .btn-secondary:disabled,
 .stock-text-button:disabled {
   background: var(--sunken);
   color: var(--muted-text);
@@ -587,8 +611,8 @@ body.platform-windows ::-webkit-scrollbar-thumb:hover {
 }
 .shortscuts-search:focus-within,
 .settings-search:focus-within {
-  border-color: var(--blueberry);
-  box-shadow: 0 0 0 2px color-mix(in oklch, var(--blueberry) 18%, transparent);
+  border-color: var(--border-strong);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--ink) 8%, transparent);
 }
 
 /* Custom dropdown menu popover */
@@ -656,7 +680,7 @@ body.platform-windows ::-webkit-scrollbar-thumb:hover {
 .toggle-switch input:checked + .toggle-slider::before,
 .settings-toggle input:checked + .settings-toggle-track::before,
 .setting-switch input:checked + .setting-switch-track::before {
-  background: var(--ink) !important;
+  background: var(--tile-ink) !important;
 }
 .switch .slider,
 .toggle-switch .toggle-slider,
@@ -702,6 +726,9 @@ body.platform-windows ::-webkit-scrollbar-thumb:hover {
    ═══════════════════════════════════════════════════ */
 .main-content {
   background: var(--canvas);
+}
+.main-content::before {
+  display: none !important;
 }
 /* Constrain single-column tool tabs to 880px like Design Bible p.25 */
 :is(#tab-multicam, #tab-silence, #tab-captions, #tab-compressor, #tab-assets, #tab-local-audio) > .content-scroll > * {
@@ -750,7 +777,7 @@ body.platform-windows ::-webkit-scrollbar-thumb:hover {
 
 /* Sticky footer (Bible p.25) */
 .app-container .content-footer {
-  background: color-mix(in oklch, var(--canvas) 92%, var(--surface));
+  background: color-mix(in srgb, var(--canvas) 85%, var(--surface));
   border-top: 1px solid var(--border);
   padding: 12px 24px;
 }
@@ -1234,8 +1261,8 @@ body.platform-windows ::-webkit-scrollbar-thumb:hover {
   place-items: center;
 }
 .settings-nav-item .settings-nav-icon svg {
-  width: 14px !important;
-  height: 14px !important;
+  width: 16px !important;
+  height: 16px !important;
   padding: 0 !important;
   background: transparent !important;
   border-radius: 0 !important;
@@ -1291,9 +1318,9 @@ body.platform-windows ::-webkit-scrollbar-thumb:hover {
   align-items: center !important;
   gap: 16px !important;
 }
-#settings-modal .settings-row-group .settings-row + .settings-row {
-  margin-top: 14px;
-  padding-top: 14px;
+#settings-modal .settings-row-group > .settings-row ~ .settings-row {
+  margin-top: 0;
+  padding-top: 16px;
   border-top: 1px solid var(--border);
 }
 #settings-modal .settings-row-copy strong {
@@ -1318,7 +1345,7 @@ body.platform-windows ::-webkit-scrollbar-thumb:hover {
 }
 #settings-modal .settings-switch input:checked + span::after,
 #settings-modal .cs-switch input:checked + span::after {
-  background: var(--ink) !important;
+  background: var(--tile-ink) !important;
 }
 #settings-modal .settings-switch span,
 #settings-modal .cs-switch span {
@@ -1793,27 +1820,27 @@ body.platform-windows #settings-close-btn .settings-close-x { display: none; }
 
 
 /* ═══════════════════════════════════════════════════
-   Settings layout v2 (2026-11-23, Design Bible §11)
-   One alignment line in the nav (24 px from the window edge),
-   a centred 720 px content column with a safe zone on both sides,
-   and the close button pinned to the window corner.
+   Settings layout v2 (2026-11-24, Design Bible §11)
+   Nav items and groups match the Home sidebar scale;
+   search spans full width on small windows; group titles
+   align cleanly above spacious setting cards.
    ═══════════════════════════════════════════════════ */
 #settings-modal .settings-body {
   max-width: none !important;
   margin-inline: 0 !important;
-  grid-template-columns: 256px minmax(0, 1fr) !important;
+  grid-template-columns: clamp(232px, 24vw, 256px) minmax(0, 1fr) !important;
 }
 
-/* Nav: 14 px rail padding + 10 px item padding = one 24 px line for
-   the title, search icon, group labels and icon tiles. */
+/* Nav: matches Home sidebar button proportions (40 px items, 28 px tiles,
+   4 px item gap, 18 px between groups, 8 px below each group title). */
 #settings-modal .settings-nav {
   width: auto !important;
   min-width: 0;
   box-sizing: border-box;
   gap: 0 !important;
-  padding: 22px 14px 24px !important;
+  padding: 20px 12px 24px !important;
 }
-#settings-modal .settings-nav-head { padding: 0 10px !important; margin: 0 !important; gap: 3px !important; height: auto !important; }
+#settings-modal .settings-nav-head { padding: 0 8px !important; margin: 0 !important; gap: 3px !important; height: auto !important; }
 #settings-modal .settings-nav-head > * { margin: 0 !important; }
 #settings-modal .settings-nav-head h3 {
   font-family: var(--font-display);
@@ -1823,31 +1850,52 @@ body.platform-windows #settings-close-btn .settings-close-x { display: none; }
 }
 #settings-modal .settings-version { font-size: 11.5px; line-height: 1.3; color: var(--muted-text); }
 #settings-modal .settings-search {
-  height: 34px;
-  margin: 16px 0 2px !important;
-  padding: 0 10px !important;
-  gap: 8px;
-  border-radius: 10px;
+  height: 38px !important;
+  min-height: 38px !important;
+  margin: 14px 0 18px !important;
+  padding: 0 12px !important;
+  gap: 9px;
+  border-radius: var(--radius-button);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
   min-width: 0;
+  box-sizing: border-box;
 }
-#settings-modal .settings-nav-list { gap: 0 !important; }
-#settings-modal .settings-nav-group { gap: 2px !important; }
+#settings-modal .settings-search svg { flex: 0 0 16px; width: 16px; height: 16px; }
+#settings-modal .settings-search input { font-size: 13px !important; }
+#settings-modal .settings-nav-list { gap: 18px !important; }
+#settings-modal .settings-nav-group { gap: 4px !important; }
 #settings-modal .settings-nav-group-label {
-  margin: 18px 0 6px !important;
-  padding: 0 10px;
+  margin: 0 0 4px !important;
+  padding: 0 8px;
   font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
   line-height: 14px;
+  text-transform: uppercase;
+  color: var(--muted-text);
 }
 #settings-modal .settings-nav-item {
-  height: 36px;
-  min-height: 36px !important;
-  padding: 0 10px !important;
+  height: auto !important;
+  min-height: 40px !important;
+  padding: 6px 8px !important;
   gap: 10px !important;
-  border-radius: 10px !important;
+  border-radius: var(--radius-button) !important;
   font-size: 13px;
-  line-height: 1;
+  line-height: 1.25;
 }
-#settings-modal .settings-nav-icon { width: 24px !important; height: 24px !important; flex: 0 0 24px; }
+#settings-modal .settings-nav-icon {
+  width: 28px !important;
+  height: 28px !important;
+  flex: 0 0 28px;
+  border-radius: 8px !important;
+}
+.settings-search-empty {
+  margin: 4px 8px 0;
+  font-size: 12.5px;
+  color: var(--muted-text);
+}
 
 /* Detail: header and panes share one centred column. */
 #settings-modal .settings-detail {
@@ -1858,7 +1906,7 @@ body.platform-windows #settings-close-btn .settings-close-x { display: none; }
 #settings-modal .settings-detail-head {
   display: block !important;
   max-width: none !important;
-  padding: 36px var(--set-pad) 20px !important;
+  padding: 32px var(--set-pad) 22px !important;
 }
 #settings-modal .settings-detail-copy {
   width: 100%;
@@ -1872,12 +1920,12 @@ body.platform-windows #settings-close-btn .settings-close-x { display: none; }
   letter-spacing: -0.03em;
 }
 #settings-modal .settings-detail-head p { margin-top: 6px; font-size: 13px; color: var(--muted-text); }
-#settings-modal .settings-panes { padding: 0 var(--set-pad) 56px !important; }
+#settings-modal .settings-panes { padding: 4px var(--set-pad) 56px !important; }
 #settings-modal .settings-pane.active {
   width: 100%;
   max-width: var(--set-col) !important;
   margin-inline: auto;
-  gap: 24px !important;
+  gap: 28px !important;
   align-items: stretch !important;   /* every card the full column width (Profile used to shrink-wrap) */
 }
 #settings-modal .settings-pane.active > .settings-group { width: 100%; min-width: 0; }
@@ -1892,20 +1940,42 @@ body.platform-windows #settings-close-btn .settings-close-x { display: none; }
   #settings-modal .settings-detail-copy { padding-right: 48px; box-sizing: border-box; }
 }
 
-/* Groups: the label lines up with the text inside its card. */
+/* Groups: group title aligns flush with its card (10 px gap to card, 28 px between groups). */
+#settings-modal .settings-group { gap: 0 !important; }
 #settings-modal .settings-group-label {
-  margin: 0 0 8px !important;
-  padding: 0 18px !important;
-  font-size: 12px;
-  line-height: 16px;
+  margin: 0 0 10px !important;
+  padding: 0 2px !important;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.3;
+  color: var(--secondary-text);
 }
-#settings-modal .settings-section { padding: 16px 18px !important; }
-#settings-modal .settings-section.settings-row-group { padding: 0 18px !important; }
-#settings-modal .settings-row-group > .settings-row { min-height: 56px; padding: 12px 0 !important; }
-#settings-modal .settings-row-copy p { max-width: 60ch; line-height: 1.45; }
+#settings-modal .settings-section { padding: 20px !important; }
+#settings-modal .settings-section.settings-row-group { padding: 4px 20px !important; }
+#settings-modal .settings-row-group > .settings-row { min-height: 62px; padding: 16px 0 !important; gap: 20px !important; }
+#settings-modal .settings-row-group > :is(.help-text, .settings-row-status):not(:empty):last-child { padding-bottom: 14px; }
+#settings-modal .settings-row + .form-group { margin-top: 14px; }
+#settings-modal .settings-row-copy strong { font-size: 13.5px; line-height: 1.35; }
+#settings-modal .settings-row-copy p { max-width: 60ch; line-height: 1.5; margin-top: 4px; }
+#settings-modal .settings-actions { gap: 8px; margin-top: 14px; }
+#settings-modal .settings-actions .btn,
+#settings-modal .cep-path-row .btn {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+#settings-modal input[type="text"],
+#settings-modal input[type="password"],
+#settings-modal input[type="email"] {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius);
+  font-size: 13px;
+}
 
 /* Editor picker: three equal tiles, icon above label, same baseline. */
-#settings-modal .nle-selector { gap: 10px !important; margin: 14px 0 10px !important; }
+#settings-modal .nle-selector { gap: 10px !important; margin: 14px 0 12px !important; }
 #settings-modal .nle-option {
   min-height: 84px !important;
   gap: 8px !important;
@@ -1927,34 +1997,44 @@ body.platform-windows #settings-close-btn .settings-close-x { display: none; }
 
 #settings-modal .about-brand-lockup { padding: 0; }
 
-/* Segmented control for 2–3 options (Theme) */
+/* Segmented control for 2–3 options (Theme, variants) */
 .settings-seg {
   display: inline-flex;
+  align-items: center;
   gap: 2px;
   padding: 3px;
   border-radius: 999px;
   background: var(--sunken);
-  box-shadow: inset 0 0 0 1px var(--border);
+  border: 1px solid var(--border);
+  box-shadow: none;
 }
 .settings-seg button {
-  height: 28px;
-  padding: 0 12px;
-  border: 0;
+  height: 32px;
+  padding: 0 15px;
+  border: 1px solid transparent;
   border-radius: 999px;
   background: transparent;
   color: var(--secondary-text);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color 120ms var(--ease-glide), color 120ms var(--ease-glide);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background-color 140ms var(--ease-glide), border-color 140ms var(--ease-glide), color 140ms var(--ease-glide), box-shadow 140ms var(--ease-glide);
+}
+.settings-seg.settings-seg-icons button {
+  width: 44px;
+  padding: 0;
 }
 .settings-seg button:hover { color: var(--ink); }
 .settings-seg button[aria-checked="true"] {
   background: var(--surface);
   color: var(--ink);
-  box-shadow: var(--shadow-button);
+  box-shadow: var(--shadow-white);
 }
 
 /* Sub-labels inside a card read like row labels, not shouting caps. */
@@ -1966,19 +2046,44 @@ body.platform-windows #settings-close-btn .settings-close-x { display: none; }
   color: var(--ink);
 }
 
-/* Narrow windows: nav becomes a top strip (styles.css ≤720 px); keep the column padding sane. */
+/* Narrow windows (≤720 px): stack full-width search cleanly above the scrolling section pills. */
 @media (max-width: 720px) {
-  #settings-modal .settings-body { grid-template-columns: minmax(0, 1fr) !important; }
-  #settings-modal .settings-nav { padding: 10px 14px !important; gap: 8px !important; }
-  #settings-modal .settings-nav-item .settings-nav-icon { display: grid !important; }
-  #settings-modal .settings-nav-item > span:not(.settings-nav-icon) { display: inline !important; }
-  #settings-modal .settings-search { margin: 0 !important; }
-  #settings-modal .settings-nav-list { flex-direction: row; gap: 2px !important; }
-  #settings-modal .settings-nav-group { flex-direction: row; }
+  #settings-modal .settings-body { grid-template-columns: minmax(0, 1fr) !important; grid-template-rows: auto minmax(0, 1fr) !important; }
+  #settings-modal .settings-nav {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 12px 16px !important;
+    gap: 10px !important;
+    overflow: visible !important;
+  }
+  #settings-modal .settings-search {
+    width: 100% !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    margin: 0 !important;
+    flex: none !important;
+  }
+  #settings-modal .settings-nav-list {
+    flex-direction: row !important;
+    align-items: center;
+    gap: 6px !important;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+  #settings-modal .settings-nav-group { flex-direction: row !important; gap: 6px !important; flex: none; }
   #settings-modal .settings-nav-group-label { display: none; }
+  #settings-modal .settings-nav-item {
+    flex: none;
+    width: auto !important;
+    min-height: 38px !important;
+    padding: 5px 12px 5px 8px !important;
+    gap: 8px !important;
+  }
+  #settings-modal .settings-nav-item .settings-nav-icon { display: grid !important; width: 26px !important; height: 26px !important; flex: 0 0 26px; }
+  #settings-modal .settings-nav-item > span:not(.settings-nav-icon) { display: inline !important; }
   #settings-modal .settings-detail { --set-pad: 20px; }
-  #settings-modal .settings-detail-head { padding-top: 20px !important; }
-  #settings-close-btn.settings-close-btn { top: 14px; right: 14px; }
+  #settings-modal .settings-detail-head { padding: 22px var(--set-pad) 16px !important; }
+  #settings-close-btn.settings-close-btn { top: 16px; right: 16px; }
 }
 
 

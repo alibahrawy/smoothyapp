@@ -9,7 +9,12 @@ const SOCIAL = {
   threads: { url: 'https://www.threads.com/@smoothyedit', label: 'Threads' },
   linkedin: { url: 'https://www.linkedin.com/company/140813934/', label: 'LinkedIn' },
 };
-const SOCIAL_TINT = { x: 'var(--ink-tint)', instagram: 'var(--rose-tint)', threads: 'var(--grape-tint)', linkedin: 'var(--sky-tint)' };
+const SOCIAL_TINT = {
+  x: '#000000',
+  instagram: 'linear-gradient(45deg, #F09433 0%, #E6683C 25%, #DC2743 50%, #CC2366 75%, #BC1888 100%)',
+  threads: '#000000',
+  linkedin: '#0A66C2',
+};
 // Keep in step with web/src/pages/pricing.astro and web/src/lib/plans.ts.
 const PRO_PERKS = [
   { tint: 'var(--mango-tint)', title: 'Unlimited ShortsCuts keys', text: 'Free decks have 6.', icon: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>' },

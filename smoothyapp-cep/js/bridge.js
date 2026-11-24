@@ -9,7 +9,7 @@
   'use strict';
 
   const csInterface = new CSInterface();
-  const HOST_SCRIPT_VERSION = '20261123-box-highlight-captions-v42';
+  const HOST_SCRIPT_VERSION = '20261124-caption-styles-v45';
   const MARKER_PAYLOAD_CHUNK_SIZE = 8000;
   let ws = null;
   let isConnected = false;
@@ -254,7 +254,10 @@
 
   // Smoothy Pro caption templates shipped in mogrt/ (built by smoothyedit-app/scripts/pro-captions/build-mogrt.mjs).
   const PRO_CAPTION_TEMPLATE_FILES = {
-    'box-highlight': 'smoothy-box-highlight.mogrt'
+    'box-highlight': 'smoothy-box-highlight.mogrt',
+    'word-rise': 'smoothy-word-rise.mogrt',
+    'word-slide': 'smoothy-word-slide.mogrt',
+    'stroke-highlight': 'smoothy-outline.mogrt'
   };
 
   function runShortsCutsHost(hostFunction, payload, responseType, requestId) {

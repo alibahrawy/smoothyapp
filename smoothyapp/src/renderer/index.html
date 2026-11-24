@@ -778,41 +778,68 @@
 
           <!-- Smoothy Pro animated captions (Premiere only) -->
           <section class="section pro-captions" id="pro-captions-section">
-            <h2>Animated captions <span class="pro-badge">Pro</span></h2>
-            <p class="help-text">Word-by-word captions as editable graphics on a new track in Premiere.</p>
-            <div class="pro-captions-preview" id="pro-captions-preview" data-template="box-highlight" aria-hidden="true">
-              <span class="pro-caption-line"><span class="is-spoken">Every</span> <span class="is-spoken">word</span> <span>lights</span> <span>up</span></span>
-            </div>
-            <div class="pro-captions-colors">
-              <label for="pro-captions-text-color">Text <input type="color" id="pro-captions-text-color" value="#151515"></label>
-              <label for="pro-captions-box-color">Box <input type="color" id="pro-captions-box-color" value="#92f388"></label>
-            </div>
+            <h2>Animated captions</h2>
+            <p class="help-text">Word-by-word captions as editable graphics on a new track in Premiere. Outline is free. More styles and your own look with Smoothy Pro.</p>
             <div class="form-group">
+              <label id="pro-captions-template-label">Style</label>
+              <div class="toggle-group pro-captions-templates" id="pro-captions-template" role="group" aria-labelledby="pro-captions-template-label">
+                <button type="button" class="toggle-btn active" data-template="stroke-highlight" aria-pressed="true" title="Outlined text, the spoken word turns green">Outline</button>
+                <button type="button" class="toggle-btn" data-template="box-highlight" aria-pressed="false" title="Words light up on a coloured box">Box</button>
+                <button type="button" class="toggle-btn" data-template="word-rise" aria-pressed="false" title="Each word fades in from below">Rise</button>
+                <button type="button" class="toggle-btn" data-template="word-slide" aria-pressed="false" title="Each word fades in from the right">Slide</button>
+              </div>
+            </div>
+            <div class="pro-captions-player" id="pro-captions-player">
+              <div class="pro-captions-preview" id="pro-captions-preview" data-template="stroke-highlight" aria-label="Animated preview of the caption style" role="img">
+                <video class="pro-captions-footage" id="pro-captions-footage" src="./assets/caption-preview.mp4" muted loop playsinline preload="auto" aria-hidden="true" tabindex="-1"></video>
+                <div class="pro-caption-line" id="pro-captions-line"></div>
+              </div>
+              <div class="pro-captions-player-bar">
+                <button type="button" class="pro-captions-play" id="pro-captions-play" aria-label="Pause preview" aria-pressed="true">
+                  <svg viewBox="0 0 16 16" aria-hidden="true"><path class="icon-pause" d="M4 3h3v10H4zM9 3h3v10H9z"/><path class="icon-play" d="M4 2.5v11l9-5.5z"/></svg>
+                </button>
+                <div class="pro-captions-progress" aria-hidden="true"><span id="pro-captions-progress"></span></div>
+                <span class="pro-captions-time" id="pro-captions-time" aria-hidden="true">0:00</span>
+              </div>
+            </div>
+            <p class="help-text pro-captions-custom-hint hidden" id="pro-captions-custom-hint">Colours, outline, shadow and size are part of Smoothy Pro. Try them here in the preview.</p>
+            <div class="pro-captions-colors" data-pro-setting>
+              <label for="pro-captions-text-color">Text <input type="color" id="pro-captions-text-color" value="#151515"></label>
+              <label for="pro-captions-box-color" data-for="box-highlight">Box <input type="color" id="pro-captions-box-color" value="#92f388"></label>
+              <label for="pro-captions-highlight-color" data-for="stroke-highlight">Spoken word <input type="color" id="pro-captions-highlight-color" value="#92f388"></label>
+              <label for="pro-captions-stroke-color" data-for="stroke-highlight">Outline <input type="color" id="pro-captions-stroke-color" value="#151515"></label>
+            </div>
+            <div class="form-group" data-for="box-highlight" data-pro-setting>
               <label for="pro-captions-upcoming">Upcoming words <span class="value-display" id="pro-captions-upcoming-value">42%</span></label>
               <input type="range" id="pro-captions-upcoming" min="0" max="100" step="1" value="42">
             </div>
-            <div class="form-group">
+            <div class="form-group" data-for="box-highlight" data-pro-setting>
               <label for="pro-captions-radius">Corner radius <span class="value-display" id="pro-captions-radius-value">7</span></label>
               <input type="range" id="pro-captions-radius" min="0" max="48" step="1" value="7">
             </div>
-            <div class="form-group">
+            <div class="form-group" data-for="stroke-highlight" data-pro-setting>
+              <label for="pro-captions-stroke-width">Outline width <span class="value-display" id="pro-captions-stroke-width-value">9</span></label>
+              <input type="range" id="pro-captions-stroke-width" min="0" max="20" step="1" value="9">
+            </div>
+            <div class="form-group" data-pro-setting>
               <label for="pro-captions-shadow">Text shadow <span class="value-display" id="pro-captions-shadow-value">0%</span></label>
               <input type="range" id="pro-captions-shadow" min="0" max="100" step="5" value="0">
             </div>
-            <div class="form-group">
+            <div class="form-group" data-pro-setting>
               <label for="pro-captions-size">Size <span class="value-display" id="pro-captions-size-value">100%</span></label>
               <input type="range" id="pro-captions-size" min="50" max="200" step="5" value="100">
             </div>
             <div class="form-group">
-              <label id="pro-captions-position-label">Height on screen</label>
+              <label id="pro-captions-position-label">Position on screen</label>
               <div class="toggle-group" id="pro-captions-position" role="group" aria-labelledby="pro-captions-position-label">
-                <button type="button" class="toggle-btn active" data-value="93.1" aria-pressed="true">Bottom</button>
-                <button type="button" class="toggle-btn" data-value="71.55" aria-pressed="false" title="Halfway between the bottom and the centre">Lower</button>
-                <button type="button" class="toggle-btn" data-value="50" aria-pressed="false">Centre</button>
+                <button type="button" class="toggle-btn active" data-position="bottom" aria-pressed="true">Bottom</button>
+                <button type="button" class="toggle-btn" data-position="lower" aria-pressed="false" title="Halfway between the bottom and the centre">Lower</button>
+                <button type="button" class="toggle-btn" data-position="centre" aria-pressed="false">Centre</button>
               </div>
             </div>
             <div class="pro-captions-actions">
               <button id="pro-captions-btn" type="button" class="btn btn-primary" disabled>Send animated captions</button>
+              <button id="pro-captions-free" type="button" class="btn btn-secondary hidden">Use free Outline look</button>
               <button id="pro-captions-upgrade" type="button" class="btn btn-pro hidden">Upgrade to Pro</button>
             </div>
             <p id="pro-captions-status" class="help-text" role="status" aria-live="polite"></p>
@@ -1932,10 +1959,10 @@
         <aside class="settings-nav">
           <div class="settings-nav-head">
             <h3 id="settings-title">Settings</h3>
-            <p class="settings-version">SmoothyApp <span id="settings-current-version">3.5.0</span></p>
+            <p class="settings-version">SmoothyApp <span id="settings-current-version">3.6.0</span></p>
           </div>
           <label class="settings-search">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></svg>
             <input id="settings-search" type="search" placeholder="Search settings…" autocomplete="off" aria-label="Search settings">
           </label>
           <nav class="settings-nav-list" id="settings-nav-list" aria-label="Settings sections">
@@ -1994,6 +2021,7 @@
                 <span>About SmoothyApp</span>
               </button>
             </div>
+            <p id="settings-search-empty" class="settings-search-empty hidden" role="status">No matching settings.</p>
           </nav>
         </aside>
 
@@ -2017,10 +2045,16 @@
                       <p>Match system follows your Mac or Windows setting.</p>
                     </div>
                     <div class="settings-row-control">
-                      <div class="settings-seg" id="appearance-control" role="radiogroup" aria-label="Theme">
-                        <button type="button" role="radio" data-appearance="light" aria-checked="false">Light</button>
-                        <button type="button" role="radio" data-appearance="dark" aria-checked="false">Dark</button>
-                        <button type="button" role="radio" data-appearance="system" aria-checked="true">Match system</button>
+                      <div class="settings-seg settings-seg-icons" id="appearance-control" role="radiogroup" aria-label="Theme">
+                        <button type="button" role="radio" data-appearance="system" aria-checked="true" aria-label="Match system" title="Match system">
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+                        </button>
+                        <button type="button" role="radio" data-appearance="light" aria-checked="false" aria-label="Light" title="Light">
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.5"/><path d="M12 3.5v2M12 18.5v2M3.5 12h2M18.5 12h2M5.99 5.99l1.41 1.41M16.6 16.6l1.41 1.41M18.01 5.99l-1.41 1.41M7.4 16.6l-1.41 1.41"/></svg>
+                        </button>
+                        <button type="button" role="radio" data-appearance="dark" aria-checked="false" aria-label="Dark" title="Dark">
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.4 14.6A8.5 8.5 0 0 1 9.4 3.6a8.5 8.5 0 1 0 11 11Z"/></svg>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -2255,8 +2289,6 @@
                     </div>
                   </div>
                   <p id="caption-models-settings-status" class="help-text settings-row-status" role="status" aria-live="polite"></p>
-                </div>
-                <div class="settings-section">
                   <div class="settings-row">
                     <div class="settings-row-copy">
                       <strong>Choosing a model</strong>
@@ -2454,15 +2486,18 @@
             </section>
             <section class="settings-pane" data-pane="about">
               <div class="settings-group">
-                <div class="settings-section">
-                  <div class="about-brand-lockup">
-                    <span class="about-brand-icon" aria-hidden="true"><img src="./logo.svg" width="28" height="28" alt=""></span>
-                    <div>
-                      <div class="about-brand-wordmark"><strong>Smoothy</strong><span>App</span></div>
-                      <p class="help-text" id="settings-about-version" style="margin:2px 0 0">Version 3.5.0</p>
+                <div class="settings-group-label">Version</div>
+                <div class="settings-section settings-row-group">
+                  <div class="settings-row">
+                    <div class="about-brand-lockup">
+                      <span class="about-brand-icon" aria-hidden="true"><img src="./logo.svg" width="28" height="28" alt=""></span>
+                      <div>
+                        <div class="about-brand-wordmark"><strong>Smoothy</strong><span>App</span></div>
+                        <p class="help-text" id="settings-about-version" style="margin:2px 0 0">Version 3.6.0</p>
+                      </div>
                     </div>
                   </div>
-                  <div class="settings-row" style="padding:14px 0 0;margin-top:16px;border-top:1px solid var(--border)">
+                  <div class="settings-row">
                     <div class="settings-row-copy">
                       <strong>Release notes</strong>
                       <p>See what’s new in this version of SmoothyApp.</p>
@@ -2481,27 +2516,27 @@
                 <div class="settings-section">
                   <p class="help-text">Updates, tips and behind-the-scenes from Smoothy, plus other editors to chat with.</p>
                   <div class="cs-social-grid">
-                    <button type="button" class="cs-social" data-open-url="https://discord.gg/KmJRqUZzDe" style="--social:#AFCFFF">
+                    <button type="button" class="cs-social" data-open-url="https://discord.gg/KmJRqUZzDe" style="--social:#5865F2">
                       <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z"/></svg></span>
                       <span class="cs-social-text"><strong>Discord</strong><small>Join the community</small></span>
                       <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
                     </button>
-                    <button type="button" class="cs-social" data-open-url="https://x.com/smoothyedit" style="--social:#E6E4DF">
+                    <button type="button" class="cs-social cs-social-dark" data-open-url="https://x.com/smoothyedit" style="--social:#000000">
                       <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z"/></svg></span>
                       <span class="cs-social-text"><strong>X</strong><small>@smoothyedit</small></span>
                       <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
                     </button>
-                    <button type="button" class="cs-social" data-open-url="https://www.instagram.com/smoothyedit/" style="--social:var(--rose-tint)">
+                    <button type="button" class="cs-social" data-open-url="https://www.instagram.com/smoothyedit/" style="--social:#E1306C;--social-bg:linear-gradient(45deg,#F09433 0%,#E6683C 25%,#DC2743 50%,#CC2366 75%,#BC1888 100%)">
                       <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.03.084c-1.277.06-2.149.264-2.911.563-.789.308-1.458.72-2.123 1.388C1.331 2.703.921 3.372.616 4.162.321 4.926.121 5.798.064 7.076.008 8.353-.005 8.764.001 12.023c.006 3.259.021 3.667.083 4.947.061 1.277.264 2.148.564 2.911.308.789.72 1.457 1.388 2.123.668.665 1.336 1.074 2.128 1.38.763.295 1.636.496 2.914.552 1.277.056 1.688.069 4.946.063 3.258-.006 3.668-.021 4.948-.081 1.28-.061 2.147-.265 2.91-.563.789-.309 1.458-.72 2.123-1.388.665-.668 1.074-1.338 1.379-2.128.296-.763.497-1.636.552-2.912.056-1.281.069-1.69.063-4.948-.006-3.258-.021-3.667-.082-4.947-.061-1.28-.264-2.149-.563-2.912-.308-.789-.72-1.457-1.388-2.123C21.298 1.33 20.628.921 19.838.617 19.074.321 18.202.12 16.924.065 15.647.009 15.236-.005 11.977.001 8.718.008 8.31.022 7.03.084m.14 21.693c-1.17-.051-1.805-.245-2.229-.408-.561-.216-.96-.477-1.382-.895-.422-.418-.681-.819-.9-1.378-.164-.423-.362-1.058-.417-2.228-.06-1.265-.072-1.644-.079-4.848-.007-3.204.005-3.583.061-4.848.05-1.169.246-1.805.408-2.228.216-.561.476-.96.895-1.382.419-.422.818-.681 1.378-.9.423-.165 1.058-.362 2.227-.417 1.266-.06 1.645-.072 4.848-.079 3.203-.007 3.584.005 4.85.061 1.169.051 1.805.244 2.228.408.561.216.96.475 1.382.895.422.419.682.818.901 1.379.165.422.362 1.056.417 2.226.06 1.266.074 1.645.08 4.848.006 3.203-.006 3.583-.061 4.848-.051 1.17-.245 1.806-.408 2.229-.216.56-.476.96-.895 1.381-.419.422-.818.681-1.379.9-.422.165-1.057.362-2.226.418-1.266.059-1.645.072-4.849.079-3.204.007-3.583-.006-4.848-.061M16.953 5.586a1.44 1.44 0 1 0 2.88-.005 1.44 1.44 0 0 0-2.88.005M5.839 12.012a6.162 6.162 0 1 0 12.323-.024 6.162 6.162 0 0 0-12.323.024M8 12.008a4 4 0 1 1 8-.016 4 4 0 0 1-8 .016"/></svg></span>
                       <span class="cs-social-text"><strong>Instagram</strong><small>@smoothyedit</small></span>
                       <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
                     </button>
-                    <button type="button" class="cs-social" data-open-url="https://www.threads.com/@smoothyedit" style="--social:var(--grape-tint)">
+                    <button type="button" class="cs-social cs-social-dark" data-open-url="https://www.threads.com/@smoothyedit" style="--social:#000000">
                       <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.263 11.097c-.03-3.486-1.92-5.586-5.111-5.586-2.13 0-3.922.963-4.863 2.499l2.062 1.438c.535-.843 1.272-1.543 2.628-1.543 1.528 0 2.318.85 2.544 2.431a15 15 0 0 0-2.236-.173c-4.125 0-6.068 1.867-6.068 4.336s1.943 3.99 4.804 3.99c3.139 0 5.013-2.115 5.781-4.735.798.361 1.348 1.204 1.348 2.47 0 3.387-3.907 5.232-7.22 5.232-4.885 0-8.077-3.207-8.077-8.424 0-6.392 4.223-10.487 9.9-10.487 3.808 0 5.69 1.671 6.97 3.914l2.108-1.475C21.44 2.078 18.331 0 13.663 0 6.227 0 1.168 5.277 1.168 12.934c0 7 4.953 11.066 10.856 11.066 4.878 0 9.809-2.846 9.809-7.716 0-2.545-1.46-4.231-3.569-5.187m-6.33 4.855c-1.077 0-2.026-.512-2.026-1.453 0-1.483 1.822-1.934 3.606-1.934.678 0 1.34.045 1.927.173-.422 1.927-1.671 3.215-3.508 3.214Z"/></svg></span>
                       <span class="cs-social-text"><strong>Threads</strong><small>@smoothyedit</small></span>
                       <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
                     </button>
-                    <button type="button" class="cs-social" data-open-url="https://www.linkedin.com/company/140813934/" style="--social:var(--sky-tint)">
+                    <button type="button" class="cs-social" data-open-url="https://www.linkedin.com/company/140813934/" style="--social:#0A66C2">
                       <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></span>
                       <span class="cs-social-text"><strong>LinkedIn</strong><small>Smoothy page</small></span>
                       <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
@@ -2511,30 +2546,41 @@
               </div>
 
               <div class="settings-group settings-group-wide cs-social-group">
-                <div class="settings-group-label">Ali Bahrawy</div>
+                <div class="settings-group-label">Ali Bahrawy · Founder</div>
                 <div class="settings-section">
-                  <p class="help-text">Keep in touch with the person building Smoothy.</p>
-                  <div class="cs-social-grid">
-                    <button type="button" class="cs-social" data-open-url="https://x.com/alibahrawy34" style="--social:#E6E4DF">
-                      <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z"/></svg></span>
-                      <span class="cs-social-text"><strong>X</strong><small>@alibahrawy34</small></span>
-                      <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
-                    </button>
-                    <button type="button" class="cs-social" data-open-url="https://www.instagram.com/alibahrawy34/" style="--social:var(--rose-tint)">
-                      <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.03.084c-1.277.06-2.149.264-2.911.563-.789.308-1.458.72-2.123 1.388C1.331 2.703.921 3.372.616 4.162.321 4.926.121 5.798.064 7.076.008 8.353-.005 8.764.001 12.023c.006 3.259.021 3.667.083 4.947.061 1.277.264 2.148.564 2.911.308.789.72 1.457 1.388 2.123.668.665 1.336 1.074 2.128 1.38.763.295 1.636.496 2.914.552 1.277.056 1.688.069 4.946.063 3.258-.006 3.668-.021 4.948-.081 1.28-.061 2.147-.265 2.91-.563.789-.309 1.458-.72 2.123-1.388.665-.668 1.074-1.338 1.379-2.128.296-.763.497-1.636.552-2.912.056-1.281.069-1.69.063-4.948-.006-3.258-.021-3.667-.082-4.947-.061-1.28-.264-2.149-.563-2.912-.308-.789-.72-1.457-1.388-2.123C21.298 1.33 20.628.921 19.838.617 19.074.321 18.202.12 16.924.065 15.647.009 15.236-.005 11.977.001 8.718.008 8.31.022 7.03.084m.14 21.693c-1.17-.051-1.805-.245-2.229-.408-.561-.216-.96-.477-1.382-.895-.422-.418-.681-.819-.9-1.378-.164-.423-.362-1.058-.417-2.228-.06-1.265-.072-1.644-.079-4.848-.007-3.204.005-3.583.061-4.848.05-1.169.246-1.805.408-2.228.216-.561.476-.96.895-1.382.419-.422.818-.681 1.378-.9.423-.165 1.058-.362 2.227-.417 1.266-.06 1.645-.072 4.848-.079 3.203-.007 3.584.005 4.85.061 1.169.051 1.805.244 2.228.408.561.216.96.475 1.382.895.422.419.682.818.901 1.379.165.422.362 1.056.417 2.226.06 1.266.074 1.645.08 4.848.006 3.203-.006 3.583-.061 4.848-.051 1.17-.245 1.806-.408 2.229-.216.56-.476.96-.895 1.381-.419.422-.818.681-1.379.9-.422.165-1.057.362-2.226.418-1.266.059-1.645.072-4.849.079-3.204.007-3.583-.006-4.848-.061M16.953 5.586a1.44 1.44 0 1 0 2.88-.005 1.44 1.44 0 0 0-2.88.005M5.839 12.012a6.162 6.162 0 1 0 12.323-.024 6.162 6.162 0 0 0-12.323.024M8 12.008a4 4 0 1 1 8-.016 4 4 0 0 1-8 .016"/></svg></span>
-                      <span class="cs-social-text"><strong>Instagram</strong><small>@alibahrawy34</small></span>
-                      <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
-                    </button>
-                    <button type="button" class="cs-social" data-open-url="https://www.linkedin.com/in/alibahrawy/" style="--social:var(--sky-tint)">
-                      <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></span>
-                      <span class="cs-social-text"><strong>LinkedIn</strong><small>Ali Bahrawy</small></span>
-                      <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
-                    </button>
-                    <button type="button" class="cs-social" data-open-url="https://www.alibahrawy.com/" style="--social:var(--lime-tint)">
-                      <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span>
-                      <span class="cs-social-text"><strong>Website</strong><small>alibahrawy.com</small></span>
-                      <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
-                    </button>
+                  <p class="help-text">Founder of Smoothy &amp; video editor. Keep in touch or check out my editing work.</p>
+                  <div class="cs-founder-layout">
+                    <div class="cs-social-grid">
+                      <button type="button" class="cs-social cs-social-dark" data-open-url="https://x.com/alibahrawy34" style="--social:#000000">
+                        <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z"/></svg></span>
+                        <span class="cs-social-text"><strong>X</strong><small>@alibahrawy34</small></span>
+                        <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                      </button>
+                      <button type="button" class="cs-social" data-open-url="https://www.instagram.com/alibahrawy34/" style="--social:#E1306C;--social-bg:linear-gradient(45deg,#F09433 0%,#E6683C 25%,#DC2743 50%,#CC2366 75%,#BC1888 100%)">
+                        <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.03.084c-1.277.06-2.149.264-2.911.563-.789.308-1.458.72-2.123 1.388C1.331 2.703.921 3.372.616 4.162.321 4.926.121 5.798.064 7.076.008 8.353-.005 8.764.001 12.023c.006 3.259.021 3.667.083 4.947.061 1.277.264 2.148.564 2.911.308.789.72 1.457 1.388 2.123.668.665 1.336 1.074 2.128 1.38.763.295 1.636.496 2.914.552 1.277.056 1.688.069 4.946.063 3.258-.006 3.668-.021 4.948-.081 1.28-.061 2.147-.265 2.91-.563.789-.309 1.458-.72 2.123-1.388.665-.668 1.074-1.338 1.379-2.128.296-.763.497-1.636.552-2.912.056-1.281.069-1.69.063-4.948-.006-3.258-.021-3.667-.082-4.947-.061-1.28-.264-2.149-.563-2.912-.308-.789-.72-1.457-1.388-2.123C21.298 1.33 20.628.921 19.838.617 19.074.321 18.202.12 16.924.065 15.647.009 15.236-.005 11.977.001 8.718.008 8.31.022 7.03.084m.14 21.693c-1.17-.051-1.805-.245-2.229-.408-.561-.216-.96-.477-1.382-.895-.422-.418-.681-.819-.9-1.378-.164-.423-.362-1.058-.417-2.228-.06-1.265-.072-1.644-.079-4.848-.007-3.204.005-3.583.061-4.848.05-1.169.246-1.805.408-2.228.216-.561.476-.96.895-1.382.419-.422.818-.681 1.378-.9.423-.165 1.058-.362 2.227-.417 1.266-.06 1.645-.072 4.848-.079 3.203-.007 3.584.005 4.85.061 1.169.051 1.805.244 2.228.408.561.216.96.475 1.382.895.422.419.682.818.901 1.379.165.422.362 1.056.417 2.226.06 1.266.074 1.645.08 4.848.006 3.203-.006 3.583-.061 4.848-.051 1.17-.245 1.806-.408 2.229-.216.56-.476.96-.895 1.381-.419.422-.818.681-1.379.9-.422.165-1.057.362-2.226.418-1.266.059-1.645.072-4.849.079-3.204.007-3.583-.006-4.848-.061M16.953 5.586a1.44 1.44 0 1 0 2.88-.005 1.44 1.44 0 0 0-2.88.005M5.839 12.012a6.162 6.162 0 1 0 12.323-.024 6.162 6.162 0 0 0-12.323.024M8 12.008a4 4 0 1 1 8-.016 4 4 0 0 1-8 .016"/></svg></span>
+                        <span class="cs-social-text"><strong>Instagram</strong><small>@alibahrawy34</small></span>
+                        <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                      </button>
+                      <button type="button" class="cs-social" data-open-url="https://www.linkedin.com/in/alibahrawy/" style="--social:#0A66C2">
+                        <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg></span>
+                        <span class="cs-social-text"><strong>LinkedIn</strong><small>Ali Bahrawy</small></span>
+                        <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                      </button>
+                      <button type="button" class="cs-social" data-open-url="https://www.alibahrawy.com/" style="--social:#92F388;--social-ink:#151515">
+                        <span class="cs-social-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span>
+                        <span class="cs-social-text"><strong>Website</strong><small>alibahrawy.com</small></span>
+                        <svg class="cs-social-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                      </button>
+                    </div>
+                    <div class="cs-hire-card">
+                      <span class="cs-hire-badge">Founder · Video Editor</span>
+                      <strong>Looking to hire me as an editor?</strong>
+                      <p>I’m the founder of Smoothy and a freelance video editor. You can see my editing work and portfolio on my website.</p>
+                      <button type="button" class="cs-hire-btn" data-open-url="https://www.alibahrawy.com/">
+                        <span>See my work at alibahrawy.com</span>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

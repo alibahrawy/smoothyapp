@@ -3,7 +3,9 @@
 // After Effects (macOS), then widens the slider ranges in its definition.json.
 //
 //   node scripts/pro-captions/build-mogrt.mjs                             Box Highlight (default)
-//   node scripts/pro-captions/build-mogrt.mjs --template box-highlight    the same, explicitly
+//   node scripts/pro-captions/build-mogrt.mjs --template <id>             one of box-highlight,
+//                                                                         word-rise, word-slide, stroke-highlight
+//   node scripts/pro-captions/build-mogrt.mjs --all                       every template
 //   node scripts/pro-captions/build-mogrt.mjs --patch-only [--template …] only re-apply ranges
 //
 // A full rebuild needs Automation access to After Effects and AE's "Allow
@@ -34,30 +36,48 @@ const TEMPLATES = {
       'Vertical Position': [0, 100],
     },
   },
+  'word-rise': {
+    script: 'build-word-captions-mogrt.jsx',
+    name: 'Smoothy Word Rise',
+    file: 'smoothy-word-rise.mogrt',
+    ranges: { 'Shadow Opacity': [0, 100], 'Caption Size': [25, 300], 'Vertical Position': [0, 100] },
+  },
+  'word-slide': {
+    script: 'build-word-captions-mogrt.jsx',
+    name: 'Smoothy Word Slide',
+    file: 'smoothy-word-slide.mogrt',
+    ranges: { 'Shadow Opacity': [0, 100], 'Caption Size': [25, 300], 'Vertical Position': [0, 100] },
+  },
+  'stroke-highlight': {
+    script: 'build-word-captions-mogrt.jsx',
+    name: 'Smoothy Outline',
+    file: 'smoothy-outline.mogrt',
+    ranges: { 'Stroke Width': [0, 30], 'Shadow Opacity': [0, 100], 'Caption Size': [25, 300], 'Vertical Position': [0, 100] },
+  },
 };
 const templateArg = process.argv.indexOf('--template');
-const templateId = templateArg > -1 ? process.argv[templateArg + 1] : 'box-highlight';
-const template = TEMPLATES[templateId];
-if (!template) {
-  console.error(`Unknown template "${templateId}". Use one of: ${Object.keys(TEMPLATES).join(', ')}`);
-  process.exit(1);
+const templateIds = process.argv.includes('--all') ? Object.keys(TEMPLATES)
+  : [templateArg > -1 ? process.argv[templateArg + 1] : 'box-highlight'];
+for (const id of templateIds) {
+  if (!TEMPLATES[id]) {
+    console.error(`Unknown template "${id}". Use one of: ${Object.keys(TEMPLATES).join(', ')}`);
+    process.exit(1);
+  }
 }
-const SLIDER_RANGES = template.ranges;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..', '..');
-const script = path.join(here, template.script);
 const mogrtFolder = path.join(repoRoot, 'smoothyapp-cep', 'mogrt');
-const out = path.join(mogrtFolder, template.file);
 const status = path.join(mogrtFolder, '.build-status.txt');
 const staging = path.join(mogrtFolder, '.build');
-const exported = path.join(staging, `${template.name}.mogrt`);
 const appName = process.env.SMOOTHY_AE_APP || 'Adobe After Effects 2026';
 
-function exportFromAfterEffects() {
+function exportFromAfterEffects(id, template, out) {
+  const script = path.join(here, template.script);
+  const exported = path.join(staging, `${template.name}.mogrt`);
   rmSync(status, { force: true });
   rmSync(staging, { recursive: true, force: true });
-  const js = `$.global.SMOOTHY_REPO_ROOT = ${JSON.stringify(repoRoot)}; $.evalFile(${JSON.stringify(script)});`;
+  const js = `$.global.SMOOTHY_REPO_ROOT = ${JSON.stringify(repoRoot)}; $.global.SMOOTHY_TEMPLATE_ID = ${JSON.stringify(id)}; $.evalFile(${JSON.stringify(script)});`;
   execFileSync('osascript', ['-e', 'with timeout of 600 seconds', '-e', `tell application ${JSON.stringify(appName)} to DoScript ${JSON.stringify(js)}`, '-e', 'end timeout'], { stdio: 'inherit' });
   const result = existsSync(status) ? readFileSync(status, 'utf8').trim() : 'no status written (is AE idle, and is file access allowed?)';
   rmSync(status, { force: true });
@@ -67,7 +87,7 @@ function exportFromAfterEffects() {
   rmSync(staging, { recursive: true, force: true });
 }
 
-function patchSliderRanges(file) {
+function patchSliderRanges(file, sliderRanges) {
   const work = mkdtempSync(path.join(os.tmpdir(), 'smoothy-mogrt-'));
   try {
     execFileSync('unzip', ['-q', file, '-d', work]);
@@ -77,7 +97,7 @@ function patchSliderRanges(file) {
     const visit = node => {
       if (Array.isArray(node)) return node.forEach(visit);
       if (!node || typeof node !== 'object') return;
-      const range = SLIDER_RANGES[node.capPropUIName];
+      const range = sliderRanges[node.capPropUIName];
       if (range && node.capPropType === 1) {
         [node.capPropMin, node.capPropMax] = range;
         patched.add(node.capPropUIName);
@@ -85,7 +105,7 @@ function patchSliderRanges(file) {
       Object.values(node).forEach(visit);
     };
     visit(definition);
-    const missing = Object.keys(SLIDER_RANGES).filter(name => !patched.has(name));
+    const missing = Object.keys(sliderRanges).filter(name => !patched.has(name));
     if (missing.length) throw new Error(`Template is missing sliders: ${missing.join(', ')}`);
     writeFileSync(definitionPath, JSON.stringify(definition));
     const rebuilt = path.join(work, 'out.mogrt');
@@ -97,12 +117,16 @@ function patchSliderRanges(file) {
   }
 }
 
-try {
-  if (!process.argv.includes('--patch-only')) exportFromAfterEffects();
-  if (!existsSync(out)) throw new Error(`${out} not found`);
-  patchSliderRanges(out);
-  console.log(`Built ${path.relative(repoRoot, out)} (${statSync(out).size} bytes)`);
-} catch (error) {
-  console.error(`MOGRT build failed: ${error.message}`);
-  process.exit(1);
+for (const id of templateIds) {
+  const template = TEMPLATES[id];
+  const out = path.join(mogrtFolder, template.file);
+  try {
+    if (!process.argv.includes('--patch-only')) exportFromAfterEffects(id, template, out);
+    if (!existsSync(out)) throw new Error(`${out} not found`);
+    patchSliderRanges(out, template.ranges);
+    console.log(`Built ${path.relative(repoRoot, out)} (${statSync(out).size} bytes)`);
+  } catch (error) {
+    console.error(`MOGRT build failed (${id}): ${error.message}`);
+    process.exit(1);
+  }
 }

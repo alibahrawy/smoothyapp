@@ -15,18 +15,21 @@ export type CommunityAvatar =
   | { kind: 'img'; data: string };
 
 export const AVATAR_COLORS = [
-  '#151515', '#FB6769', '#F48E20', '#FBCB2A', '#92F388', '#1D7815', '#186C8D', '#4BC6FA',
-  '#0D5EC5', '#145EC1', '#6D47B8', '#8A4AF5', '#B717A1', '#FC9AC9', '#AF2934', '#8F5214', '#5B5E66',
+  '#18181B', '#FF6B6B', '#FF9636', '#FFD23F', '#92F388', '#34C759', '#22B8CF', '#4BC6FA',
+  '#3B82F6', '#6366F1', '#7C5CFC', '#9B6BFF', '#D946EF', '#FF8AC6', '#F43F5E', '#F59E0B', '#64748B',
 ] as const;
 
 /** Names for the editor's accessible labels. */
 export const AVATAR_COLOR_NAMES = [
-  'Ink', 'Watermelon', 'Papaya', 'Mango', 'Lime', 'Lime Deep', 'Sky Deep', 'Sky',
-  'Blueberry', 'Blueberry Deep', 'Grape Deep', 'Grape', 'Dragonfruit', 'Rose', 'Watermelon Deep', 'Papaya Deep', 'Graphite',
+  'Ink', 'Watermelon', 'Papaya', 'Mango', 'Lime', 'Mint', 'Teal', 'Sky',
+  'Blueberry', 'Indigo', 'Violet', 'Grape', 'Dragonfruit', 'Rose', 'Berry', 'Amber', 'Graphite',
 ] as const;
 
 /** Design Bible §11 p.31: the nine flavors + Graphite for the Settings picker. */
 export const AVATAR_BRAND_INDICES = [4, 3, 2, 1, 13, 12, 11, 8, 7, 16] as const;
+
+/** Automatic avatar colors stay within the nine vibrant Smoothy flavors. */
+const AUTO_AVATAR_INDICES = [4, 3, 2, 1, 13, 12, 11, 8, 7] as const;
 
 const SHAPE_COUNT = 10;
 const EYE_COUNT = 16;
@@ -47,7 +50,7 @@ export function defaultAvatar(id: string): CommunityAvatar {
 }
 
 export function colorFor(avatar: Extract<CommunityAvatar, { kind: 'gen' }>, id: string): string {
-  const index = avatar.color ?? (hash(`${id}:color`) % AVATAR_COLORS.length);
+  const index = avatar.color ?? AUTO_AVATAR_INDICES[hash(`${id}:color`) % AUTO_AVATAR_INDICES.length];
   return AVATAR_COLORS[Math.min(Math.max(index, 0), AVATAR_COLORS.length - 1)];
 }
 

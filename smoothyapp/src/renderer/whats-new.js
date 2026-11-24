@@ -3,6 +3,19 @@
  * Add one entry per release, keyed by "major.minor", when the release is prepared.
  */
 export const WHATS_NEW = {
+  '3.6': {
+    since: '3.5.0',
+    sections: [
+      { title: 'Animated captions', items: [
+        { tag: 'new', title: 'Free Outline style', text: 'Send word-by-word animated Outline captions straight to Premiere Pro on the free plan, with adjustable screen position.' },
+        { tag: 'new', title: 'Four animated styles in Smoothy Pro', text: 'Pick Outline, Box, Rise or Slide, and customize colors, size, stroke, shadow and box styling. Box removes the scale bounce and only fades in after a pause.' },
+        { tag: 'new', title: 'Live preview & bundled fonts', text: 'Preview every caption style live over video right in the Captions tab. Inter Display and Plus Jakarta Sans ship with the app and install automatically when needed.' },
+      ] },
+      { title: 'Design & polish', items: [
+        { tag: 'improved', title: 'Updated Smoothy cup icon', text: 'Refreshed app icon and brand mark with a thicker straw across macOS, Linux and Windows.' },
+      ] },
+    ],
+  },
   '3.5': {
     since: '3.0.0',
     sections: [

@@ -180,20 +180,33 @@
 .cs-switch input:checked + span::after { transform: translateX(16px); background: var(--foreground); }
 .cs-switch input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
 
-/* ---- Settings → Community: social links and the SmoothyREC promo ----
-   Smoothy palette: each link gets a pastel tile (set inline as --social) with
-   a dark brand glyph, on a neutral bordered row. Hover only tints the row. */
+/* ---- Settings → About: social links, founder hire card, and SmoothyREC promo ----
+   Each social link uses its real platform brand color (--social / --social-bg)
+   with a crisp white brand glyph, on a neutral bordered row. */
 .cs-social-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; margin-top: 10px; }
 .cs-social { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 9px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--background); color: var(--foreground); font: inherit; text-align: left; cursor: pointer; transition: background .12s ease, border-color .12s ease; }
-.cs-social:hover { background: color-mix(in oklab, var(--social, var(--background-tertiary)) 22%, var(--background)); border-color: color-mix(in oklab, var(--social, var(--border)) 70%, var(--border)); }
+.cs-social:hover { background: color-mix(in oklab, var(--social, var(--background-tertiary)) 10%, var(--background)); border-color: color-mix(in oklab, var(--social, var(--border)) 42%, var(--border)); }
 .cs-social:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.cs-social-icon { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 9px; background: var(--social, var(--background-tertiary)); color: rgba(0, 0, 0, 0.82); }
+.cs-social-icon { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 9px; background: var(--social-bg, var(--social, var(--background-tertiary))); color: var(--social-ink, #FFFFFF); }
 .cs-social-icon svg { width: 16px; height: 16px; }
 .cs-social-text { display: grid; flex: 1; min-width: 0; }
 .cs-social-text strong { font-size: 12.5px; font-weight: 650; }
 .cs-social-text small { overflow: hidden; color: var(--foreground-muted); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
 .cs-social-go { width: 14px; height: 14px; flex: none; color: var(--foreground-muted); opacity: 0; transition: opacity .12s ease; }
 .cs-social:hover .cs-social-go, .cs-social:focus-visible .cs-social-go { opacity: 1; }
+
+.cs-founder-layout { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(220px, 1fr); gap: 12px; align-items: stretch; margin-top: 10px; }
+.cs-founder-layout .cs-social-grid { margin-top: 0; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); align-content: start; }
+.cs-hire-card { display: flex; flex-direction: column; gap: 6px; padding: 13px 14px; border: 1px solid color-mix(in oklch, var(--brand-lime) 55%, var(--border)); border-radius: 12px; background: color-mix(in oklch, var(--brand-lime) 14%, var(--background)); }
+.cs-hire-badge { align-self: flex-start; padding: 2px 8px; border-radius: 999px; background: var(--brand-lime); color: #151515; font-size: 9.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.cs-hire-card strong { font-size: 13px; font-weight: 650; color: var(--foreground); }
+.cs-hire-card p { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--foreground-secondary); }
+.cs-hire-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; margin-top: auto; padding: 7px 12px; border: 0; border-radius: 9px; background: var(--foreground); color: var(--background); font: inherit; font-size: 11.5px; font-weight: 650; cursor: pointer; transition: opacity .12s ease; }
+.cs-hire-btn:hover { opacity: .88; }
+.cs-hire-btn svg { width: 13px; height: 13px; flex: none; }
+@media (max-width: 720px) {
+  .cs-founder-layout { grid-template-columns: 1fr; }
+}
 
 .cs-promo { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--background); }
 .cs-promo-icon { display: block; width: 44px; height: 44px; flex: none; border-radius: 10px; overflow: hidden; }
