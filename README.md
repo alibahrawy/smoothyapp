@@ -1,32 +1,26 @@
-# SmoothyEdit
+# SmoothyApp (SmoothyEdit)
 
-**Free local editing tools for Premiere Pro and DaVinci Resolve Free.** Switch multicam angles, cut silence, generate and edit multilingual captions, import SVGs and images, and compress video from one desktop app. The Premiere panel connects your timeline to SmoothyEdit; the core tools run on your computer.
+**Open-source desktop editing toolkit for Premiere Pro and DaVinci Resolve Free.** Switch multicam angles, cut silence, generate and edit multilingual & animated word-by-word captions, clean up audio, detect retakes, import SVGs and images, compress video, and connect AI agents to your edit from one desktop app. Core local tools run on your computer and stay free forever.
 
-[Download for Mac](https://smoothyedit.com/api/download/mac) · [Download for Windows](https://smoothyedit.com/api/download/win) · [See the latest release](https://github.com/alibahrawy/smoothyapp/releases/latest) · [Visit the website](https://smoothyedit.com/features/smoothy-app)
+- **[Download Latest for Mac (Apple Silicon)](https://smoothyedit.com/api/download/mac)**
+- **[Download Latest for Windows (x64)](https://smoothyedit.com/api/download/win)**
+- **[Latest Release & Linux Builds (AppImage / .deb)](https://github.com/alibahrawy/smoothyapp/releases/latest)**
+- **[Website & Docs](https://smoothyedit.com)** · **[Changelog](https://smoothyedit.com/changelog)**
 
-> **2.1 release:** macOS **2.1.0** for Apple Silicon is signed and notarized. Windows downloads remain **2.0.0** until a Windows 2.1 build is published. Linux AppImage and .deb packages are built on native x64 and arm64 runners.
-
-## A look inside
-
-These interface mockups show the SmoothyEdit 1.4 layout.
-
-| Multilingual captions | Multicam editing |
-| --- | --- |
-| ![SmoothyEdit 1.4 captions interface with an audio file, multilingual model, Arabic language, and GPU setting](docs/images/captions-1.4.jpg) | ![SmoothyEdit 1.4 multicam interface with sequence, audio tracks, and video tracks](docs/images/multicam-1.4.jpg) |
+> **Always get the latest version:** The download links above always point to the newest release. Installed builds include automatic updates so you stay on the latest version.
 
 ## What it does
 
 | Tool | Workflow |
 | --- | --- |
-| **Multicam (beta)** | Follow the active speaker on a duplicate of your source or nested timeline. The main camera stays on top, with the enabled reverse footage underneath for fine-tuning; clip effects and continuous audio are retained. |
-| **Silence removal** | Detect quiet sections and remove them from the timeline with adjustable settings. |
-| **Captions** | Transcribe an editor timeline or an audio/video file locally. Choose multilingual Whisper, specialist Moroccan Darija models or compatible custom GGML models; send captions to your editor or save an SRT. |
-| **Audio Cleanup** | Split Speech and Music locally, enhance speech, listen with Solo/Mute and save WAVs. Automatic GPU selection falls back to CPU. |
-| **Assets** | Convert SVGs and images to PNGs, preserve transparency, export files, or send a still to Premiere. |
-| **Compressor** | Reduce video file size with hardware encoding when available. |
-| **Stock Footage** | Search Commons, Internet Archive, NASA and the configured Pixabay service, preview shots, save MP4s and import into Premiere’s Project panel. |
-| **Audio Library** | Preview an unofficial YouTube music archive, filter tracks, keep Favorites and Saved MP3s, and explore Staff picks. Verify each track’s license before publishing. |
-| **Best Shorts** | Optional Studio feature that finds short-form moments and sends markers to Premiere. |
+| **Multicam** | Follow the active speaker on a duplicate of your source or nested timeline. The main camera stays on top, with the enabled reverse footage underneath for fine-tuning; clip effects and continuous audio are retained. |
+| **Silence removal & Retakes** | Detect quiet sections and repeated takes, and tighten your timeline with adjustable settings. |
+| **Captions & Animated Word-by-Word Captions** | Transcribe a timeline or audio/video file locally with Whisper (including multilingual, Moroccan Darija, or custom GGML models). Export SRT/VTT or send animated word-by-word captions directly to Premiere Pro (Outline free; 4 customizable styles in Smoothy Pro). |
+| **Audio Cleanup** | Split Speech and Music locally, enhance speech, listen with Solo/Mute, and save WAVs. Automatic GPU selection falls back to CPU. |
+| **Assets & Compressor** | Convert SVGs and images to PNGs, remove backgrounds, upscale images, send stills to Premiere, and compress videos with hardware encoding. |
+| **Stock Footage, SFX & Audio Library** | Search Commons, Internet Archive, NASA, Coverr, and Pixabay, use bundled SFX, and preview/save tracks from the Audio Library into Premiere. |
+| **ShortsCuts & Agent Bridge** | Control Premiere shortcuts from your phone (6 keys free, unlimited in Pro) and connect MCP-compatible AI agents to your edit (Pro). |
+| **Community & Studio** | Built-in Community chat and optional Studio cloud tools. |
 
 Premiere Pro connects through the bundled **CEP extension**. The desktop app installs or refreshes the panel when it starts. Premiere Pro 25.x and 26+ are supported. DaVinci Resolve Free connects through local Lua helpers. Start **Workspace → Scripts → Smoothy Connector** once per session; see the [setup guide](https://smoothyedit.com/blog/smoothy-connector-resolve-free). Generated timelines carry cuts, source timing and selected audio channels, but do not copy grades, effects, fades, automation or mixer processing. Review the imported edit.
 
@@ -48,7 +42,6 @@ Audio Library favorites stay local. Optional anonymous archive favorite sharing 
 | --- | --- |
 | [`smoothyapp/`](smoothyapp/) | Electron desktop app and build configuration |
 | [`smoothyapp-cep/`](smoothyapp-cep/) | Premiere Pro CEP panel and ExtendScript bridge |
-| [`docs/images/`](docs/images/) | 1.4 interface mockups used in this README |
 
 ## Development
 
